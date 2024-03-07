@@ -25,4 +25,4 @@ docs = [
 include = ["sketchyopts"]
 
 [tool.coverage.run]
-omit = ["tests/*"]
+omit = ["tests/*", "__init__.py"]
