@@ -1,0 +1,4 @@
+/* make math expressions (in displaystyle) flush to the left */
+div.math {
+  flex-direction: row;
+}

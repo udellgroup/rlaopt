@@ -1,0 +1,16 @@
+# compiled files
+*.pyc
+sketchyopts/__pycache__/
+tests/__pycache__/
+
+# virtual environment
+.venv/
+
+# OS files
+.DS_Store
+
+# pre-commit config
+.pre-commit-config.yaml
+
+# built documentation
+docs/_build/
