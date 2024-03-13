@@ -21,7 +21,6 @@ class InputDimError(SketchyOptsError):
     def __init__(
         self, input_name: str, actual_dim: int, required_dim: Union[int, Sequence[int]]
     ) -> None:
-
         if isinstance(required_dim, Sequence) and len(required_dim) > 1:
             msg = f"Input {input_name} is expected to have any dimension in {required_dim} but has {actual_dim}."
         else:
