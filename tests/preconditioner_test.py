@@ -7,6 +7,10 @@ from sketchyopts.errors import InputDimError, MatrixNotSquareError
 
 
 def test_rand_nystrom_approx_correctness():
+    """
+    This tests the approximation quality based on element-wise relative error.
+    We generate the original matrix from Normal distirbution and repeatedly approximate the matrix with different keys. We then compute the average element-wise relative error from these runs.
+    """
     size = 100
     rank = 5
     approx_rank = 10
@@ -35,6 +39,9 @@ def test_rand_nystrom_approx_correctness():
 
 
 def test_rand_nystrom_approx_errors():
+    """
+    This tests various input errors.
+    """
     rank = 1
     key = jax.random.PRNGKey(0)
 
