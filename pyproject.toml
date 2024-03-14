@@ -13,7 +13,10 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-test = []
+test = [
+  "pytest", 
+  "pytest-cov", 
+]
 docs = [
   "sphinx-book-theme", 
   "sphinxcontrib-katex",
