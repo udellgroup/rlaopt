@@ -129,7 +129,7 @@ jobs:
   #   - name: Build and deploy documentation. 
   #     id: deployment
   #     uses: sphinx-notes/pages@v3
-  publish documentation:
+  publish-documentation:
     name: docs publication
     needs: # publish docs only after tests are passed
       - run-type-checker
