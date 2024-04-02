@@ -13,5 +13,5 @@ This page provides more detailed information of some of the error messages one m
 
 Input Errors
 ~~~~~~~~~~~~
-.. autofunction:: InputDimError
-.. autofunction:: MatrixNotSquareError
+.. autoclass:: InputDimError
+.. autoclass:: MatrixNotSquareError

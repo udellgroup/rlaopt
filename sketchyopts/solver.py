@@ -1,15 +1,25 @@
+import jax
 import jax.numpy as jnp
-from jax import lax
-from jax import jit
+from optax._src.base import (
+    ScalarOrSchedule,
+    GradientTransformation,
+    GradientTransformationExtraArgs,
+)
 
-from sketchyopts.preconditioner import rand_nystrom_approx
+from sketchyopts.preconditioner import (
+    rand_nystrom_approx,
+    update_nystrom_precond,
+    scale_by_nystrom_precond,
+)
+from sketchyopts.util import shareble_state_named_chain, scale_by_ref_learning_rate
 from sketchyopts.errors import InputDimError, MatrixNotSquareError
 
-from typing import Optional
+from typing import Optional, Callable, ParamSpec, Concatenate
 from jax.typing import ArrayLike
 from jax import Array
 
 KeyArrayLike = ArrayLike
+P = ParamSpec("P")
 
 
 def nystrom_pcg(
@@ -23,18 +33,18 @@ def nystrom_pcg(
     tol: float = 1e-5,
     maxiter: Optional[int] = None,
 ) -> tuple[Array, Array, Array, int]:
-    r"""Nyström preconditioned conjugate gradient (Nyström PCG).
+    r"""The Nyström preconditioned conjugate gradient method (Nyström PCG).
 
     The function solves the regularized linear system :math:`(A + \mu I)x = b` using Nyström PCG.
 
-    The algorithm uses randomized Nyström preconditioner by implicitly applying
+    Nyström PCG uses randomized Nyström preconditioner by implicitly applying
 
     .. math::
       P^{-1} = (\hat{\lambda}_{l} + \mu) U (\hat{\Lambda} + \mu I)^{-1} U^{T} + (I - U U^{T})
 
     where :math:`U` and :math:`\hat{\Lambda}` are from rank-:math:`l` randomized Nyström approximation (here :math:`\hat{\lambda}_{l}` is the :math:`l`:sup:`th` diagonal entry of :math:`\hat{\Lambda}`).
 
-    The algorithm terminates if the :math:`\ell_2`-norm of the residual :math:`b - (A + \mu I)\hat{x}` is within the specified tolerance or it has reached the maximal number of iterations.
+    Nyström PCG terminates if the :math:`\ell_2`-norm of the residual :math:`b - (A + \mu I)\hat{x}` is within the specified tolerance or it has reached the maximal number of iterations.
 
     References:
       - Z\. Frangella, J. A. Tropp, and M. Udell, `Randomized Nyström preconditioning <https://epubs.siam.org/doi/10.1137/21M1466244>`_. SIAM Journal on Matrix Analysis and Applications, vol. 44, iss. 2, 2023, pp. 718-752.
@@ -62,26 +72,19 @@ def nystrom_pcg(
     U, S = rand_nystrom_approx(A, rank, key)
 
     # matrix-vector (or mat-mat for multiple righthand sides) product for regularized linear operator
-    @jit
+    @jax.jit
     def regularized_A(x):
         return A @ x + mu * x
 
     # matrix-vector (or mat-mat for multiple righthand sides) product for inverse Nyström preconditioner
-    @jit
+    @jax.jit
     def inv_preconditioner(x):
         UTx = U.T @ x
         return (S[-1] + mu) * U @ (UTx / jnp.expand_dims(S + mu, axis=1)) + x - U @ UTx
 
     # condition evaluation
     def cond_fun(value):
-        (
-            _,
-            _,
-            _,
-            _,
-            mask,
-            k,
-        ) = value
+        _, _, _, _, mask, k = value
         return (jnp.sum(mask) > 0) & (k < maxiter)
 
     # PCG iteration
@@ -133,7 +136,7 @@ def nystrom_pcg(
     mask0 = jnp.ones(jnp.shape(b)[1], dtype=int)
     initial_value = (x0, r0, z0, p0, mask0, 0)
 
-    x_final, r_final, _, _, mask_final, k_final = lax.while_loop(
+    x_final, r_final, _, _, mask_final, k_final = jax.lax.while_loop(
         cond_fun, body_fun, initial_value
     )
 
@@ -143,3 +146,68 @@ def nystrom_pcg(
         r_final = jnp.squeeze(r_final)
 
     return x_final, r_final, ~mask_final.astype(bool), k_final  # type: ignore
+
+
+def sketchysgd(
+    rank: int,
+    rho: float,
+    update_freq: int,
+    seed: int,
+    f: Callable[Concatenate[Array, P], Array],
+    *,
+    learning_rate: Optional[float] = None,
+) -> GradientTransformation:
+    r"""The SketchySGD optimizer.
+
+    SketchySGD is a stochastic quasi-Newton method that uses sketching to approximate the curvature of the loss function. It maintains a preconditioner for SGD using randomized low-rank Nyström approximations to the subsampled Hessian and automatically selects an appropriate learning whenever it updates the preconditioner.
+
+    Example:
+      >>> import sketchyopts
+      >>> import optax
+      >>> import jax
+      >>> import jax.numpy as jnp
+      >>> def f(x): return jnp.sum(x ** 2)  # simple quadratic function
+      >>> solver = sketchyopts.sketchysgd(rank=3, rho=1.0, update_freq=0, seed=0, f=f)
+      >>> params = jnp.array([1., 2., 3.])
+      >>> print('Objective function: ', f(params))
+      Objective function:  14.0
+      >>> opt_state = solver.init(params)
+      >>> for _ in range(5):
+      ...  grad = jax.grad(f)(params)
+      ...  updates, opt_state = solver.update(grad, opt_state, params)
+      ...  params = optax.apply_updates(params, updates)
+      ...  print('Objective function: {:.2E}'.format(f(params)))
+      Objective function: 2.63E-12
+      Objective function: 6.37E-25
+      Objective function: 1.75E-37
+      Objective function: 0.00E+00
+      Objective function: 0.00E+00
+
+    References:
+      - Z\. Frangella, P. Rathore, S. Zhao, and M. Udell, `SketchySGD: Reliable Stochastic Optimization via Randomized Curvature Estimates <https://arxiv.org/abs/2211.08597>`_.
+
+    Args:
+      rank: Rank of the preconditioner.
+      rho: Regularization parameter (with non-negative value).
+      update_freq: A non-negative integer that specifies the update frequency of the preconditioner. When set to ``0`` or :math:`\infty` (*e.g.* ``jax.numpy.inf`` or ``numpy.inf``), the optimizer uses constant preconditioner that is constructed at the beginning of the optimization process.
+      seed: An integer used as a seed to generate random numbers.
+      f: A scalar-valued loss/objective function to be optimized. The function needs to have the optimization variable as its first argument.
+      learning_rate: Step size for applying updates (default ``None``). It can either be a fixed scalar value or a schedule based on step count. When set to ``None``, the algorithm adaptively chooses a learning rate whenever the preconditioner is updated.
+
+    Returns:
+      The corresponding `GradientTransformation <https://optax.readthedocs.io/en/latest/api/transformations.html#optax.GradientTransformation>`_ object.
+
+    """
+    return shareble_state_named_chain(
+        (
+            "update_precond",
+            update_nystrom_precond(
+                rank, rho, update_freq, seed, f, adaptive_lr=learning_rate is None
+            ),
+        ),
+        ("scale_by_precond", scale_by_nystrom_precond(rho, ref_state="update_precond")),
+        (
+            "scale_by_lr",
+            scale_by_ref_learning_rate(learning_rate, ref_state="update_precond"),
+        ),
+    )

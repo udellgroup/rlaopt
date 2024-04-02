@@ -28,6 +28,7 @@ Citation
 
    api/sketchyopts.preconditioner
    api/sketchyopts.solver
+   api/sketchyopts.util
    api/sketchyopts.errors
 
 ----

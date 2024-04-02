@@ -1,8 +1,9 @@
 import jax.random
 import jax.numpy as jnp
+import optax
 import pytest
 
-from sketchyopts.solver import nystrom_pcg
+from sketchyopts.solver import nystrom_pcg, sketchysgd
 from sketchyopts.errors import InputDimError, MatrixNotSquareError
 
 
@@ -129,3 +130,23 @@ def test_nystrom_pcg_errors():
         match="Input A is expected to be a square matrix but has shape \\(10, 5\\).",
     ):
         nystrom_pcg(A, b, mu, rank, key)
+
+
+def test_sketchysgd():
+    """
+    This tests SketchySGD on a simple quadratic function.
+    With constant Hessian, we use fixed preconditioner and expect the optimizer to reach to the optimum (0) quickly.
+    """
+
+    def f(x):
+        return jnp.sum(x**2)
+
+    params = jnp.array([1.0, 2.0, 3.0])
+    solver = sketchysgd(rank=3, rho=1.0, update_freq=0, seed=0, f=f)
+    opt_state = solver.init(params)
+    for _ in range(5):
+        grad = jax.grad(f)(params)
+        updates, opt_state = solver.update(grad, opt_state, params)
+        params = optax.apply_updates(params, updates)
+
+    assert jnp.allclose(f(params), 0.0)
