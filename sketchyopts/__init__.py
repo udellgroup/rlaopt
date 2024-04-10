@@ -10,6 +10,9 @@ scale_by_nystrom_precond = preconditioner.scale_by_nystrom_precond
 nystrom_pcg = solver.nystrom_pcg
 sketchysgd = solver.sketchysgd
 LinearOperator = util.LinearOperator
+TransformUpdateExtraArgsRefStateFn = util.TransformUpdateExtraArgsRefStateFn
+GradientTransformationExtraArgsRefState = util.GradientTransformationExtraArgsRefState
+with_ref_state_support = util.with_ref_state_support
 shareble_state_named_chain = util.shareble_state_named_chain
 scale_by_ref_learning_rate = util.scale_by_ref_learning_rate
 InputDimError = errors.InputDimError
@@ -23,6 +26,9 @@ __all__ = (
     "nystrom_pcg",
     "sketchysgd",
     "LinearOperator",
+    "TransformUpdateExtraArgsRefStateFn",
+    "GradientTransformationExtraArgsRefState",
+    "with_ref_state_support",
     "shareble_state_named_chain",
     "scale_by_ref_learning_rate",
     "InputDimError",

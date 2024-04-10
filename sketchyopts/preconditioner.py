@@ -5,7 +5,11 @@ import numpy as np
 from optax._src.base import GradientTransformationExtraArgs, EmptyState
 from optax._src import numerics
 
-from sketchyopts.util import LinearOperator, HessianLinearOperator
+from sketchyopts.util import (
+    LinearOperator,
+    HessianLinearOperator,
+    GradientTransformationExtraArgsRefState,
+)
 from sketchyopts.errors import InputDimError, MatrixNotSquareError
 
 from typing import NamedTuple, Union, Callable, Optional, ParamSpec, Concatenate
@@ -22,17 +26,26 @@ def rand_nystrom_approx(
 ) -> tuple[Array, Array]:
     r"""Randomized Nyström approximation of a positive-semidefinite matrix.
 
-    The function computes rank-:math:`l` randomized Nyström approximation of a given positive-semidefinite matrix :math:`A \in \R^{n \times n}`.
+    The function computes rank-:math:`l` randomized Nyström approximation of a given
+    positive-semidefinite matrix :math:`A \in \R^{n \times n}`.
 
-    It returns the truncated eigen-decomposition :math:`\hat{A}_{\mathrm{nys}} = U \hat{\Lambda} U^{T}` where :math:`U \in \R^{n \times l}` is orthonormal consisting of eigenvectors as columns and :math:`\hat{\Lambda} \in \R^{l \times l}` is diagonal with eigenvalues on its diagonal. Note that output :code:`U` represents :math:`U` whereas :code:`S` contains only the eigenvalues (not the full diagonal matrix :math:`\hat{\Lambda}`).
+    It returns the truncated eigen-decomposition
+    :math:`\hat{A}_{\mathrm{nys}} = U \hat{\Lambda} U^{T}` where
+    :math:`U \in \R^{n \times l}` is orthonormal consisting of eigenvectors as columns
+    and :math:`\hat{\Lambda} \in \R^{l \times l}` is diagonal with eigenvalues on its
+    diagonal. Note that output :code:`U` represents :math:`U` whereas :code:`S` contains
+    only the eigenvalues (not the full diagonal matrix :math:`\hat{\Lambda}`).
 
     References:
       - H\. Li, G. C. Linderman, A. Szlam, K. P. Stanton, Y. Kluger, and M. Tygert, `Algorithm 971: An implementation of a randomized algorithm for principal component analysis <https://dl.acm.org/doi/10.1145/3004053>`_, ACM Transactions on Mathematical Software (TOMS), 43 (2017), pp. 1–14.
       - J\. A. Tropp, A. Yurtsever, M. Udell, and V. Cevher, `Fixed-rank approximation of a positive-semidefinite matrix from streaming data <https://dl.acm.org/doi/10.5555/3294771.3294888>`_, in NIPS, vol. 30, 2017, pp. 1225–1234.
 
     Args:
-      A: A two-dimensional array representing a positive-semidefinite matrix. This can either be an explicit JAX array or an implicit :class:`sketchyopts.util.LinearOperator` object.
-      l: Rank of the Nyström approximated matrix :math:`\hat{A}_{\mathrm{nys}}` (which coincides with sketch size).
+      A: A two-dimensional array representing a positive-semidefinite matrix. This can
+        either be an explicit JAX array or an implicit
+        :class:`sketchyopts.util.LinearOperator` object.
+      l: Rank of the Nyström approximated matrix :math:`\hat{A}_{\mathrm{nys}}`
+        (which coincides with sketch size).
       key: A PRNG key used as the random key.
 
     Returns:
@@ -93,7 +106,9 @@ def update_nystrom_precond(
 ) -> GradientTransformationExtraArgs:
     r"""Updates Nyström preconditioner.
 
-    The function updates the preconditioner using randomized low-rank Nyström approximations to the subsampled Hessian and determines appropriate learning rate using randomized powering (if ``adaptive_lr`` is set to ``True``).
+    The function updates the preconditioner using randomized low-rank Nyström
+    approximations to the subsampled Hessian and determines appropriate learning rate
+    using randomized powering (if ``adaptive_lr`` is set to ``True``).
 
     References:
       - Z\. Frangella, P. Rathore, S. Zhao, and M. Udell, `SketchySGD: Reliable Stochastic Optimization via Randomized Curvature Estimates <https://arxiv.org/abs/2211.08597>`_.
@@ -101,10 +116,16 @@ def update_nystrom_precond(
     Args:
       rank: Rank of the preconditioner.
       rho: Regularization parameter (with non-negative value).
-      update_freq: A non-negative integer that specifies the update frequency of the preconditioner. When set to ``0`` or :math:`\infty` (*e.g.* ``jax.numpy.inf`` or ``numpy.inf``), the optimizer uses constant preconditioner that is constructed at the beginning of the optimization process.
+      update_freq: A non-negative integer that specifies the update frequency of the
+        preconditioner. When set to ``0`` or :math:`\infty` (*e.g.* ``jax.numpy.inf`` or
+        ``numpy.inf``), the optimizer uses constant preconditioner that is constructed at
+        the beginning of the optimization process.
       seed: An integer used as a seed to generate random numbers.
-      f: A scalar-valued loss/objective function to be optimized. The function needs to have the optimization variable as its first argument.
-      adaptive_lr: Whether or not to enable automated learning rate selection (default ``True``). When set to ``True``, the algorithm adaptively chooses a learning rate whenever the preconditioner is updated using **Algorithm 2.1** of the referenced paper.
+      f: A scalar-valued loss/objective function to be optimized. The function needs to
+        have the optimization variable as its first argument.
+      adaptive_lr: Whether or not to enable automated learning rate selection (default
+         ``True``). When set to ``True``, the algorithm adaptively chooses a learning rate
+         whenever the preconditioner is updated using **Algorithm 2.1** of the referenced paper.
 
     Returns:
       A `GradientTransformationExtraArgs <https://optax.readthedocs.io/en/latest/api/transformations.html#optax.GradientTransformationExtraArgs>`_ object.
@@ -156,8 +177,7 @@ def update_nystrom_precond(
 
         return 1.0 / labda
 
-    def update_fn(updates, state, params, chain_state=None, **f_extra_args):
-        del chain_state
+    def update_fn(updates, state, params, **f_extra_args):
         # increment counter
         count_inc = numerics.safe_int32_increment(state.step_count)
         # update the preconditioner at the beginning and at the specified frequency
@@ -195,14 +215,20 @@ def scale_by_nystrom_precond(
 ) -> GradientTransformationExtraArgs:
     r"""Rescales updates using Nyström preconditioner.
 
-    The function scales the gradient update using Nyström preconditioner. Specifically, it applies the `matrix inversion lemma <https://en.wikipedia.org/wiki/Woodbury_matrix_identity>`_ and computes the following (**Equation (2.3)** of the referenced paper):
+    The function scales the gradient update using Nyström preconditioner. Specifically,
+    it applies the
+    `matrix inversion lemma <https://en.wikipedia.org/wiki/Woodbury_matrix_identity>`_
+    and computes the following (**Equation (2.3)** of the referenced paper):
 
     .. math::
       v = U(S + \rho I)^{-1} U^{T} g + \frac{1}{\rho} (g - U U^{T} g)
 
-    where :math:`g` is the gradient and :math:`v` is the obtained update direction (from rescaling).
+    where :math:`g` is the gradient and :math:`v` is the obtained update direction (from
+    rescaling).
 
-    If the eigendecomposition of the preconditioner is not directly provided (*i.e.* ``U`` and ``S`` are set to ``None``), the function then uses the preconditioner stored in the referenced state to scale the updates.
+    If the eigendecomposition of the preconditioner is not directly provided (*i.e.*
+    ``U`` and ``S`` are set to ``None``), the function then uses the preconditioner stored
+    in the referenced state to scale the updates.
 
     References:
       - Z\. Frangella, P. Rathore, S. Zhao, and M. Udell, `SketchySGD: Reliable Stochastic Optimization via Randomized Curvature Estimates <https://arxiv.org/abs/2211.08597>`_.
@@ -217,22 +243,44 @@ def scale_by_nystrom_precond(
       A `GradientTransformationExtraArgs <https://optax.readthedocs.io/en/latest/api/transformations.html#optax.GradientTransformationExtraArgs>`_ object.
     """
 
-    # isPrecondNotProvided = (U is None) and (S is None)
+    if ((U is None) or (S is None)) and (ref_state is None):
+        raise ValueError("U or S and ref_state cannot both be None")
 
     def init_fn(params):
         del params
         return EmptyState()
 
-    def update_fn(updates, state, params=None, chain_state=None):
-        del params
-        # get preconditioner from referenced state if preconditioner is not provided
-        ref_U = U
-        ref_S = S
-        if (ref_U is None) and (ref_S is None):
-            ref_U = chain_state[ref_state].U  # type: ignore
-            ref_S = chain_state[ref_state].S  # type: ignore
-        UTg = ref_U.T @ updates  # type: ignore
-        updates = ref_U @ (UTg / (ref_S + rho)) + updates / rho - ref_U @ UTg / rho  # type: ignore
-        return updates, state
+    def _apply_precond(U, S, updates):
+        UTg = U.T @ updates
+        return U @ (UTg / (S + rho)) + updates / rho - U @ UTg / rho
 
-    return GradientTransformationExtraArgs(init_fn, update_fn)
+    if (U is not None) and (S is not None):
+
+        def update_fn(updates, state, params=None):
+            del params
+            return _apply_precond(U, S, updates), state
+
+        return GradientTransformationExtraArgs(init_fn, update_fn)
+    else:
+
+        def ref_update_fn(updates, state, params=None, chain_state=None):
+            del params
+            # validate referenced preconditioner
+            if (chain_state is None) or (ref_state not in chain_state.keys()):
+                raise ValueError("ref_state does not exist")
+            if ("U" not in dir(chain_state[ref_state])) or (
+                "S" not in dir(chain_state[ref_state])
+            ):
+                raise ValueError("U or S is not an attribute of the referenced state")
+            if (not isinstance(chain_state[ref_state].U, Array)) or (
+                not isinstance(chain_state[ref_state].S, Array)
+            ):
+                raise ValueError("U or S has incompatible type")
+            return (
+                _apply_precond(
+                    chain_state[ref_state].U, chain_state[ref_state].S, updates
+                ),
+                state,
+            )
+
+        return GradientTransformationExtraArgsRefState(init_fn, ref_update_fn)

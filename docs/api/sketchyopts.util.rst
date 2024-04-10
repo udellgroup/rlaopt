@@ -5,6 +5,9 @@ Utilities
 
 .. autosummary::
     LinearOperator
+    TransformUpdateExtraArgsRefStateFn
+    GradientTransformationExtraArgsRefState
+    with_ref_state_support
     shareble_state_named_chain
     scale_by_ref_learning_rate
 
@@ -16,5 +19,18 @@ Linear Operator
 
 Transformations
 ~~~~~~~~~~~~~~~
+
+Type
+^^^^
+.. autoclass:: TransformUpdateExtraArgsRefStateFn
+    :special-members: __call__
+.. autoclass:: GradientTransformationExtraArgsRefState
+
+Type Conversion
+^^^^^^^^^^^^^^^
+.. autofunction:: with_ref_state_support
+
+Sharable State Transformations
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 .. autofunction:: shareble_state_named_chain
 .. autofunction:: scale_by_ref_learning_rate

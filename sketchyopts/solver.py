@@ -35,48 +35,64 @@ def nystrom_pcg(
 ) -> tuple[Array, Array, Array, int]:
     r"""The Nyström preconditioned conjugate gradient method (Nyström PCG).
 
-    The function solves the regularized linear system :math:`(A + \mu I)x = b` using Nyström PCG.
+    The function solves the regularized linear system :math:`(A + \mu I)x = b` using
+    Nyström PCG.
 
     Nyström PCG uses randomized Nyström preconditioner by implicitly applying
 
     .. math::
-      P^{-1} = (\hat{\lambda}_{l} + \mu) U (\hat{\Lambda} + \mu I)^{-1} U^{T} + (I - U U^{T})
+        P^{-1} = (\hat{\lambda}_{l} + \mu) U (\hat{\Lambda} + \mu I)^{-1} U^{T} + (I - U U^{T})
 
-    where :math:`U` and :math:`\hat{\Lambda}` are from rank-:math:`l` randomized Nyström approximation (here :math:`\hat{\lambda}_{l}` is the :math:`l`:sup:`th` diagonal entry of :math:`\hat{\Lambda}`).
+    where :math:`U` and :math:`\hat{\Lambda}` are from rank-:math:`l` randomized Nyström
+    approximation (here :math:`\hat{\lambda}_{l}` is the :math:`l`:sup:`th` diagonal
+    entry of :math:`\hat{\Lambda}`).
 
-    Nyström PCG terminates if the :math:`\ell_2`-norm of the residual :math:`b - (A + \mu I)\hat{x}` is within the specified tolerance or it has reached the maximal number of iterations.
+    Nyström PCG terminates if the :math:`\ell_2`-norm of the residual
+    :math:`b - (A + \mu I)\hat{x}` is within the specified tolerance or it has reached
+    the maximal number of iterations.
 
     References:
       - Z\. Frangella, J. A. Tropp, and M. Udell, `Randomized Nyström preconditioning <https://epubs.siam.org/doi/10.1137/21M1466244>`_. SIAM Journal on Matrix Analysis and Applications, vol. 44, iss. 2, 2023, pp. 718-752.
 
     Args:
       A: A two-dimensional array representing a positive-semidefinite matrix.
-      b: A vector or a two-dimensional array giving the righthand side(s) of the regularized linear system.
+      b: A vector or a two-dimensional array giving the righthand side(s) of the
+        regularized linear system.
       mu: Regularization parameter (with non-negative value).
-      rank: Rank of the randomized Nyström approximation (which coincides with sketch size).
+      rank: Rank of the randomized Nyström approximation (which coincides with sketch
+        size).
       key: A PRNG key used as the random key.
-      x0: Initial guess for the solution (same size as righthand side(s) ``b``; default ``None``). When set to ``None``, the algorithm uses zero vector as starting guess.
+      x0: Initial guess for the solution (same size as righthand side(s) ``b``; default
+        ``None``). When set to ``None``, the algorithm uses zero vector as starting
+        guess.
       tol: Solution tolerance (default :math:`10^{-5}`).
-      maxiter: Maximum number of iterations (default ``None``). When set to ``None``, the algorithm only terminates when the specified tolerance has been achieved. Internally the value gets set to ten times the size of the system.
+      maxiter: Maximum number of iterations (default ``None``). When set to ``None``,
+        the algorithm only terminates when the specified tolerance has been achieved.
+        Internally the value gets set to ten times the size of the system.
 
     Returns:
       A four-element tuple containing
 
-      - **x** – Approximate solution to the regularized linear system. Solution has the same size as righthand side(s) ``b``.
-      - **r** – Residual of the approximate solution. Residual has the same size as righthand side(s) ``b``.
-      - **status** – Whether or not the approximate solution has converged for each righthand side. Status has the same size as the number of righthand side(s).
+      - **x** – Approximate solution to the regularized linear system. Solution has the
+        same size as righthand side(s) ``b``.
+      - **r** – Residual of the approximate solution. Residual has the same size as
+        righthand side(s) ``b``.
+      - **status** – Whether or not the approximate solution has converged for each
+        righthand side. Status has the same size as the number of righthand side(s).
       - **k** – Total number of iterations to reach to the approximate solution.
 
     """
     # perform randomized Nyström approximation
     U, S = rand_nystrom_approx(A, rank, key)
 
-    # matrix-vector (or mat-mat for multiple righthand sides) product for regularized linear operator
+    # matrix-vector (or mat-mat for multiple righthand sides) product for regularized
+    # linear operator
     @jax.jit
     def regularized_A(x):
         return A @ x + mu * x
 
-    # matrix-vector (or mat-mat for multiple righthand sides) product for inverse Nyström preconditioner
+    # matrix-vector (or mat-mat for multiple righthand sides) product for inverse
+    # Nyström preconditioner
     @jax.jit
     def inv_preconditioner(x):
         UTx = U.T @ x
@@ -96,7 +112,8 @@ def nystrom_pcg(
         rs = jnp.where(mask > 0, r[:,], jnp.nan)
         zs = jnp.where(mask > 0, z[:,], jnp.nan)
         ps = jnp.where(mask > 0, p[:,], jnp.nan)
-        # perform update on selected columns and ignore padded columns (i.e. with NaN values)
+        # perform update on selected columns and ignore padded columns
+        # (i.e. with NaN values)
         v = regularized_A(ps)
         gamma = jnp.sum(rs * zs, axis=0, keepdims=True)  # type: ignore
         alpha = gamma / jnp.sum(ps * v, axis=0, keepdims=True)
@@ -159,7 +176,10 @@ def sketchysgd(
 ) -> GradientTransformation:
     r"""The SketchySGD optimizer.
 
-    SketchySGD is a stochastic quasi-Newton method that uses sketching to approximate the curvature of the loss function. It maintains a preconditioner for SGD using randomized low-rank Nyström approximations to the subsampled Hessian and automatically selects an appropriate learning whenever it updates the preconditioner.
+    SketchySGD is a stochastic quasi-Newton method that uses sketching to approximate the
+    curvature of the loss function. It maintains a preconditioner for SGD using
+    randomized low-rank Nyström approximations to the subsampled Hessian and
+    automatically selects an appropriate learning whenever it updates the preconditioner.
 
     Example:
       >>> import sketchyopts
@@ -189,10 +209,16 @@ def sketchysgd(
     Args:
       rank: Rank of the preconditioner.
       rho: Regularization parameter (with non-negative value).
-      update_freq: A non-negative integer that specifies the update frequency of the preconditioner. When set to ``0`` or :math:`\infty` (*e.g.* ``jax.numpy.inf`` or ``numpy.inf``), the optimizer uses constant preconditioner that is constructed at the beginning of the optimization process.
+      update_freq: A non-negative integer that specifies the update frequency of the
+        preconditioner. When set to ``0`` or :math:`\infty` (*e.g.* ``jax.numpy.inf`` or
+        ``numpy.inf``), the optimizer uses constant preconditioner that is constructed at
+        the beginning of the optimization process.
       seed: An integer used as a seed to generate random numbers.
-      f: A scalar-valued loss/objective function to be optimized. The function needs to have the optimization variable as its first argument.
-      learning_rate: Step size for applying updates (default ``None``). It can either be a fixed scalar value or a schedule based on step count. When set to ``None``, the algorithm adaptively chooses a learning rate whenever the preconditioner is updated.
+      f: A scalar-valued loss/objective function to be optimized. The function needs to
+        have the optimization variable as its first argument.
+      learning_rate: Step size for applying updates (default ``None``). It can either be
+        a fixed scalar value or a schedule based on step count. When set to ``None``, the
+        algorithm adaptively chooses a learning rate whenever the preconditioner is updated.
 
     Returns:
       The corresponding `GradientTransformation <https://optax.readthedocs.io/en/latest/api/transformations.html#optax.GradientTransformation>`_ object.

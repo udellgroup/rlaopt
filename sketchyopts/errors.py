@@ -33,7 +33,8 @@ class InputDimError(SketchyOptsError):
 class MatrixNotSquareError(SketchyOptsError):
     r"""Non-square Matrix Error.
 
-    This error occurs when an argument representing a non-square matrix gets passed to a function that expects a square matrix.
+    This error occurs when an argument representing a non-square matrix gets passed to a
+    function that expects a square matrix.
 
     """
 
