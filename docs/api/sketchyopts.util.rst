@@ -5,6 +5,7 @@ Utilities
 
 .. autosummary::
     LinearOperator
+    HessianLinearOperator
     TransformUpdateExtraArgsRefStateFn
     GradientTransformationExtraArgsRefState
     with_ref_state_support
@@ -16,6 +17,9 @@ Linear Operator
 .. autoclass:: LinearOperator
     :members:
     :special-members: __init__, __matmul__
+.. autoclass:: HessianLinearOperator
+    :members:
+    :special-members: __init__
 
 Transformations
 ~~~~~~~~~~~~~~~

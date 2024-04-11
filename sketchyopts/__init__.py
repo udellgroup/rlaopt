@@ -10,6 +10,7 @@ scale_by_nystrom_precond = preconditioner.scale_by_nystrom_precond
 nystrom_pcg = solver.nystrom_pcg
 sketchysgd = solver.sketchysgd
 LinearOperator = util.LinearOperator
+HessianLinearOperator = util.HessianLinearOperator
 TransformUpdateExtraArgsRefStateFn = util.TransformUpdateExtraArgsRefStateFn
 GradientTransformationExtraArgsRefState = util.GradientTransformationExtraArgsRefState
 with_ref_state_support = util.with_ref_state_support
@@ -26,6 +27,7 @@ __all__ = (
     "nystrom_pcg",
     "sketchysgd",
     "LinearOperator",
+    "HessianLinearOperator",
     "TransformUpdateExtraArgsRefStateFn",
     "GradientTransformationExtraArgsRefState",
     "with_ref_state_support",

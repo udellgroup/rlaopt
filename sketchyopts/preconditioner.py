@@ -1,6 +1,7 @@
 import jax
 import jax.numpy as jnp
 import jax.scipy as jsp
+from jax._src.flatten_util import ravel_pytree
 import numpy as np
 from optax._src.base import GradientTransformationExtraArgs, EmptyState
 from optax._src import numerics
@@ -251,8 +252,9 @@ def scale_by_nystrom_precond(
         return EmptyState()
 
     def _apply_precond(U, S, updates):
-        UTg = U.T @ updates
-        return U @ (UTg / (S + rho)) + updates / rho - U @ UTg / rho
+        raveled, unravel_fn = ravel_pytree(updates)
+        UTg = U.T @ raveled
+        return unravel_fn(U @ (UTg / (S + rho)) + raveled / rho - U @ UTg / rho)
 
     if (U is not None) and (S is not None):
 

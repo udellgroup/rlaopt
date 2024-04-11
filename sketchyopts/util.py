@@ -1,5 +1,6 @@
 import jax
 import jax.numpy as jnp
+from jax._src.flatten_util import ravel_pytree
 from optax._src.base import (
     GradientTransformation,
     GradientTransformationExtraArgs,
@@ -66,20 +67,50 @@ class LinearOperator:
 
 
 class HessianLinearOperator(LinearOperator):
+    r"""Hessian operator for computing hessian-vector-product without explicitly forming
+    the Hessian matrix.
+    """
+
     def __init__(self, f, params, **f_extra_args):
-        params_dim = jnp.ndim(params)
-        params_shape = jnp.shape(params)
+        r"""Initialize the Hessian linear operator.
+
+        The linear operator implcitly forms the Hessian of function ``f`` with respect
+        to parameters ``params``. The function can have other arguments ``f_extra_args``
+        that go into its evaluation, but only the second partial derivative
+        information of parameters ``params`` gets used.
+
+        Args:
+          f: Scalar-valued function.
+          params: Parameters of the function. Can be of any PyTree structure.
+          **f_extra_args: Other optional arguments to the function.
+
+        """
+        unraveled, unravel_fn = ravel_pytree(params)
+        params_size = jnp.size(unraveled)
 
         f_partial = lambda x: f(x, **f_extra_args)
-        self.jvp_func = lambda v: jax.jvp(jax.grad(f_partial), (params,), (v,))[1]
+        hvp = lambda v: jax.jvp(jax.grad(f_partial), [params], [unravel_fn(v)])[1]
+        self.hvp_func = lambda v: ravel_pytree(hvp(v))[0]
 
-        super().__init__(shape=params_shape * 2, ndim=params_dim * 2)
+        super().__init__(shape=(params_size, params_size), ndim=2)
 
     def matmul(self, other):
+        r"""Compute the Hessian-vector or Hessian-matrix product.
+
+        The vector of matrix the Hessian acts on must be a JAX Array (not a PyTree).
+        The result is also a JAX Array of the same dimension.
+
+        Args:
+          other: A 1D or 2D JAX array with matching size to the Hessian.
+
+        Returns:
+          JAX Array representing the result.
+
+        """
         if jnp.ndim(other) == 1:
-            return self.jvp_func(other)
+            return self.hvp_func(other)
         elif jnp.ndim(other) == 2:
-            return jax.vmap(self.jvp_func, 1, 1)(other)
+            return jax.vmap(self.hvp_func, 1, 1)(other)
         else:
             raise ValueError(
                 "matmul input operand 1 must have ndim 1 or 2, but it has ndim {}".format(

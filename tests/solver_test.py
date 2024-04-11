@@ -5,6 +5,7 @@ import pytest
 
 from sketchyopts.solver import nystrom_pcg, sketchysgd
 from sketchyopts.errors import InputDimError, MatrixNotSquareError
+from collections import namedtuple
 
 
 class TestNystromPCG:
@@ -133,7 +134,7 @@ class TestNystromPCG:
 
 class TestSketchySGD:
 
-    def test_sketchysgd(self):
+    def test_sketchysgd_quadratic(self):
         """
         Test SketchySGD on a simple quadratic function.
         With constant Hessian, we use fixed preconditioner and expect the optimizer to reach to the optimum (0) quickly.
@@ -152,7 +153,7 @@ class TestSketchySGD:
 
         assert jnp.allclose(f(params), 0.0)
 
-    def test_sketchysgd_2(self):
+    def test_sketchysgd_quadratic_additional_arg(self):
         """
         Test SketchySGD on a simple quadratic function with additional argument to the objective.
         """
@@ -170,3 +171,22 @@ class TestSketchySGD:
             params = optax.apply_updates(params, updates)
 
         assert jnp.allclose(f(params, y), jnp.sum(y**2))
+
+    def test_sketchysgd_quadratic_pytree(self):
+        """
+        Test SketchySGD on a simple quadratic function of a tree-like variable.
+        """
+        Point = namedtuple("Point", ["x", "y"])
+
+        def f(p):
+            return (1 / 2) * (p.x**2 + p.y**2)
+
+        params = Point(1.0, 2.0)
+        solver = sketchysgd(rank=3, rho=1.0, update_freq=0, seed=0, f=f)
+        opt_state = solver.init(params)
+        for _ in range(5):
+            grad = jax.grad(f)(params)
+            updates, opt_state = solver.update(grad, opt_state, params)
+            params = optax.apply_updates(params, updates)
+
+        assert jnp.allclose(f(params), 0.0)
