@@ -16,6 +16,7 @@ dependencies = [
 test = [
   "pytest", 
   "pytest-cov", 
+  "flax"
 ]
 docs = [
   "sphinx-book-theme", 

@@ -5,7 +5,8 @@ Solvers
 
 .. autosummary::
     nystrom_pcg
-    sketchysgd
+    SketchySGD
+    SketchySVRG
 
 Nyström PCG
 ~~~~~~~~~~~
@@ -13,4 +14,10 @@ Nyström PCG
 
 SketchySGD
 ~~~~~~~~~~~
-.. autofunction:: sketchysgd
+.. autoclass:: SketchySGD
+    :special-members: run
+
+SketchySVRG
+~~~~~~~~~~~
+.. autoclass:: SketchySVRG
+    :special-members: run

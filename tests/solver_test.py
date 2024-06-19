@@ -1,11 +1,10 @@
 import jax.random
 import jax.numpy as jnp
-import optax
+import numpy as np
 import pytest
 
-from sketchyopts.solver import nystrom_pcg, sketchysgd
+from sketchyopts.solver import nystrom_pcg, SketchySGD, SketchySVRG
 from sketchyopts.errors import InputDimError, MatrixNotSquareError
-from collections import namedtuple
 
 
 class TestNystromPCG:
@@ -124,7 +123,7 @@ class TestNystromPCG:
             nystrom_pcg(A, b, mu, rank, key)
 
         # wrong shape
-        A = A = jnp.ones((10, 5))
+        A = jnp.ones((10, 5))
         with pytest.raises(
             MatrixNotSquareError,
             match="Input A is expected to be a square matrix but has shape \\(10, 5\\).",
@@ -132,61 +131,46 @@ class TestNystromPCG:
             nystrom_pcg(A, b, mu, rank, key)
 
 
-class TestSketchySGD:
+class TestPromiseSolvers:
 
-    def test_sketchysgd_quadratic(self):
+    @pytest.fixture
+    def least_squares(self, promise_solver):
         """
-        Test SketchySGD on a simple quadratic function.
-        With constant Hessian, we use fixed preconditioner and expect the optimizer to reach to the optimum (0) quickly.
+        Test solvers on a simple least squares problem.
+        With constant Hessian, we expect the objective to converge to the optimal quickly,
         """
+        num_samples = int(1e3)
+        sample_dim = 3
 
-        def f(x):
-            return jnp.sum(x**2)
+        true_params = jnp.array([1.0, 2.0, 3.0])
+        key = jax.random.key(0)
+        rng = np.random.default_rng()
+        X = jax.random.normal(key, shape=(num_samples, sample_dim))
+        y = X @ jnp.expand_dims(true_params, 1)  # no noise
+        data = jnp.hstack([X, y])
 
-        params = jnp.array([1.0, 2.0, 3.0])
-        solver = sketchysgd(rank=3, rho=1.0, update_freq=0, seed=0, f=f)
-        opt_state = solver.init(params)
-        for _ in range(5):
-            grad = jax.grad(f)(params)
-            updates, opt_state = solver.update(grad, opt_state, params)
-            params = optax.apply_updates(params, updates)
+        def f(params, data):
+            return jnp.sum(
+                jnp.square(data[:, sample_dim] - data[:, :sample_dim] @ params)
+            )
 
-        assert jnp.allclose(f(params), 0.0)
+        solver_class, solver_params = promise_solver
+        solver = solver_class(
+            fun=f,
+            rank=3,
+            rho=1,
+            grad_batch_size=100,
+            hess_batch_size=50,
+            seed=0,
+            maxiter=20,
+            tol=1e-05,
+            **solver_params,
+        )
+        init_params = jnp.zeros_like(true_params)
+        params, state = solver.run(init_params, data)
 
-    def test_sketchysgd_quadratic_additional_arg(self):
-        """
-        Test SketchySGD on a simple quadratic function with additional argument to the objective.
-        """
+        assert jnp.allclose(f(params, data), 0.0)
 
-        def f(x, y):
-            return jnp.sum(x**2) + jnp.sum(y**2)
-
-        params = jnp.array([1.0, 2.0, 3.0])
-        y = jnp.array([3.0, 1.0])
-        solver = sketchysgd(rank=3, rho=1.0, update_freq=0, seed=0, f=f)
-        opt_state = solver.init(params)
-        for _ in range(5):
-            grad = jax.grad(f)(params, y)
-            updates, opt_state = solver.update(grad, opt_state, params, y=y)
-            params = optax.apply_updates(params, updates)
-
-        assert jnp.allclose(f(params, y), jnp.sum(y**2))
-
-    def test_sketchysgd_quadratic_pytree(self):
-        """
-        Test SketchySGD on a simple quadratic function of a tree-like variable.
-        """
-        Point = namedtuple("Point", ["x", "y"])
-
-        def f(p):
-            return (1 / 2) * (p.x**2 + p.y**2)
-
-        params = Point(1.0, 2.0)
-        solver = sketchysgd(rank=3, rho=1.0, update_freq=0, seed=0, f=f)
-        opt_state = solver.init(params)
-        for _ in range(5):
-            grad = jax.grad(f)(params)
-            updates, opt_state = solver.update(grad, opt_state, params)
-            params = optax.apply_updates(params, updates)
-
-        assert jnp.allclose(f(params), 0.0)
+    @pytest.mark.parametrize("promise_solver", [(SketchySGD, {"update_freq": 0})])
+    def test_problems(self, least_squares):
+        assert 1
