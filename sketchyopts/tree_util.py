@@ -1,42 +1,137 @@
-# PyTree Utilities (from JaxOpt implementation: https://github.com/google/jaxopt/blob/main/jaxopt/_src/tree_util.py)
+# Pytree utilities in this module are adapted from JAXopt with modifications.
+# - documentation of the JAXopt tree utilities: https://jaxopt.github.io/stable/api.html#tree-utilities
+# - original implementation: https://github.com/google/jaxopt/blob/main/jaxopt/_src/tree_util.py
+#
+# Copyright license information:
+#
+# Copyright 2021 Google LLC
+# Modifications copyright 2024 the SketchyOpts authors
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     https://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 
 import functools
 import itertools
 import operator
 
 import jax
-from jax import tree_util as tu
 import jax.numpy as jnp
-import numpy as onp
+import jax.tree_util as jtu
+import numpy as np
+from jax._src import flatten_util
 
+ravel_tree = flatten_util.ravel_pytree
+ravel_tree.__annotations__ = {}
+ravel_tree.__doc__ = r"""
+Ravel a tree to a 1-dimensional array.
 
-tree_flatten = tu.tree_flatten
-tree_leaves = tu.tree_leaves
-tree_map = tu.tree_map
-tree_reduce = tu.tree_reduce
-tree_unflatten = tu.tree_unflatten
+This function flattens a tree to a 1-dimensional array (*i.e.* the flattened and concatenated leaf values). An alias of :func:`jax.flatten_util.ravel_pytree`.
+
+Args: 
+  pytree: A pytree of arrays and scalars to ravel. 
+
+Returns:
+  A two-element tuple containing
+
+  - **raveled_tree** – 1-dimensional array representing the flattened and concatenated leaf values. 
+  - **unravel_fun** – Callable for unflattening a 1-dimensional array back to a tree of the same structure as ``pytree``.
+
+See Also:
+  :func:`tree_flatten`
+"""
+
+tree_map = jtu.tree_map
+tree_map.__annotations__ = {}
+tree_map.__doc__ = (
+    r"""Map a multi-input function over pytree args to produce a new pytree."""
+)
+
+tree_reduce = jtu.tree_reduce
+tree_reduce.__annotations__ = {}
+tree_reduce.__doc__ = r"""Call ``reduce`` over the leaves of a tree."""
+
+tree_flatten = jtu.tree_flatten
+tree_flatten.__annotations__ = {}
+tree_flatten.__doc__ = r"""
+Flatten a tree to a list of leaves.
+
+This function flattens a tree to the corresponding list of leaf values. An alias of :func:`jax.tree.flatten`.
+
+Args: 
+  tree: Pytree to flatten. 
+  is_leaf: Optional function used to decide what component of the tree is considered a leaf and thus does not flattening (default ``None``). 
+
+Returns:
+  A two-element tuple containing
+
+  - **leaves** – List of leaf values.
+  - **treedef** – Treedef representing the structure of the flattened tree.
+"""
+
+tree_unflatten = jtu.tree_unflatten
+tree_unflatten.__annotations__ = {}
+tree_unflatten.__doc__ = r"""
+Unflatten a tree from leaves. 
+
+This function reconstructs a tree from the treedef and the leaves. An alias of :func:`jax.tree.unflatten`.
+
+Args: 
+  treedef: Treedef to use for tree reconstruction. 
+  leaves: Matching iterable of leaves the tree reconstructs from. 
+
+Returns:
+  Reconstructed tree. 
+"""
+
+tree_leaves = jtu.tree_leaves
+tree_leaves.__annotations__ = {}
+tree_leaves.__doc__ = r"""
+Get the leaves of a tree.
+
+Similar to :func:`tree_flatten`, the function flattens a tree. The difference is that only a list of leaf values gets returned. An alias of :func:`jax.tree.leaves`.
+
+Args: 
+  tree: Pytree to flatten. 
+  is_leaf: Optional function used to decide what component of the tree is considered a leaf and thus does not flattening (default ``None``). 
+
+Returns:
+  A list of tree leaves.
+"""
+
+tree_structure = jtu.tree_structure
+tree_structure.__annotations__ = {}
+tree_structure.__doc__ = r"""Get the treedef for a pytree."""
 
 
 def broadcast_pytrees(*trees):
-    """Broadcasts leaf pytrees to match treedef shared by the other arguments.
+    r"""Broadcasts leaf pytrees to match treedef shared by the other arguments.
 
     Args:
-      *trees: A `Sequence` of pytrees such that all elements that are *not* leaf
-        pytrees (i.e. single arrays) have the same treedef.
+      *trees: A ``Sequence`` of pytrees such that all elements that are *not* leaf
+        pytrees (*i.e.* single arrays) have the same treedef.
 
     Returns:
-      The input `Sequence` of pytrees `*trees` with leaf pytrees (i.e. single
+      The input ``Sequence`` of pytrees ``*trees`` with leaf pytrees (*i.e.* single
       arrays) replaced by pytrees matching the treedef of non-shallow elements via
       broadcasting.
 
     Raises:
-      ValueError: If two or more pytrees in `*trees` that are not leaf pytrees
+      ValueError: If two or more pytrees in ``*trees`` that are not leaf pytrees
         differ in their structure (treedef).
     """
     leaves, treedef, is_leaf = [], None, []
     for tree in trees:
-        leaves_i, treedef_i = tu.tree_flatten(tree)
-        is_leaf_i = tu.treedef_is_leaf(treedef_i)
+        leaves_i, treedef_i = jtu.tree_flatten(tree)
+        is_leaf_i = jtu.treedef_is_leaf(treedef_i)
         if not is_leaf_i:
             treedef = treedef or treedef_i
             if treedef_i != treedef:
@@ -58,25 +153,94 @@ def broadcast_pytrees(*trees):
 
 
 tree_add = functools.partial(tree_map, operator.add)
-tree_add.__doc__ = "Tree addition."
+tree_add.__doc__ = r"""
+Compute tree addition.
+
+This function computes :math:`tree + rest`.
+
+Args: 
+  tree: Pytree that precedes the addition operator. 
+  rest: Pytree that succeeds the addition operator. 
+  is_leaf: Optional function used to decide what component of the tree is considered a leaf (default ``None``). 
+
+Returns:
+  Resulting pytree. 
+"""
 
 tree_sub = functools.partial(tree_map, operator.sub)
-tree_sub.__doc__ = "Tree subtraction."
+tree_sub.__doc__ = r"""
+Compute tree subtraction.
+
+This function computes :math:`tree - rest`.
+
+Args: 
+  tree: Pytree that precedes the subtraction operator. 
+  rest: Pytree that succeeds the subtraction operator. 
+  is_leaf: Optional function used to decide what component of the tree is considered a leaf (default ``None``). 
+
+Returns:
+  Resulting pytree. 
+"""
 
 tree_mul = functools.partial(tree_map, operator.mul)
-tree_mul.__doc__ = "Tree multiplication."
+tree_mul.__doc__ = r"""
+Compute tree multiplication.
+
+This function computes :math:`tree \odot rest`.
+
+Args: 
+  tree: Pytree that precedes the (Hadamard) multiplication operator. 
+  rest: Pytree that succeeds the (Hadamard) multiplication operator. 
+  is_leaf: Optional function used to decide what component of the tree is considered a leaf (default ``None``). 
+
+Returns:
+  Resulting pytree. 
+"""
 
 tree_div = functools.partial(tree_map, operator.truediv)
-tree_div.__doc__ = "Tree division."
+tree_div.__doc__ = r"""
+Compute tree division.
+
+This function computes :math:`tree \oslash rest`.
+
+Args: 
+  tree: Pytree that precedes the (Hadamard) division operator. 
+  rest: Pytree that succeeds the (Hadamard) division operator. 
+  is_leaf: Optional function used to decide what component of the tree is considered a leaf (default ``None``). 
+
+Returns:
+  Resulting pytree. 
+"""
 
 
 def tree_scalar_mul(scalar, tree_x):
-    """Compute scalar * tree_x."""
+    r"""Compute a tree multiplied by a scalar.
+
+    The function computes :math:`scalar \cdot tree_x`.
+
+    Args:
+      scalar: Scalar to be applied to the tree.
+      tree_x: Pytree to be multiplied by the scalar.
+
+    Returns:
+      Resulting pytree.
+    """
     return tree_map(lambda x: scalar * x, tree_x)
 
 
 def tree_add_scalar_mul(tree_x, scalar, tree_y):
-    """Compute tree_x + scalar * tree_y."""
+    r"""Compute the sum of a tree and another scalar multiplied tree.
+
+    The function computes :math:`tree_x + scalar \cdot tree_y`.
+
+    Args:
+      tree_x: Pytree to add to the scalar multiplied tree.
+      scalar: Scalar to be applied to the tree.
+      tree_y: Pytree to be multiplied by the scalar.
+
+    Returns:
+      Resulting pytree.
+    """
     return tree_map(lambda x, y: x + scalar * y, tree_x, tree_y)
 
 
@@ -88,13 +252,16 @@ def _vdot_safe(a, b):
 
 
 def tree_vdot(tree_x, tree_y):
-    """Compute the inner product <tree_x, tree_y>."""
+    r"""Compute the inner product of trees.
+
+    The function computes :math:`\langle tree_x, tree_y \rangle'.
+    """
     vdots = tree_map(_vdot_safe, tree_x, tree_y)
     return tree_reduce(operator.add, vdots)
 
 
 def _vdot_real(x, y):
-    """Vector dot-product guaranteed to have a real valued result despite
+    r"""Vector dot-product guaranteed to have a real valued result despite
     possibly complex input. Thus neglects the real-imaginary cross-terms.
     The result is a real float.
     """
@@ -108,26 +275,46 @@ def _vdot_real(x, y):
 
 
 def tree_vdot_real(tree_x, tree_y):
-    """Compute the real part of the inner product <tree_x, tree_y>."""
+    r"""Compute the real part of the inner product.
+
+    The function computes :math:`\operatorname{Re}(\langle tree_x, tree_y \rangle)`.
+    """
     return sum(tree_leaves(tree_map(_vdot_real, tree_x, tree_y)))
 
 
 def tree_dot(tree_x, tree_y):
-    """Compute leaves-wise dot product between pytree of arrays.
+    r"""Compute leaves-wise dot product between pytree of arrays.
 
-    Useful to store block diagonal linear operators: each leaf of the tree
-    corresponds to a block."""
+    The function computes :math:`\langle tree_x, tree_y \rangle' for pytree of arrays.
+
+    This is useful to store block diagonal linear operators: each leaf of the tree
+    corresponds to a block.
+    """
     return tree_map(jnp.dot, tree_x, tree_y)
 
 
 def tree_sum(tree_x):
-    """Compute sum(tree_x)."""
+    r"""Compute the sum of leaves of a tree.
+
+    The function computes :math:`\sum_{leaf \in tree_x} leaf`.
+    """
     sums = tree_map(jnp.sum, tree_x)
     return tree_reduce(operator.add, sums)
 
 
 def tree_l2_norm(tree_x, squared=False):
-    """Compute the l2 norm ||tree_x||."""
+    r"""Compute the L2 norm of a tree.
+
+    The function computes :math:`\lVert tree_x \rVert`.
+    If ``squared`` is set to ``True``, it returns the squared norm instead.
+
+    Args:
+      tree_x: Pytree of interest.
+      squared: Whether to compute the squared norm (default ``False``).
+
+    Returns:
+      Norm (or squared norm) of the tree.
+    """
     squared_tree = tree_map(
         lambda leaf: jnp.square(leaf.real) + jnp.square(leaf.imag), tree_x
     )
@@ -139,111 +326,128 @@ def tree_l2_norm(tree_x, squared=False):
 
 
 def tree_zeros_like(tree_x):
-    """Creates an all-zero tree with the same structure as tree_x."""
+    r"""Create an all-zero tree with the same structure."""
     return tree_map(jnp.zeros_like, tree_x)
 
 
 def tree_ones_like(tree_x):
-    """Creates an all-ones tree with the same structure as tree_x."""
+    r"""Create an all-ones tree with the same structure."""
     return tree_map(jnp.ones_like, tree_x)
 
 
 def tree_average(trees, weights):
-    """Return the linear combination of a list of trees.
+    r"""Return the weighted linear combination of a list of trees.
+
+    The function computes :math:`\sum_{i=1}^{\text{num\_trees}} weight_i \cdot tree_i`.
 
     Args:
-      trees: tree of arrays with shape (m,...)
-      weights: array of shape (m,)
+      trees: Array of trees with shape ``(num_trees,...)``.
+      weights: Array of weights with shape ``(num_trees,)``.
 
     Returns:
-      a single tree that is the linear combination of all trees
+      A single tree that is the weighted linear combination of all the trees.
     """
     return tree_map(lambda x: jnp.tensordot(weights, x, axes=1), trees)
 
 
-def tree_gram(a):
-    """Compute Gramn matrix from the pytree of batchs of vectors.
+def tree_gram(trees):
+    r"""Compute Gram matrix from pytrees.
+
+    The function computes matrix :math:`G` given by :math:`G_{i,j} = \langle tree_i, tree_j \rangle`.
 
     Args:
-      a: pytree of arrays of shape (m,...)
+      trees: Array of trees with shape ``(num_trees,...)``.
 
     Returns:
-      arrays of shape (m,m) of all dot products
+      Arrays of shape ``(num_trees, num_trees)`` of all dot products.
     """
     vmap_left = jax.vmap(tree_vdot, in_axes=(0, None))
     vmap_right = jax.vmap(vmap_left, in_axes=(None, 0))
-    return vmap_right(a, a)
+    return vmap_right(trees, trees)
 
 
 def tree_inf_norm(tree_x):
-    """Computes the infinity norm of a pytree."""
+    r"""Compute the infinity norm of a pytree.
+
+    The function computes :math:`\lVert tree_x \rVert_{\infty}`.
+    """
     leaves_vec = tree_leaves(tree_map(jnp.ravel, tree_x))
     return jnp.max(jnp.abs(jnp.concatenate(leaves_vec)))
 
 
 def tree_where(cond, a, b):
-    """jnp.where for trees.
+    r"""jnp.where for trees.
 
-    Mimic broadcasting semantic of jnp.where.
-    cond, a and b can be arrays (including scalars) broadcastable to the leaves of
+    Mimic broadcasting semantic of :func:`jax.numpy.where`.
+    ``cond``, ``a`` and ``b`` can be arrays (including scalars) broadcastable to the leaves of
     the other input arguments.
 
     Args:
-      cond: pytree of booleans arrays, or single array broadcastable to the shapes
-        of leaves of `a` and `b`.
-      a: pytree of arrays, or single array broadcastable to the shapes of leaves
-        of `cond` and `b`.
-      b: pytree of arrays, or single array broadcastable to the shapes of leaves
-        of `cond` and `a`.
+      cond: Pytree of booleans arrays, or single array broadcastable to the shapes
+        of leaves of ``a`` and ``b``.
+      a: Pytree of arrays, or single array broadcastable to the shapes of leaves
+        of ``cond`` and ``b``.
+      b: Pytree of arrays, or single array broadcastable to the shapes of leaves
+        of ``cond`` and ``a``.
 
     Returns:
-      pytree of arrays, or single array
+      Pytree of arrays, or single array
     """
     cond, a, b = broadcast_pytrees(cond, a, b)
     return tree_map(jnp.where, cond, a, b)
 
 
 def tree_negative(tree):
-    """Computes elementwise negation -x."""
+    r"""Compute leaf-wise negation.
+
+    The function computes :math:`-tree`.
+    """
     return tree_scalar_mul(-1, tree)
 
 
-def tree_reciproqual(tree):
-    """Computes elementwise inverse 1/x."""
+def tree_reciprocal(tree):
+    r"""Compute leaf-wise inverse.
+
+    The function computes :math:`1 \oslash tree`. In other words, the function returns a pytree that consists of :math:`1/leaf` where :math:`leaf` is the corresponding leaf of the original tree :math:`tree`.
+    """
     return tree_map(lambda x: jnp.reciprocal(x), tree)
 
 
 def tree_mean(tree):
-    """Mean reduction for trees."""
+    r"""Mean reduction for a tree.
+
+    The function computes :math:`\frac{1}{\text{num_leaves}} \sum_{leaf \in tree} \frac{1}{\lvert leaf \rvert} \sum_{i \in leaf} i`.
+    """
     leaves_avg = tree_map(jnp.mean, tree)
     return tree_sum(leaves_avg) / len(tree_leaves(leaves_avg))
 
 
 def tree_single_dtype(tree, convert_in_jax_dtype=True):
-    """The dtype for all values in a tree, provided that all leaves share the same type.
+    r"""The dtype for all values in a tree, provided that all leaves share the same type.
 
-    If the leaves have different type, raise a ValueError.
+    If the leaves have different type, raise a ``ValueError``.
 
     Args:
-      tree: tree to get the dtype of
-      convert_in_jax_type: whether to convert the types in JAX precision.
-        Namely, a numpy int64 type is converted in a jax.numpy int32 type
+      tree: Tree to get the dtype of.
+      convert_in_jax_type: Whether to convert the types in JAX precision.
+        Namely, a ``numpy`` ``int64`` type is converted in a ``jax.numpy`` ``int32`` type
         by default unless one enables double precision using
-        jax.config.update("jax_enable_x64", True)
+        ``jax.config.update("jax_enable_x64", True)``.
+
     Return:
-      dtype shared by all leaves of the tree
+      dtype shared by all leaves of the tree.
     """
     if convert_in_jax_dtype:
         dtypes = set(
             jnp.asarray(p).dtype
-            for p in tu.tree_leaves(tree)
-            if isinstance(p, (bool, int, float, complex, onp.ndarray, jnp.ndarray))
+            for p in jtu.tree_leaves(tree)
+            if isinstance(p, (bool, int, float, complex, np.ndarray, jnp.ndarray))
         )
     else:
         dtypes = set(
-            onp.asarray(p).dtype
-            for p in tu.tree_leaves(tree)
-            if isinstance(p, (bool, int, float, complex, onp.ndarray, jnp.ndarray))
+            np.asarray(p).dtype
+            for p in jtu.tree_leaves(tree)
+            if isinstance(p, (bool, int, float, complex, np.ndarray, jnp.ndarray))
         )
     if not dtypes:
         return None
@@ -254,7 +458,7 @@ def tree_single_dtype(tree, convert_in_jax_dtype=True):
 
 
 def get_real_dtype(dtype):
-    """Dtype corresponding of real part of a complex dtype."""
+    r"""Dtype corresponding of real part of a complex dtype."""
     if dtype not in [f"complex{i}" for i in [4, 8, 16, 32, 64, 128]]:
         return dtype
     else:
@@ -262,15 +466,24 @@ def get_real_dtype(dtype):
 
 
 def tree_conj(tree):
-    """Complex conjugate of a tree."""
+    r"""Complex conjugate of a tree.
+
+    The function computes :math:`\overline{tree}` where conjugacy applies to the tree leaf-wise.
+    """
     return tree_map(jnp.conj, tree)
 
 
 def tree_real(tree):
-    """Real part of a tree"""
+    r"""Real part of a tree.
+
+    The function computes :math:`\operatorname{Re}(tree)` where :math:`\operatorname{Re}` applies to the tree leaf-wise.
+    """
     return tree_map(jnp.real, tree)
 
 
 def tree_imag(tree):
-    """Imaginary part of a tree"""
+    r"""Imaginary part of a tree.
+
+    The function computes :math:`\operatorname{Im}(tree)` where :math:`\operatorname{Im}` applies to the tree leaf-wise.
+    """
     return tree_map(jnp.imag, tree)

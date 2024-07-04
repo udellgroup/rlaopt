@@ -1,14 +1,14 @@
+from typing import Union
+
 import jax
 import jax.numpy as jnp
 import jax.scipy as jsp
 import numpy as np
-
-from sketchyopts.base import LinearOperator, HessianLinearOperator
-from sketchyopts.errors import InputDimError, MatrixNotSquareError
-
-from typing import Union
-from jax.typing import ArrayLike
 from jax import Array
+from jax.typing import ArrayLike
+
+from sketchyopts.base import LinearOperator
+from sketchyopts.errors import InputDimError, MatrixNotSquareError
 
 KeyArray = Array
 KeyArrayLike = ArrayLike
@@ -30,8 +30,8 @@ def rand_nystrom_approx(
     only the eigenvalues (not the full diagonal matrix :math:`\hat{\Lambda}`).
 
     References:
-      - H\. Li, G. C. Linderman, A. Szlam, K. P. Stanton, Y. Kluger, and M. Tygert, `Algorithm 971: An implementation of a randomized algorithm for principal component analysis <https://dl.acm.org/doi/10.1145/3004053>`_, ACM Transactions on Mathematical Software (TOMS), 43 (2017), pp. 1–14.
-      - J\. A. Tropp, A. Yurtsever, M. Udell, and V. Cevher, `Fixed-rank approximation of a positive-semidefinite matrix from streaming data <https://dl.acm.org/doi/10.5555/3294771.3294888>`_, in NIPS, vol. 30, 2017, pp. 1225–1234.
+      - H\. Li, G. C. Linderman, A. Szlam, K. P. Stanton, Y. Kluger, and M. Tygert, `Algorithm 971: An implementation of a randomized algorithm for principal component analysis <https://dl.acm.org/doi/10.1145/3004053>`_, ACM Transactions on Mathematical Software (TOMS), 43: 1–14, 2017.
+      - J\. A. Tropp, A. Yurtsever, M. Udell, and V. Cevher, `Fixed-rank approximation of a positive-semidefinite matrix from streaming data <https://papers.nips.cc/paper_files/paper/2017/hash/4558dbb6f6f8bb2e16d03b85bde76e2c-Abstract.html>`_, Advances in Neural Information Processing Systems, 30, 2017.
 
     Args:
       A: A two-dimensional array representing a positive-semidefinite matrix. This can
@@ -44,8 +44,8 @@ def rand_nystrom_approx(
     Returns:
       A two-element tuple containing
 
-      - **U** – orthonormal matrix :math:`U`.
-      - **S** – diagonal entries of :math:`\hat{\Lambda}`.
+      - **U** – Orthonormal matrix :math:`U`.
+      - **S** – Diagonal entries of :math:`\hat{\Lambda}`.
 
     """
     # dimension check

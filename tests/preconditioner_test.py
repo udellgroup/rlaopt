@@ -1,12 +1,15 @@
-import jax.random
+import jax
 import jax.numpy as jnp
+import numpy as np
 import pytest
 
-from sketchyopts.preconditioner import rand_nystrom_approx
-from sketchyopts.errors import InputDimError, MatrixNotSquareError
+from sketchyopts import errors, preconditioner
+from tests import test_util
 
 
-class TestNystromApprox:
+class TestNystromApprox(test_util.TestCase):
+
+    key = jax.random.PRNGKey(0)
 
     def test_rand_nystrom_approx_correctness(self):
         """
@@ -18,21 +21,18 @@ class TestNystromApprox:
         size = 100
         rank = 5
         approx_rank = 10
-        seed = 0
         num_repeats = 100
         tolerance = 1e-05
         # generate keys
-        initial_key = jax.random.PRNGKey(seed)
-        generation_key, approximation_key = jax.random.split(initial_key)
+        self.key, generation_key, approximation_key = jax.random.split(self.key, num=3)
         # generate PSD matrix
         vecs = jax.random.normal(generation_key, (size, rank))
         A = vecs @ vecs.T
         # compute randomized Nyström approximations
-        key = approximation_key
         mean_relative_error = 0.0
         for i in range(num_repeats):
-            key, subkey = jax.random.split(key)
-            U, S = rand_nystrom_approx(A, approx_rank, subkey)
+            approximation_key, subkey = jax.random.split(approximation_key)
+            U, S = preconditioner.rand_nystrom_approx(A, approx_rank, subkey)
             A_nys = U @ jnp.diag(S) @ U.T
             # keep track of average element-wise relative errors
             mean_relative_error += (1 / num_repeats) * jnp.mean(
@@ -46,31 +46,37 @@ class TestNystromApprox:
         Test various input errors.
         """
         rank = 1
-        key = jax.random.PRNGKey(0)
 
         # wrong dimension
         A = 0
+        self.key, subkey = jax.random.split(self.key)
         with pytest.raises(
-            InputDimError, match="Input A is expected to have dimension 2 but has 0."
+            errors.InputDimError,
+            match="Input A is expected to have dimension 2 but has 0.",
         ):
-            rand_nystrom_approx(A, rank, key)
+            preconditioner.rand_nystrom_approx(A, rank, subkey)
 
         A = jnp.ones(10)
+        self.key, subkey = jax.random.split(self.key)
         with pytest.raises(
-            InputDimError, match="Input A is expected to have dimension 2 but has 1."
+            errors.InputDimError,
+            match="Input A is expected to have dimension 2 but has 1.",
         ):
-            rand_nystrom_approx(A, rank, key)
+            preconditioner.rand_nystrom_approx(A, rank, subkey)
 
         A = jnp.ones((10, 10, 10))
+        self.key, subkey = jax.random.split(self.key)
         with pytest.raises(
-            InputDimError, match="Input A is expected to have dimension 2 but has 3."
+            errors.InputDimError,
+            match="Input A is expected to have dimension 2 but has 3.",
         ):
-            rand_nystrom_approx(A, rank, key)
+            preconditioner.rand_nystrom_approx(A, rank, subkey)
 
         # wrong shape
-        A = A = jnp.ones((10, 5))
+        A = jnp.ones((10, 5))
+        self.key, subkey = jax.random.split(self.key)
         with pytest.raises(
-            MatrixNotSquareError,
+            errors.MatrixNotSquareError,
             match="Input A is expected to be a square matrix but has shape \\(10, 5\\).",
         ):
-            rand_nystrom_approx(A, rank, key)
+            preconditioner.rand_nystrom_approx(A, rank, subkey)

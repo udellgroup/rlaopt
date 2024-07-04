@@ -1,17 +1,18 @@
 import jax
-import jax.numpy as jnp
-
-from jax.typing import ArrayLike
 from jax import Array
+from jax.typing import ArrayLike
+
+from sketchyopts import tree_util
 
 KeyArray = Array
 KeyArrayLike = ArrayLike
 
-
-def generate_random_batch(
-    data: Array, batch_size: int, key: KeyArray
-) -> tuple[Array, KeyArray]:
-    n = jnp.shape(data)[0]
-    key, subkey = jax.random.split(key)
-    batch_idx = jax.random.permutation(subkey, n)[:batch_size]
-    return batch_idx, key
+ravel_tree = tree_util.ravel_tree
+tree_flatten = tree_util.tree_flatten
+tree_unflatten = tree_util.tree_unflatten
+tree_leaves = tree_util.tree_leaves
+tree_add = tree_util.tree_add
+tree_sub = tree_util.tree_sub
+tree_scalar_mul = tree_util.tree_scalar_mul
+tree_add_scalar_mul = tree_util.tree_add_scalar_mul
+tree_l2_norm = tree_util.tree_l2_norm

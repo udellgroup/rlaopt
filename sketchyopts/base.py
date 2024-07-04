@@ -1,44 +1,69 @@
-import jax
-import jax.numpy as jnp
-from jax._src.flatten_util import ravel_pytree
-
-import sketchyopts
-
 import abc
 from dataclasses import dataclass
-from typing import NamedTuple, Any, Callable, Tuple, Union, Optional
-from jax.typing import ArrayLike
+from typing import Any, Callable, NamedTuple, Optional
+
+import jax
+import jax.numpy as jnp
 from jax import Array
+from jax.typing import ArrayLike
+
+import sketchyopts
 
 KeyArray = Array
 KeyArrayLike = ArrayLike
 
 
 class SolverState(NamedTuple):
+    r"""Class for encapsulating parameters and solver state.
+
+    Args:
+      params: Parameters the solver seeks to optimize.
+      state: State of the solver.
+    """
+
     params: Any
     state: Any
 
 
 @dataclass(eq=False, kw_only=True)
 class PromiseSolver(abc.ABC):
+    r"""Base class for PROMISE solvers.
+
+    The class provides basic functionalities of the sketching-based preconditioned stochastic gradient algorithms.
+
+    It constructs function ``_value_and_grad`` that evaluates both the objective and gradient. It also implements
+    method ``_update_precond`` that updates the Nystroö subsampled Newton (NySSN) preconditioner and the corresponding
+    preconditioned smoothness constant. Lastly, it generates the function that applies preconditioner to gradient.
+
+    References:
+      - Z\. Frangella, P. Rathore, S. Zhao, and M. Udell, `PROMISE: Preconditioned Stochastic Optimization Methods by Incorporating Scalable Curvature Estimates <https://arxiv.org/abs/2309.02014>`_.
+
+    """
 
     fun: Callable
     grad_fun: Optional[Callable] = None
     hvp_fun: Optional[Callable] = None
     pre_update: Optional[Callable] = None
 
-    rank: int
     rho: float
+    rank: int
     grad_batch_size: int
     hess_batch_size: int
+    update_freq: int
     seed: int
-    learning_rate: Union[float, Callable] = 0.5
 
     maxiter: int = 20
     tol: float = 1e-3
     verbose: bool = False
 
     def __post_init__(self):
+        r"""The function constructs ``_value_and_grad`` that evaluates both the objective and gradient."""
+        # initialize values to appease static type checker
+        self.num_samples = 0
+        if "learning_rate" not in dir(self):
+            self.learning_rate = None
+
+        # construct objective value and gradient function
         if self.grad_fun is None:
             self._value_and_grad = jax.value_and_grad(self.fun)
         else:
@@ -51,6 +76,7 @@ class PromiseSolver(abc.ABC):
             self._value_and_grad = value_and_grad
 
     def _get_grad_transform(self, U, S):
+        r"""The function constructs ``grad_transform`` that applies preconditioner to gradient."""
 
         @jax.jit
         def grad_transform(g):
@@ -59,8 +85,8 @@ class PromiseSolver(abc.ABC):
 
         return grad_transform
 
-    # matrix-vector product for the inverse square-root of preconditioner
     def _get_inv_sqrt_precond(self, U, S):
+        r"""The function constructs ``matvec`` that computes matrix-vector product for the inverse square-root of preconditioner"""
 
         @jax.jit
         def matvec(v):
@@ -71,10 +97,10 @@ class PromiseSolver(abc.ABC):
 
         return matvec
 
-    def _get_lr(
-        self, H_S, inv_sqrt_precond, key, p_tol: float = 1e-5, p_maxiter: int = 10
+    def _estimate_constant(
+        self, H_S, inv_sqrt_precond, key, p_tol: float = 1e-5, p_maxiter: int = 20
     ):
-
+        r"""The function estimates the preconditioned smoothness constant."""
         n = jnp.shape(H_S)[0]
 
         # stopping criterion
@@ -100,13 +126,17 @@ class PromiseSolver(abc.ABC):
 
         _, labda, _, _ = jax.lax.while_loop(cond_fun, body_fun, initial_value)
 
-        return self.learning_rate / labda  # type: ignore
+        return labda  # type: ignore
 
-    def _update_precond(self, params, state, data, *args, **kwargs) -> SolverState:
+    def _update_step_size(self, labda, state):
+        r"""The function updates the step size using the learning rate from the class variable and the provided smoothness constant."""
+        return state._replace(step_size=self.learning_rate / labda)
 
+    def _update_precond(self, params, state, data, *args, **kwargs):
+        r"""The function updates the Nyström subsampled Newton (NySSN) preconditioner and corresponding smoothness constant."""
         key, subkey = jax.random.split(state.key)
-        batch_idx, key = sketchyopts.generate_random_batch(
-            data, self.hess_batch_size, key
+        batch_idx = jax.random.choice(
+            subkey, self.num_samples, (self.hess_batch_size,), replace=False
         )
         H_S = HessianLinearOperator(
             self.fun,
@@ -117,16 +147,17 @@ class PromiseSolver(abc.ABC):
             **kwargs,
             data=data[batch_idx],
         )
-        U, S = sketchyopts.rand_nystrom_approx(H_S, self.rank, subkey)
+        U, S = sketchyopts.preconditioner.rand_nystrom_approx(H_S, self.rank, subkey)
 
         # explicitly specified learning schedule
         if callable(self.learning_rate):
-            lr = self.learning_rate(state.iter_num)
+            step_size = self.learning_rate(state.iter_num)
+            state = state._replace(step_size=step_size)
         # adaptive learning rate
         else:
             key, subkey = jax.random.split(key)
-            batch_idx, key = sketchyopts.generate_random_batch(
-                data, self.hess_batch_size, key
+            batch_idx = jax.random.choice(
+                subkey, self.num_samples, (self.hess_batch_size,), replace=False
             )
             H_S = HessianLinearOperator(
                 self.fun,
@@ -138,13 +169,13 @@ class PromiseSolver(abc.ABC):
                 data=data[batch_idx],
             )
             inv_sqrt_precond = self._get_inv_sqrt_precond(U, S)
-            lr = self._get_lr(H_S, inv_sqrt_precond, subkey)
+            labda = self._estimate_constant(H_S, inv_sqrt_precond, subkey)
+            state = self._update_step_size(labda, state)
 
-        new_state = state._replace(
-            key=key, precond=self._get_grad_transform(U, S), lr=lr
+        return state._replace(
+            key=key,
+            precond=self._get_grad_transform(U, S),
         )
-
-        return SolverState(params=params, state=new_state)
 
 
 class LinearOperator(abc.ABC):
@@ -163,7 +194,7 @@ class LinearOperator(abc.ABC):
 
     @abc.abstractmethod
     def matmul(self, other: ArrayLike) -> Array:
-        r"""Compute a matrix-vector or matrix-matrix product between this operator and
+        r"""Compute a matrix-vector or matrix-matrix product between the operator and
         a JAX array.
 
         Args:
@@ -175,7 +206,7 @@ class LinearOperator(abc.ABC):
         """
 
     def __matmul__(self, other: ArrayLike) -> Array:
-        r"""An alias for function :func:`sketchyopts.util.LinearOperator.matmul`.
+        r"""An alias for function :func:`sketchyopts.base.LinearOperator.matmul`.
 
         This overwrites the ``@`` operator.
 
@@ -184,53 +215,63 @@ class LinearOperator(abc.ABC):
 
 
 class HessianLinearOperator(LinearOperator):
-    r"""Hessian operator for computing hessian-vector-product without explicitly forming
+    r"""Hessian operator for computing Hessian-vector product without explicitly forming
     the Hessian matrix.
     """
 
     def __init__(self, fun, grad_fun, hvp_fun, params, *args, **kwargs):
         r"""Initialize the Hessian linear operator.
 
-        The linear operator implcitly forms the Hessian of function ``f`` with respect
-        to parameters ``params``. The function can have other arguments ``f_extra_args``
-        that go into its evaluation, but only the second partial derivative
-        information of parameters ``params`` gets used.
+        The linear operator implcitly forms the Hessian of function ``fun`` with respect
+        to parameters ``params``. The function can have additional positional and keyword
+        arguments.
+
+        The operator uses automatic differentiation to compute Hessian-vector product,
+        unless an oracle ``hvp_fun`` is provided.
 
         Args:
-          f: Scalar-valued function.
-          params: Parameters of the function. Can be of any PyTree structure.
-          **f_extra_args: Other optional arguments to the function.
+          fun: Scalar-valued function.
+          grad_fun: Optional gradient oracle.
+          hvp_fun: Optional Hessian-vector product oracle.
+          params: Parameters of the function.
+          *args: Additional positional arguments to be passed to ``fun`` (and ``grad_fun`` as well as ``hvp_fun`` if provided).
+          **kwargs: Additional keyword arguments to be passed to ``fun`` (and ``grad_fun`` as well as ``hvp_fun`` if provided).
 
         """
-        unraveled, unravel_fn = ravel_pytree(params)
+        unraveled, unravel_fun = sketchyopts.util.ravel_tree(params)
         params_size = jnp.size(unraveled)
 
         if hvp_fun:
-            self.hvp_fn = lambda v: hvp_fun(params, v, *args, **kwargs)
+            self.hvp_fn = lambda v: sketchyopts.util.ravel_tree(
+                hvp_fun(params, unravel_fun(v), *args, **kwargs)
+            )[0]
         else:
             if grad_fun:
                 grad_fun_partial = lambda x: grad_fun(x, *args, **kwargs)
-                hvp = lambda v: jax.jvp(grad_fun_partial, [params], [unravel_fn(v)])[1]
+                hvp = lambda v: jax.jvp(grad_fun_partial, [params], [unravel_fun(v)])[1]
             else:
                 fun_partial = lambda x: fun(x, *args, **kwargs)
                 hvp = lambda v: jax.jvp(
-                    jax.grad(fun_partial), [params], [unravel_fn(v)]
+                    jax.grad(fun_partial), [params], [unravel_fun(v)]
                 )[1]
-            self.hvp_fn = lambda v: ravel_pytree(hvp(v))[0]
+            self.hvp_fn = lambda v: sketchyopts.util.ravel_tree(hvp(v))[0]
 
         super().__init__(shape=(params_size, params_size), ndim=2)
 
     def matmul(self, other):
         r"""Compute the Hessian-vector or Hessian-matrix product.
 
-        The vector of matrix the Hessian acts on must be a JAX Array (not a PyTree).
-        The result is also a JAX Array of the same dimension.
+        The vector or matrix ``other`` the Hessian acts on must have the matching size of the parameters ``params``.
+        Specifically, the function expects ``(params_size)`` for a vector or ``(params_size, num_vectors)`` for a matrix.
+        If ``params`` is a pytree, the size should be the number of leaves of the tree (*i.e.* length of the flattened tree).
+
+        The resulting array has ``(params_size)`` for vector input or ``(params_size, num_vectors)`` for matrix input.
 
         Args:
-          other: A 1D or 2D JAX array with matching size to the Hessian.
+          other: A 1-dimensional or 2-dimensional array with the matching size.
 
         Returns:
-          JAX Array representing the result.
+          Array representing the result.
 
         """
         if jnp.ndim(other) == 1:
@@ -238,8 +279,4 @@ class HessianLinearOperator(LinearOperator):
         elif jnp.ndim(other) == 2:
             return jax.vmap(self.hvp_fn, 1, 1)(other)
         else:
-            raise ValueError(
-                "matmul input operand 1 must have ndim 1 or 2, but it has ndim {}".format(
-                    jnp.ndim(other)
-                )
-            )
+            raise sketchyopts.errors.InputDimError("operand 1", jnp.ndim(other), [1, 2])

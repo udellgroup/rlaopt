@@ -1,13 +1,15 @@
-import jax.random
+import jax
 import jax.numpy as jnp
 import numpy as np
 import pytest
 
-from sketchyopts.solver import nystrom_pcg, SketchySGD, SketchySVRG
-from sketchyopts.errors import InputDimError, MatrixNotSquareError
+from sketchyopts import errors, solver
+from tests import test_util
 
 
-class TestNystromPCG:
+class TestNystromPCG(test_util.TestCase):
+
+    key = jax.random.PRNGKey(0)
 
     def test_nystrom_pcg_correctness_1(self):
         """
@@ -17,14 +19,14 @@ class TestNystromPCG:
         size = 10
         mu = 0
         rank = 1
-        seed = 0
 
-        key = jax.random.PRNGKey(seed)
+        self.key, subkey1, subkey2 = jax.random.split(self.key, num=3)
         A = jnp.identity(size)
-        b = jax.random.normal(key, (size, 1))
-        x, _, status, k = nystrom_pcg(A, b, mu, rank, key)
-        assert jnp.allclose(x, b)
-        assert jnp.allclose(status, True)
+        b = jax.random.normal(subkey1, (size, 1))
+        x, _, status, k = solver.nystrom_pcg(A, b, mu, rank, subkey2)
+
+        self.assertAllClose(x, b)
+        self.assertAllClose(status, jnp.ones(1, dtype=bool))
 
     def test_nystrom_pcg_multiple_righthand_sides(self):
         """
@@ -35,16 +37,14 @@ class TestNystromPCG:
         num_rhs = 20
         mu = 0
         rank = 1
-        seed = 0
 
-        key = jax.random.PRNGKey(seed)
+        self.key, subkey1, subkey2 = jax.random.split(self.key, num=3)
         A = jnp.identity(size)
-        b = jax.random.normal(key, (size, num_rhs))
-        x, _, status, k = nystrom_pcg(A, b, mu, rank, key)
-        print(k)
+        b = jax.random.normal(subkey1, (size, num_rhs))
+        x, _, status, k = solver.nystrom_pcg(A, b, mu, rank, subkey2)
 
-        assert jnp.allclose(x, b)
-        assert jnp.allclose(status, jnp.ones(num_rhs))
+        self.assertAllClose(x, b)
+        self.assertAllClose(status, jnp.ones(num_rhs, dtype=bool))
         assert k < size * 10
 
     def test_nystrom_pcg_correctness_2(self):
@@ -56,25 +56,22 @@ class TestNystromPCG:
         size = 100
         mu = 0.1
         rank = 10
-        seed = 0
         num_repeats = 10
         tolerance = 1e-05
-        # generate keys
-        initial_key = jax.random.PRNGKey(seed)
-        generation_key, solver_key = jax.random.split(initial_key)
+
         # generate PSD matrix with fast spectral decay
-        eigvec_key, sol_key = jax.random.split(generation_key)
-        Q, _ = jnp.linalg.qr(jax.random.normal(eigvec_key, (size, size)))
+        self.key, subkey1, subkey2 = jax.random.split(self.key, num=3)
+        Q, _ = jnp.linalg.qr(jax.random.normal(subkey1, (size, size)))
         L = jnp.exp(1 / (jnp.arange(size) + 0.5)) - 1
         A = Q @ jnp.diag(L) @ Q.T
-        x = jax.random.normal(sol_key, (size,))
+        x = jax.random.normal(subkey2, (size,))
         b = A @ x + mu * x
+
         # run Nyström-PCG
-        key = solver_key
         tol_factor = 1 / (L[-1] ** 2 + 2 * L[-1] * mu + mu**2) ** (1 / 2)
         for i in range(num_repeats):
-            key, subkey = jax.random.split(key)
-            x_final, r_final, status_final, k_final = nystrom_pcg(
+            self.key, subkey = jax.random.split(self.key)
+            x_final, r_final, status_final, k_final = solver.nystrom_pcg(
                 A, b, mu, rank, subkey, tol=tolerance
             )
             # approximate solution should be close to the true solution
@@ -86,91 +83,154 @@ class TestNystromPCG:
         """
         rank = 1
         mu = 1
-        key = jax.random.PRNGKey(0)
 
         # wrong dimension
         A = 0
         b = 0
+        self.key, subkey = jax.random.split(self.key)
         with pytest.raises(
-            InputDimError, match="Input A is expected to have dimension 2 but has 0."
+            errors.InputDimError,
+            match="Input A is expected to have dimension 2 but has 0.",
         ):
-            nystrom_pcg(A, b, mu, rank, key)
+            solver.nystrom_pcg(A, b, mu, rank, subkey)
 
         A = jnp.ones(10)
+        self.key, subkey = jax.random.split(self.key)
         with pytest.raises(
-            InputDimError, match="Input A is expected to have dimension 2 but has 1."
+            errors.InputDimError,
+            match="Input A is expected to have dimension 2 but has 1.",
         ):
-            nystrom_pcg(A, b, mu, rank, key)
+            solver.nystrom_pcg(A, b, mu, rank, subkey)
 
         A = jnp.ones((10, 10, 10))
+        self.key, subkey = jax.random.split(self.key)
         with pytest.raises(
-            InputDimError, match="Input A is expected to have dimension 2 but has 3."
+            errors.InputDimError,
+            match="Input A is expected to have dimension 2 but has 3.",
         ):
-            nystrom_pcg(A, b, mu, rank, key)
+            solver.nystrom_pcg(A, b, mu, rank, subkey)
 
         A = jnp.ones((10, 10))
+        self.key, subkey = jax.random.split(self.key)
         with pytest.raises(
-            InputDimError,
+            errors.InputDimError,
             match="Input b is expected to have any dimension in \\[1, 2\\] but has 0.",
         ):
-            nystrom_pcg(A, b, mu, rank, key)
+            solver.nystrom_pcg(A, b, mu, rank, subkey)
 
         b = jnp.ones((10, 2, 1))
+        self.key, subkey = jax.random.split(self.key)
         with pytest.raises(
-            InputDimError,
+            errors.InputDimError,
             match="Input b is expected to have any dimension in \\[1, 2\\] but has 3.",
         ):
-            nystrom_pcg(A, b, mu, rank, key)
+            solver.nystrom_pcg(A, b, mu, rank, subkey)
 
         # wrong shape
         A = jnp.ones((10, 5))
+        self.key, subkey = jax.random.split(self.key)
         with pytest.raises(
-            MatrixNotSquareError,
+            errors.MatrixNotSquareError,
             match="Input A is expected to be a square matrix but has shape \\(10, 5\\).",
         ):
-            nystrom_pcg(A, b, mu, rank, key)
+            solver.nystrom_pcg(A, b, mu, rank, subkey)
 
 
-class TestPromiseSolvers:
+def obj_fun(beta, data, reg):
+    """
+    Objective function of ridge regression.
+    The function works for both one-dimensional (single sample) or two-dimensional (a batch of samples) data input.
+    """
+    if jnp.ndim(data) == 1:
+        features = jnp.expand_dims(data[:-1], axis=0)
+        targets = jnp.expand_dims(data[-1], axis=0)
+        n = 1
+    else:
+        features = data[:, :-1]
+        targets = data[:, -1]
+        n = data.shape[0]
+    preds = (
+        features[:, :2] @ beta[0]
+        + features[:, 2:5] @ beta[1]
+        + features[:, 5:] @ beta[2]
+    )
+    res = targets - preds
+    return (1 / (2 * n)) * jnp.sum(jnp.square(res)) + (reg / 2) * (
+        jnp.sum(jnp.square(beta[0]))
+        + jnp.sum(jnp.square(beta[1]))
+        + jnp.sum(jnp.square(beta[2]))
+    )
 
-    @pytest.fixture
-    def least_squares(self, promise_solver):
+
+class TestPromiseSolvers(test_util.TestCase):
+
+    key = jax.random.PRNGKey(0)
+
+    # generate data
+    num_samples = 20
+    num_features = 10
+    reg = 0.1
+    key, subkey1, subkey2 = jax.random.split(key, num=3)
+    X = jax.random.normal(subkey1, (num_samples, num_features))
+    y = jax.random.normal(subkey2, (num_samples,))
+    data = jnp.hstack([X, jnp.expand_dims(y, 1)])
+
+    # initial parameters
+    beta_0 = (jnp.zeros(2), jnp.zeros(3), jnp.zeros(5))
+
+    # compute reference solution
+    _, unravel_fun = jax._src.flatten_util.ravel_pytree(beta_0)
+    beta_sol = unravel_fun(test_util.ridge_regression_sol(X, y, reg))
+    value_sol = obj_fun(beta_sol, data, reg)
+
+    # solver hyperparameters
+    rho = 0.1
+    rank = 10
+    grad_batch_size = 20
+    hess_batch_size = 20
+    update_freq = 0
+    seed = 0
+    maxiter = 50
+    tol = 1e-05
+
+    @pytest.mark.parametrize(
+        "promise_solver",
+        [
+            (solver.SketchySGD, {"learning_rate": 0.5}),
+            (solver.SketchySVRG, {"learning_rate": 0.5, "snapshop_update_freq": 1}),
+            (solver.SketchySAGA, {"learning_rate": 0.5}),
+            (
+                solver.SketchyKatyusha,
+                {
+                    "mu": 0.1,
+                    "momentum_param": 1 / 3,
+                    "momentum_multiplier": 2 / 3,
+                    "snapshop_update_prob": 0.5,
+                },
+            ),
+        ],
+    )
+    def test_ridge_regression(self, promise_solver):
         """
-        Test solvers on a simple least squares problem.
-        With constant Hessian, we expect the objective to converge to the optimal quickly,
+        Test PROMISE solvers on a ridge regression problem.
+        The parameters we seek to optimize has a tree-like structure.
+        The problem has a constant Hessian and therefore we do not update the preconditioner during the run.
         """
-        num_samples = int(1e3)
-        sample_dim = 3
-
-        true_params = jnp.array([1.0, 2.0, 3.0])
-        key = jax.random.key(0)
-        rng = np.random.default_rng()
-        X = jax.random.normal(key, shape=(num_samples, sample_dim))
-        y = X @ jnp.expand_dims(true_params, 1)  # no noise
-        data = jnp.hstack([X, y])
-
-        def f(params, data):
-            return jnp.sum(
-                jnp.square(data[:, sample_dim] - data[:, :sample_dim] @ params)
-            )
-
         solver_class, solver_params = promise_solver
         solver = solver_class(
-            fun=f,
-            rank=3,
-            rho=1,
-            grad_batch_size=100,
-            hess_batch_size=50,
-            seed=0,
-            maxiter=20,
-            tol=1e-05,
+            fun=obj_fun,
+            rank=self.rank,
+            rho=self.rho,
+            grad_batch_size=self.grad_batch_size,
+            hess_batch_size=self.hess_batch_size,
+            update_freq=self.update_freq,
+            seed=self.seed,
+            maxiter=self.maxiter,
+            tol=self.tol,
             **solver_params,
         )
-        init_params = jnp.zeros_like(true_params)
-        params, state = solver.run(init_params, data)
+        beta_final, solver_state = solver.run(self.beta_0, self.data, reg=self.reg)
 
-        assert jnp.allclose(f(params, data), 0.0)
-
-    @pytest.mark.parametrize("promise_solver", [(SketchySGD, {"update_freq": 0})])
-    def test_problems(self, least_squares):
-        assert 1
+        self.assertAllClose(self.value_sol, obj_fun(beta_final, self.data, self.reg))
+        assert solver_state.iter_num <= self.maxiter
+        assert solver_state.error <= self.tol

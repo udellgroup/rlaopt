@@ -1,5 +1,5 @@
 from collections.abc import Sequence
-from typing import Union, Tuple
+from typing import Union
 
 
 class SketchyOptsError(Exception):
@@ -19,10 +19,16 @@ class InputDimError(SketchyOptsError):
     """
 
     def __init__(
-        self, input_name: str, actual_dim: int, required_dim: Union[int, Sequence[int]]
+        self,
+        input_name: str,
+        actual_dim: int,
+        required_dim: Union[int, Sequence[int]],
+        custom_msg="",
     ) -> None:
 
-        if isinstance(required_dim, Sequence) and len(required_dim) > 1:
+        if custom_msg:
+            msg = custom_msg
+        elif isinstance(required_dim, Sequence) and len(required_dim) > 1:
             msg = f"Input {input_name} is expected to have any dimension in {required_dim} but has {actual_dim}."
         else:
             msg = f"Input {input_name} is expected to have dimension {required_dim} but has {actual_dim}."

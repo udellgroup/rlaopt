@@ -4,7 +4,7 @@ SketchyOpts
 
 SketchyOpts is a `JAX <https://jax.readthedocs.io/>`_ library for sketching-based methods. 
 
-The primary goal is to provide accessible and efficient implementation of these methods to the scientific community. To this end, the library follows design philosophies of `Optax <https://optax.readthedocs.io/>`_ and structures optimizers into composable blocks. We hope the library facilitates research productivity and leads to new ideas and exciting solutions.  
+The primary goal is to provide accessible and efficient implementation of these methods to the scientific community. To this end, the library follows design philosophies of `JAXopt <https://jaxopt.github.io/>`_ and provides a familiar interface. We hope the library facilitates research productivity and leads to new ideas and exciting solutions.  
 
 ----
 
@@ -29,7 +29,8 @@ Citation
    api/sketchyopts.preconditioner
    api/sketchyopts.solver
    api/sketchyopts.base
-   api/sketchyopts.errors
+   api/sketchyopts.util
+   api/sketchyopts.error
 
 ----
 

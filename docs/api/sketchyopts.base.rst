@@ -4,8 +4,15 @@ Base
 .. currentmodule:: sketchyopts.base
 
 .. autosummary::
+    SolverState
+    PromiseSolver
     LinearOperator
     HessianLinearOperator
+
+PROMISE Solvers
+~~~~~~~~~~~~~~~
+.. autoclass:: SolverState
+.. autoclass:: PromiseSolver
 
 Linear Operator
 ~~~~~~~~~~~~~~~
