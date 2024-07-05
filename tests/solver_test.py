@@ -144,18 +144,16 @@ def obj_fun(beta, data, reg):
     if jnp.ndim(data) == 1:
         features = jnp.expand_dims(data[:-1], axis=0)
         targets = jnp.expand_dims(data[-1], axis=0)
-        n = 1
     else:
         features = data[:, :-1]
         targets = data[:, -1]
-        n = data.shape[0]
     preds = (
         features[:, :2] @ beta[0]
         + features[:, 2:5] @ beta[1]
         + features[:, 5:] @ beta[2]
     )
     res = targets - preds
-    return (1 / (2 * n)) * jnp.sum(jnp.square(res)) + (reg / 2) * (
+    return (1 / 2) * jnp.mean(jnp.square(res)) + (reg / 2) * (
         jnp.sum(jnp.square(beta[0]))
         + jnp.sum(jnp.square(beta[1]))
         + jnp.sum(jnp.square(beta[2]))

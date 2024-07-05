@@ -174,7 +174,7 @@ class PromiseSolver(abc.ABC):
 
         return state._replace(
             key=key,
-            precond=self._get_grad_transform(U, S),
+            precond=jax.tree_util.Partial(self._get_grad_transform(U, S)),
         )
 
 
@@ -222,7 +222,7 @@ class HessianLinearOperator(LinearOperator):
     def __init__(self, fun, grad_fun, hvp_fun, params, *args, **kwargs):
         r"""Initialize the Hessian linear operator.
 
-        The linear operator implcitly forms the Hessian of function ``fun`` with respect
+        The linear operator implicitly forms the Hessian of function ``fun`` with respect
         to parameters ``params``. The function can have additional positional and keyword
         arguments.
 

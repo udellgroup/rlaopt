@@ -155,7 +155,7 @@ def obj_fun(beta, data, reg):
         + features[:, 5:] @ beta[2]
     )
     res = targets - preds
-    return (1 / (2 * n)) * jnp.sum(jnp.square(res)) + (reg / 2) * (
+    return (1 / 2) * jnp.mean(jnp.square(res)) + (reg / 2) * (
         jnp.sum(jnp.square(beta[0]))
         + jnp.sum(jnp.square(beta[1]))
         + jnp.sum(jnp.square(beta[2]))

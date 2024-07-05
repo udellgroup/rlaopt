@@ -262,7 +262,7 @@ class SketchySGD(PromiseSolver):
 
         # call custom pre-update function
         if self.pre_update:
-            solver_state = self.pre_update(
+            params, state = self.pre_update(
                 params, state, *args, **kwargs, data=data[batch_idx]
             )
 
@@ -303,6 +303,11 @@ class SketchySGD(PromiseSolver):
         params = init_params
         state = self._init_state()
 
+        # jit the parameter update function
+        update_params = jax.jit(
+            lambda p, s: self._update_params(p, s, data, *args, **kwargs)
+        )
+
         # run the optimization loop
         for i in range(self.maxiter):
 
@@ -313,7 +318,7 @@ class SketchySGD(PromiseSolver):
                 state = self._update_precond(params, state, data, *args, **kwargs)
 
             # update iterate
-            params, state = self._update_params(params, state, data, *args, **kwargs)
+            params, state = update_params(params, state)
 
             # break out of loop if tolerance has been reached
             if state.error < self.tol:
@@ -443,7 +448,7 @@ class SketchySVRG(PromiseSolver):
 
         # call custom pre-update function
         if self.pre_update:
-            solver_state = self.pre_update(
+            params, state = self.pre_update(
                 params, state, *args, **kwargs, data=data[batch_idx]
             )
 
@@ -493,6 +498,11 @@ class SketchySVRG(PromiseSolver):
         params = init_params
         state = self._init_state()
 
+        # jit the parameter update function
+        update_params = jax.jit(
+            lambda p, s: self._update_params(p, s, data, *args, **kwargs)
+        )
+
         # run the optimization loop
         for i in range(self.maxiter):
 
@@ -507,7 +517,7 @@ class SketchySVRG(PromiseSolver):
                 state = self._update_precond(params, state, data, *args, **kwargs)
 
             # update iterate
-            params, state = self._update_params(params, state, data, *args, **kwargs)
+            params, state = update_params(params, state)
 
             # break out of loop if tolerance has been reached
             if state.error < self.tol:
@@ -552,6 +562,8 @@ class SketchySAGA(PromiseSolver):
     the optimizer computes auxiliary vector and uses it to update the variance-reduced stochastic
     gradient. The update is then based on the preconditioned variance-reduced stochastic gradient.
 
+    .. note:: Because SketchySAGA computes gradient of each individual component function, the provided objective function ``fun`` or gradient function ``grad_fun`` needs to be compatible with 1-dimensional data input (*i.e.* when the data input is a vector representing a single sample). The following example expands the vector to a 2-dimensional array to handle the single sample case.
+
     Example:
       .. highlight:: python
       .. code-block:: python
@@ -560,6 +572,9 @@ class SketchySAGA(PromiseSolver):
         from sketchyopts.solver import SketchySAGA
 
         def ridge_reg_objective(params, l2reg, data):
+            # make data 2-dimensional if it is a vector of a single sample
+            if jnp.ndim(data) == 1:
+                data = jnp.expand_dims(data, axis=0)
             # data has dimension num_samples * (feature_dim + 1)
             X, y = data[:,:feature_dim], data[:,feature_dim:]
             residuals = jnp.dot(X, params) - y
@@ -641,7 +656,7 @@ class SketchySAGA(PromiseSolver):
 
         # call custom pre-update function
         if self.pre_update:
-            solver_state = self.pre_update(
+            params, state = self.pre_update(
                 params, state, *args, **kwargs, data=data[batch_idx]
             )
 
@@ -695,6 +710,11 @@ class SketchySAGA(PromiseSolver):
         params = init_params
         state = self._init_state(init_params, data)
 
+        # jit the parameter update function
+        update_params = jax.jit(
+            lambda p, s: self._update_params(p, s, data, *args, **kwargs)
+        )
+
         # run the optimization loop
         for i in range(self.maxiter):
 
@@ -705,7 +725,7 @@ class SketchySAGA(PromiseSolver):
                 state = self._update_precond(params, state, data, *args, **kwargs)
 
             # update iterate
-            params, state = self._update_params(params, state, data, *args, **kwargs)
+            params, state = update_params(params, state)
 
             # break out of loop if tolerance has been reached
             if state.error < self.tol:
@@ -841,6 +861,16 @@ class SketchyKatyusha(PromiseSolver):
             theta=theta,
         )
 
+    def _update_snapshot(self, u, params, state, data, *args, **kwargs):
+        r"""The function updates snapshot and full gradient with specified update probability."""
+
+        def update():
+            _, full_grad = self._value_and_grad(params, *args, **kwargs, data=data)
+            full_grad, _ = ravel_tree(full_grad)
+            return state._replace(full_grad=full_grad, snapshot=params)
+
+        return jax.lax.cond(u <= self.snapshop_update_prob, update, lambda: state)
+
     def _update_params(self, params, state, data, *args, **kwargs) -> SolverState:
         r"""The function performs an update on the iterate."""
         # generate a random batch
@@ -852,17 +882,9 @@ class SketchyKatyusha(PromiseSolver):
 
         # call custom pre-update function
         if self.pre_update:
-            solver_state = self.pre_update(
+            params, state = self.pre_update(
                 params, state, *args, **kwargs, data=data[batch_idx]
             )
-
-        # update snapshot
-        full_grad = state.full_grad
-        snapshot = state.snapshot
-        if u <= self.snapshop_update_prob:
-            _, full_grad = self._value_and_grad(params, *args, **kwargs, data=data)
-            full_grad, _ = ravel_tree(full_grad)
-            snapshot = params
 
         # compute negative momentum
         x = tree_scalar_mul(state.theta, state.z)
@@ -884,6 +906,9 @@ class SketchyKatyusha(PromiseSolver):
             state.precond(unraveled_grad - unraveled_grad_snapshot + state.full_grad),
         )
 
+        # update snapshot
+        state = self._update_snapshot(u, params, state, data, *args, **kwargs)
+
         # perform an update
         z = tree_scalar_mul(state.step_size * state.sigma, x)
         z = tree_add(z, state.z)
@@ -898,8 +923,6 @@ class SketchyKatyusha(PromiseSolver):
                 value=value,
                 error=error,
                 key=key,
-                full_grad=full_grad,
-                snapshot=snapshot,
                 z=z,
             ),
         )
@@ -920,6 +943,11 @@ class SketchyKatyusha(PromiseSolver):
         params = init_params
         state = self._init_state(init_params, data, *args, **kwargs)
 
+        # jit the parameter update function
+        update_params = jax.jit(
+            lambda p, s: self._update_params(p, s, data, *args, **kwargs)
+        )
+
         # run the optimization loop
         for i in range(self.maxiter):
 
@@ -930,7 +958,7 @@ class SketchyKatyusha(PromiseSolver):
                 state = self._update_precond(params, state, data, *args, **kwargs)
 
             # update iterate
-            params, state = self._update_params(params, state, data, *args, **kwargs)
+            params, state = update_params(params, state)
 
             # break out of loop if tolerance has been reached
             if state.error < self.tol:
