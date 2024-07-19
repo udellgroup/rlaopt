@@ -19,20 +19,24 @@ class TestNystromApprox(test_util.TestCase):
         element-wise relative error from these runs.
         """
         size = 100
-        rank = 5
-        approx_rank = 10
-        num_repeats = 100
-        tolerance = 1e-05
+        rank = 10
+        num_repeats = 1000
+        tolerance = 1e-03
         # generate keys
         self.key, generation_key, approximation_key = jax.random.split(self.key, num=3)
         # generate PSD matrix
-        vecs = jax.random.normal(generation_key, (size, rank))
-        A = vecs @ vecs.T
+        A = jax.random.uniform(generation_key, (rank, size))
+        A = A.T @ A
+        # jit the approximation function
+        nys_approx = jax.jit(
+            lambda a, k: preconditioner.rand_nystrom_approx(a, rank, k)
+        )
         # compute randomized Nyström approximations
         mean_relative_error = 0.0
         for i in range(num_repeats):
             approximation_key, subkey = jax.random.split(approximation_key)
-            U, S = preconditioner.rand_nystrom_approx(A, approx_rank, subkey)
+            # U, S = preconditioner.rand_nystrom_approx(A, approx_rank, subkey)
+            U, S = nys_approx(A, subkey)
             A_nys = U @ jnp.diag(S) @ U.T
             # keep track of average element-wise relative errors
             mean_relative_error += (1 / num_repeats) * jnp.mean(

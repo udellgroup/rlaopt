@@ -9,8 +9,8 @@ Base
     LinearOperator
     HessianLinearOperator
 
-PROMISE Solvers
-~~~~~~~~~~~~~~~
+PROMISE Solver
+~~~~~~~~~~~~~~
 .. autoclass:: SolverState
 .. autoclass:: PromiseSolver
 

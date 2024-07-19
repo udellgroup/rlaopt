@@ -160,6 +160,15 @@ def obj_fun(beta, data, reg):
     )
 
 
+def sqrt_hess_fun(beta, data):
+    """
+    Square root Hessian function of ridge regression.
+    """
+    sqrt_n = data.shape[0] ** 0.5
+    features = data[:, :-1]
+    return (1 / sqrt_n) * features
+
+
 class TestPromiseSolvers(test_util.TestCase):
 
     key = jax.random.PRNGKey(0)
@@ -215,9 +224,31 @@ class TestPromiseSolvers(test_util.TestCase):
         The problem has a constant Hessian and therefore we do not update the preconditioner during the run.
         """
         solver_class, solver_params = promise_solver
+
+        # solver with the Nyström subsampled Newton preconditioner
         solver = solver_class(
             fun=obj_fun,
             rank=self.rank,
+            rho=self.rho,
+            grad_batch_size=self.grad_batch_size,
+            hess_batch_size=self.hess_batch_size,
+            update_freq=self.update_freq,
+            seed=self.seed,
+            maxiter=self.maxiter,
+            tol=self.tol,
+            **solver_params,
+        )
+        beta_final, solver_state = solver.run(self.beta_0, self.data, reg=self.reg)
+
+        self.assertAllClose(self.value_sol, obj_fun(beta_final, self.data, self.reg))
+        assert solver_state.iter_num <= self.maxiter
+        assert solver_state.error <= self.tol
+
+        # solver with the subsampled Newton preconditioner
+        solver = solver_class(
+            fun=obj_fun,
+            sqrt_hess_fun=sqrt_hess_fun,
+            precond="ssn",
             rho=self.rho,
             grad_batch_size=self.grad_batch_size,
             hess_batch_size=self.hess_batch_size,

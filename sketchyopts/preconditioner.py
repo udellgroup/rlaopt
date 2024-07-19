@@ -62,19 +62,30 @@ def rand_nystrom_approx(
     Omega = jsp.linalg.qr(Omega, mode="economic")[0]
     Y = A @ Omega
     # shift Y for numerical stability
-    shift = np.spacing(jnp.linalg.norm(Y, ord="fro"))
+    shift = jnp.linalg.norm(Y, ord="fro")
+    shift = shift - jnp.nextafter(shift, 0.0)
     Y_shifted = Y + shift * Omega
     # compute rank-l approximate Cholesky factor of Nyström approximation
     cholesky_target = Omega.T @ Y_shifted
     C = jsp.linalg.cholesky(cholesky_target, lower=False)
+
     # fail-safe step if Cholesky fails
     # Cholesky fails when the returned matrix has NaN values
     # This behavior is explained in post https://github.com/google/jax/issues/775
-    if jnp.any(jnp.isnan(C)):
+
+    def fail_safe(C):
         eigs, eigvectors = jsp.linalg.eigh(cholesky_target)
-        shift = shift + jnp.abs(jnp.min(eigs))
-        eigs = eigs + shift
-        C = jsp.linalg.cholesky(eigvectors @ jnp.diag(eigs) @ eigvectors.T, lower=False)
+        new_shift = shift + jnp.abs(jnp.min(eigs))
+        eigs = eigs + new_shift
+        return (
+            jsp.linalg.cholesky(
+                eigvectors @ jnp.diag(eigs) @ eigvectors.T, lower=False
+            ),
+            new_shift,
+        )
+
+    C, shift = jax.lax.cond(jnp.any(jnp.isnan(C)), fail_safe, lambda x: (x, shift), C)
+
     B = jsp.linalg.solve_triangular(C, Y_shifted.T, lower=False, trans=1)
     U, S, _ = jsp.linalg.svd(B.T, full_matrices=False)
     S = jnp.maximum(0.0, jnp.square(S) - shift)
