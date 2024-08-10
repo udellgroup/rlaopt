@@ -39,11 +39,11 @@ myst_enable_extensions = [
     "attrs_inline",
 ]
 myst_dmath_double_inline = True
-nb_execution_mode = 'off'
+nb_execution_mode = "off"
 nb_render_image_options = {
     "align": "center",
 }
-bibtex_bibfiles = ['refs.bib']
+bibtex_bibfiles = ["refs.bib"]
 bibtex_reference_style = "author_year"
 bibtex_default_style = "plain"
 
