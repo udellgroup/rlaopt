@@ -14,6 +14,15 @@ KeyArray = Array
 KeyArrayLike = ArrayLike
 
 
+def shifted_cholesky(target, shift):
+    eigs, eigvectors = jsp.linalg.eigh(target)
+    new_shift = shift + jnp.abs(jnp.min(eigs))
+    L = jsp.linalg.cholesky(
+        eigvectors @ jnp.diag(eigs + new_shift) @ eigvectors.T, lower=False
+    )
+    return L, new_shift
+
+
 def rand_nystrom_approx(
     A: Union[ArrayLike, LinearOperator], l: int, key: KeyArrayLike
 ) -> tuple[Array, Array]:
@@ -73,18 +82,13 @@ def rand_nystrom_approx(
     # Cholesky fails when the returned matrix has NaN values
     # This behavior is explained in post https://github.com/google/jax/issues/775
 
-    def fail_safe(C):
-        eigs, eigvectors = jsp.linalg.eigh(cholesky_target)
-        new_shift = shift + jnp.abs(jnp.min(eigs))
-        eigs = eigs + new_shift
-        return (
-            jsp.linalg.cholesky(
-                eigvectors @ jnp.diag(eigs) @ eigvectors.T, lower=False
-            ),
-            new_shift,
-        )
-
-    C, shift = jax.lax.cond(jnp.any(jnp.isnan(C)), fail_safe, lambda x: (x, shift), C)
+    C, shift = jax.lax.cond(
+        jnp.any(jnp.isnan(C)),
+        shifted_cholesky,
+        lambda x, y: (C, shift),
+        cholesky_target,
+        shift,
+    )
 
     B = jsp.linalg.solve_triangular(C, Y_shifted.T, lower=False, trans=1)
     U, S, _ = jsp.linalg.svd(B.T, full_matrices=False)

@@ -32,9 +32,10 @@ class PromiseSolver(abc.ABC):
     The class provides basic functionalities of the sketching-based preconditioned stochastic gradient algorithms.
 
     It constructs function ``_value_and_grad`` that evaluates both the objective and gradient. It also implements
-    method ``_update_precond`` that updates the Nyström subsampled Newton (NySSN) or subsampled Newton (SSN)
-    preconditioner and the corresponding preconditioned smoothness constant. Lastly, it generates the function
-    that applies preconditioner to gradient.
+    method ``_init_precond`` that initializes empty preconditioner decomposition, and ``_update_precond`` that
+    updates the Nyström subsampled Newton (NySSN) or subsampled Newton (SSN) preconditioner as well as the
+    corresponding preconditioned smoothness constant. Helper method ``_grad_transform`` applies preconditioner to
+    the provided gradient vector.
 
     References:
       - Z\. Frangella, P. Rathore, S. Zhao, and M. Udell, `PROMISE: Preconditioned Stochastic Optimization Methods by Incorporating Scalable Curvature Estimates <https://arxiv.org/abs/2309.02014>`_.
@@ -49,25 +50,26 @@ class PromiseSolver(abc.ABC):
 
     precond: str = "nyssn"
 
-    rho: float
+    rho: float = 1e-3
     rank: int = 10
     grad_batch_size: int
     hess_batch_size: int
     update_freq: int
-    seed: int
+    seed: int = 0
 
     maxiter: int = 20
     tol: float = 1e-3
     verbose: bool = False
     jit: bool = True
+    sparse: bool = False
 
     def __post_init__(self):
         r"""The function constructs ``_value_and_grad`` that evaluates both the objective and gradient."""
         # validate preconditioner type and required oracle
         if self.precond == "ssn":
-            if not self.sqrt_hess_fun:
+            if not callable(self.sqrt_hess_fun):
                 raise ValueError(
-                    "Unspecified square root Hessian oracle for the subsampled Newton preconditioner."
+                    "Invalid square-root Hessian oracle for the subsampled Newton preconditioner."
                 )
         elif self.precond != "nyssn":
             raise ValueError(
@@ -81,52 +83,80 @@ class PromiseSolver(abc.ABC):
             self.learning_rate = None
 
         # construct objective value and gradient function
-        if self.grad_fun is None:
+        if not callable(self.grad_fun):
             self._value_and_grad = jax.value_and_grad(self.fun)
         else:
 
             def value_and_grad(params, *args, **kwargs):
-                return self.fun(params, *args, **kwargs), self.grad_fun(  # type: ignore
+                return self.fun(params, *args, **kwargs), self.grad_fun(
                     params, *args, **kwargs
-                )
+                )  # type: ignore
 
             self._value_and_grad = value_and_grad
 
-    def _get_grad_transform_nyssn(self, U, S):
-        r"""The function constructs ``grad_transform`` that applies preconditioner to gradient for the Nyström subsampled Newton preconditioner."""
+    def _init_precond(self, params, data, reg, *args, **kwargs):
+        r"""The function initializes zero preconditioner of the correct shape."""
+        # NySSN preconditioner
+        if self.precond == "nyssn":
+            precond = (
+                sketchyopts.util.inexact_asarray(
+                    jnp.zeros((self.params_len, self.rank))
+                ),
+                sketchyopts.util.inexact_asarray(jnp.zeros((self.rank,))),
+            )
+        # SSN preconditioner
+        else:
+            # get the shape of the square root of the Hessian
+            X = self.sqrt_hess_fun(
+                params, *args, **kwargs, data=data[: self.hess_batch_size]
+            )  # type: ignore
+            sqrt_hess_size = jnp.shape(X)[0]
 
-        @jax.jit
-        def grad_transform(g):
+            if sqrt_hess_size < self.params_len:
+                precond = (
+                    sketchyopts.util.inexact_asarray(
+                        jnp.zeros((sqrt_hess_size, sqrt_hess_size))
+                    ),
+                    sketchyopts.util.inexact_asarray(
+                        jnp.zeros((sqrt_hess_size, self.params_len))
+                    ),
+                )
+            else:
+                precond = (
+                    sketchyopts.util.inexact_asarray(
+                        jnp.zeros((self.params_len, self.params_len))
+                    ),
+                    sketchyopts.util.inexact_asarray(
+                        jnp.zeros((sqrt_hess_size, self.params_len))
+                    ),
+                )
+
+        return precond
+
+    def _grad_transform(self, g, precond):
+        r"""The function performs preconditioning on the gradient."""
+        # NySSN preconditioner
+        if self.precond == "nyssn":
+            U, S = precond
             UTg = U.T @ g
             return U @ (UTg / (S + self.rho)) + g / self.rho - U @ UTg / self.rho
+        # SSN preconditioner
+        else:
+            L, X = precond
 
-        return grad_transform
-
-    def _get_grad_transform_ssn(self, L, X):
-        r"""The function constructs ``grad_transform`` that applies preconditioner to gradient for the subsampled Newton preconditioner."""
-
-        if jnp.shape(X)[0] < self.params_len:
-
-            @jax.jit
-            def grad_transform(g):
+            if jnp.shape(X)[0] < self.params_len:
                 v = X @ g
                 v = jnp.linalg.solve(L, v)
                 v = jnp.linalg.solve(L.T, v)
                 v = X.T @ v
-                return (1 / self.rho) * (g - v)
-
-            return grad_transform
-
-        @jax.jit
-        def grad_transform(g):
-            v = jnp.linalg.solve(L, g)
-            v = jnp.linalg.solve(L.T, v)
-            return v
-
-        return grad_transform
+                return (1.0 / self.rho) * (g - v)
+            else:
+                v = jnp.linalg.solve(L, g)
+                v = jnp.linalg.solve(L.T, v)
+                return v
 
     def _estimate_constant(
-        self, H_S, grad_transform, key, p_tol: float = 1e-5, p_maxiter: int = 20
+        self, H_S, precond, key, p_tol: float = 1e-5, p_maxiter: int = 20
     ):
         r"""The function estimates the preconditioned smoothness constant."""
 
@@ -138,7 +168,7 @@ class PromiseSolver(abc.ABC):
         # power iteration
         def body_fun(value):
             y, _, _, k = value
-            y_ = grad_transform(y)
+            y_ = self._grad_transform(y, precond)
             y_ = H_S @ y_
             labda = jnp.dot(y, y_)
             norm_r = jnp.linalg.norm(y_ - labda * y)
@@ -164,25 +194,25 @@ class PromiseSolver(abc.ABC):
         batch_idx = jax.random.choice(
             subkey, self.num_samples, (self.hess_batch_size,), replace=False
         )
-        H_S = HessianLinearOperator(
-            fun=self.fun,
-            grad_fun=self.grad_fun,
-            hvp_fun=self.hvp_fun,
-            sqrt_hess_fun=self.sqrt_hess_fun,
-            params=params,
-            data=data[batch_idx],
-            reg=0,
-            *args,
-            **kwargs,
-        )
 
         # update NySSN preconditioner
         if self.precond == "nyssn":
+            H_S = HessianLinearOperator(
+                fun=self.fun,
+                grad_fun=self.grad_fun,
+                hvp_fun=self.hvp_fun,
+                sqrt_hess_fun=self.sqrt_hess_fun,
+                params=params,
+                data=data[batch_idx],
+                reg=0,
+                *args,
+                **kwargs,
+            )
             key, subkey = jax.random.split(key)
             U, S = sketchyopts.preconditioner.rand_nystrom_approx(
                 H_S, self.rank, subkey
             )
-            grad_transform = self._get_grad_transform_nyssn(U, S)
+            precond = (U, S)
         # update SSN preconditioner
         else:
             X = self.sqrt_hess_fun(params, *args, **kwargs, data=data[batch_idx])  # type: ignore
@@ -193,7 +223,7 @@ class PromiseSolver(abc.ABC):
             L = jnp.linalg.cholesky(
                 H + self.rho * jnp.identity(jnp.shape(H)[0]), upper=False
             )
-            grad_transform = self._get_grad_transform_ssn(L, X)
+            precond = (L, X)
 
         # update step size rate with explicitly specified learning schedule
         if callable(self.learning_rate):
@@ -216,12 +246,11 @@ class PromiseSolver(abc.ABC):
                 *args,
                 **kwargs,
             )
-            labda = self._estimate_constant(H_S, grad_transform, subkey)
+            labda = self._estimate_constant(H_S, precond, subkey)
             state = self._update_step_size(labda, state)
-
         return state._replace(
             key=key,
-            precond=jax.tree_util.Partial(grad_transform),
+            precond=precond,
         )
 
 

@@ -5,12 +5,15 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 from jax import Array
+from jax.experimental import sparse
 from jax.typing import ArrayLike
 
 from sketchyopts.base import PromiseSolver, SolverState
 from sketchyopts.errors import InputDimError, MatrixNotSquareError
 from sketchyopts.preconditioner import rand_nystrom_approx
 from sketchyopts.util import (
+    inexact_asarray,
+    integer_asarray,
     ravel_tree,
     tree_add,
     tree_add_scalar_mul,
@@ -48,7 +51,7 @@ def nystrom_pcg(
     approximation (here :math:`\hat{\lambda}_{l}` is the :math:`l`:sup:`th` diagonal
     entry of :math:`\hat{\Lambda}`).
 
-    Nyström PCG terminates if the :math:`\ell_2`-norm of the residual
+    Nyström PCG terminates if the :math:`\ell^2`-norm of the residual
     :math:`b - (A + \mu I)\hat{x}` is within the specified tolerance or it has reached
     the maximal number of iterations.
 
@@ -174,7 +177,7 @@ class SketchySGDState(NamedTuple):
       value: Objective value at the current iterate.
       error: Gradient norm of the current iterate.
       key: PRNG key for the next update.
-      precond: Preconditioner for the next update.
+      precond: Decomposition of the preconditioner for the next update.
       step_size: Step size for the next update.
     """
 
@@ -182,7 +185,7 @@ class SketchySGDState(NamedTuple):
     value: Array
     error: Array
     key: KeyArray
-    precond: Callable
+    precond: tuple[Array, Array]
     step_size: Array
 
 
@@ -215,44 +218,40 @@ class SketchySGD(PromiseSolver):
       - Z\. Frangella, P. Rathore, S. Zhao, and M. Udell, `SketchySGD: Reliable Stochastic Optimization via Randomized Curvature Estimates <https://arxiv.org/abs/2211.08597>`_.
 
     Args:
-      fun: Scalar-valued objective function. The function needs to have the optimization variable as its first argument, and data input argument ``data`` as well as :math:`L2` regularization strength argument ``reg``. For example, the function signature might take the form of ``fun(params, some_arg, data, reg, other_arg)``.
-      grad_fun: Optional gradient oracle corresponding to the provided objective function ``fun``. The gradient function returns the gradient of the objective function with respect to its first argument (*i.e.* the optimization variable). The gradient function should have the same function signature as the objective function, and the returned gradient should have the same shapes and types as the the optimization variable (*i.e.* the first argument of ``fun``). For example, the function signature might take the form of ``grad_fun(params, some_arg, data, reg, other_arg)``.
-      hvp_fun: Optional Hessian-vector product oracle for the Nyström subsampled Newton preconditioner. The hvp function should take optimization variable and vector (of the same shape and type) as its first and second arguments, respectively. It is also expected to have the same additional arguments as the provided objective function ``fun``. The returned result should have the same shapes and types as the the optimization variable (*i.e.* the first argument of ``fun``). For example, the function signature might take the form of ``hvp(params, vec, some_arg, data, reg, other_arg)``.
-      sqrt_hess_fun: Required oracle that computes the square root of the Hessian matrix for the subsampled Newton preconditioner (*i.e.* cannot be empty if ``precond`` is set to ``ssn``). The function should return a 2-dimensional array :math:`X` with :math:`X^{T}X = H` where :math:`H` is the Hessian of the unregularized objective function (*i.e.* the objective function without the :math:`L2` regularization term) with respect to the (flattened) first argument (*i.e.* the optimization variable). The function should take the same arguments as the objective function except for the regularization strength ``reg``. For example, the function signature might take the form of ``sqrt_hess_fun(params, some_arg, data, other_arg)``.
-      pre_update: Optional function to execute before optimizer's each update on the iterate. The function expects signature ``params, state = pre_update(params, state, *args, **kwargs)`` where ``state`` is the :class:`SketchySGDState` object.
+      fun: Scalar-valued objective function. :term:`↪ More Details<fun>`
+      grad_fun: Optional gradient oracle corresponding to the provided objective function ``fun``. :term:`↪ More Details<grad_fun>`
+      hvp_fun: Optional Hessian-vector product oracle for the Nyström subsampled Newton preconditioner. :term:`↪ More Details<hvp_fun>`
+      sqrt_hess_fun: Required oracle that computes the square root of the Hessian matrix for the subsampled Newton preconditioner (*i.e.* cannot be empty if ``precond`` is set to ``ssn``). :term:`↪ More Details<sqrt_hess_fun>`
+      pre_update: Optional function to execute before optimizer's each update on the iterate. :term:`↪ More Details<pre_update>`
       precond: Type of preconditioner to use. Either ``nyssn`` for Nyström subsampled Newton or ``ssn`` for subsampled Newton (default ``nyssn``).
-      rho: Regularization parameter for the preconditioner. Expect a non-negative value.
+      rho: Regularization parameter for the preconditioner. Expect a non-negative value (default ``1e-3``).
       rank: Rank of the Nyström subsampled Newton preconditioner. Expect a positive value (default ``10``).
       grad_batch_size: Size of the batch of data to compute stochastic gradient at each iteration. Expect a positive value.
       hess_batch_size: Size of the batch of data to estimate the stochastic Hessian when updating the preconditioner. Expect a positive value.
       update_freq: Update frequency of the preconditioner. When set to ``0`` or :math:`\infty` (*e.g.* ``jax.numpy.inf`` or
         ``numpy.inf``), the optimizer uses constant preconditioner that is constructed at
         the beginning of the optimization process.
-      seed: Initial seed for the random number generator.
-      learning_rate: Step size for applying updates (default ``0.5``). It can either be
-        a fixed scalar value or a schedule based on step count. If a fixed scalar value is
-        provided, the optimizer uses the value as the multiplier to the adaptively chosen
-        learning rate whenever the preconditioner is updated. If a schedule (in the form of a
-        function) is provided, the optimizer solely relies on the schedule and no longer
-        computes and determines the learning rate adaptively.
+      seed: Initial seed for the random number generator (default ``0``).
+      learning_rate: Step size for applying updates (default ``0.5``). It can either be a fixed scalar value or a schedule (callable) based on step count. :term:`↪ More Details<learning_rate>`
       maxiter: Maximum number of iterations to run the optimizer (default ``20``). Expect a positive value.
       tol: Threshold of the gradient norm used for terminating the optimizer (default ``1e-3``).
-      verbose: Whether to print diagnostic message (default ``false``).
-      jit: Whether to JIT-compile the optimization process (default ``true``).
+      verbose: Whether to print diagnostic message (default ``False``).
+      jit: Whether to JIT-compile the optimization process (default ``True``). :term:`↪ More Details<jit>`
+      sparse: Whether to sparsify the optimization process (default ``False``). :term:`↪ More Details<sparse>`
 
     """
 
     learning_rate: Union[float, Callable] = 0.5
 
-    def _init_state(self) -> SketchySGDState:
+    def _init_state(self, params, data, reg, *args, **kwargs) -> SketchySGDState:
         r"""The function initializes the optimizer state."""
         return SketchySGDState(
-            iter_num=jnp.asarray(0),
-            value=jnp.asarray(jnp.inf),
-            error=jnp.asarray(jnp.inf),
+            iter_num=integer_asarray(0),
+            value=inexact_asarray(jnp.inf),
+            error=inexact_asarray(jnp.inf),
             key=jax.random.PRNGKey(self.seed),
-            precond=jax.tree_util.Partial(lambda g: g),
-            step_size=jnp.asarray(0.0),
+            precond=self._init_precond(params, data, reg, *args, **kwargs),
+            step_size=inexact_asarray(0.0),
         )
 
     def _update_params(self, params, state, data, reg, *args, **kwargs) -> SolverState:
@@ -273,7 +272,7 @@ class SketchySGD(PromiseSolver):
         )
         error = tree_l2_norm(grad, squared=False)
         unraveled_grad, unravel_fun = ravel_tree(grad)
-        direction = unravel_fun(state.precond(unraveled_grad))
+        direction = unravel_fun(self._grad_transform(unraveled_grad, state.precond))
 
         # perform an update
         params = tree_add_scalar_mul(params, -state.step_size, direction)
@@ -306,15 +305,22 @@ class SketchySGD(PromiseSolver):
         params = init_params
         self.num_samples = jnp.shape(data)[0]
         self.params_len = jnp.size(ravel_tree(params)[0])
-        state = self._init_state()
+        state = self._init_state(params, data, reg, *args, **kwargs)
 
-        # jit update functions
+        # define partial functions
         update_params = lambda p, s: self._update_params(
             p, s, data, reg, *args, **kwargs
         )
         update_precond = lambda p, s: self._update_precond(
             p, s, data, reg, *args, **kwargs
         )
+
+        # sparsify functions if needed
+        if self.sparse:
+            update_params = sparse.sparsify(update_params)
+            update_precond = sparse.sparsify(update_precond)
+
+        # JIT-compile functions if needed
         if self.jit:
             update_params = (
                 jax.jit(update_params) if self.maxiter > 1 else update_params
@@ -327,6 +333,11 @@ class SketchySGD(PromiseSolver):
 
         # run the optimization loop
         for i in range(self.maxiter):
+            # call custom pre-update function
+            if self.pre_update:
+                params, state = self.pre_update(
+                    params, state, *args, **kwargs, data=data, reg=reg
+                )
 
             # update preconditioner
             if (self.update_freq == 0 and state.iter_num == 0) or (
@@ -334,18 +345,12 @@ class SketchySGD(PromiseSolver):
             ):
                 state = update_precond(params, state)
 
-            # call custom pre-update function
-            if self.pre_update:
-                params, state = self.pre_update(
-                    params, state, *args, **kwargs, data=data, reg=reg
-                )
-
             # update iterate
             params, state = update_params(params, state)
 
             # break out of loop if tolerance has been reached
             if state.error < self.tol:
-                jax.debug.print(
+                print(
                     "Info: early termination because error tolerance has been reached."
                 )
                 break
@@ -361,7 +366,7 @@ class SketchySVRGState(NamedTuple):
       value: Objective value at the current iterate.
       error: Gradient norm of the current iterate.
       key: PRNG key for the next update.
-      precond: Preconditioner for the next update.
+      precond: Decomposition of the preconditioner for the next update.
       full_grad: Full gradient at the snapshot.
       snapshot: Snapshot of the iterate.
       step_size: Step size for the next update.
@@ -371,7 +376,7 @@ class SketchySVRGState(NamedTuple):
     value: Array
     error: Array
     key: KeyArray
-    precond: Callable
+    precond: tuple[Array, Array]
     full_grad: Array
     snapshot: Array
     step_size: Array
@@ -410,13 +415,13 @@ class SketchySVRG(PromiseSolver):
     - Z\. Frangella, P. Rathore, S. Zhao, and M. Udell, `PROMISE: Preconditioned Stochastic Optimization Methods by Incorporating Scalable Curvature Estimates <https://arxiv.org/abs/2309.02014>`_.
 
     Args:
-      fun: Scalar-valued objective function. The function needs to have the optimization variable as its first argument, and data input argument ``data`` as well as :math:`L2` regularization strength argument ``reg``. For example, the function signature might take the form of ``fun(params, some_arg, data, reg, other_arg)``.
-      grad_fun: Optional gradient oracle corresponding to the provided objective function ``fun``. The gradient function returns the gradient of the objective function with respect to its first argument (*i.e.* the optimization variable). The gradient function should have the same function signature as the objective function, and the returned gradient should have the same shapes and types as the the optimization variable (*i.e.* the first argument of ``fun``). For example, the function signature might take the form of ``grad_fun(params, some_arg, data, reg, other_arg)``.
-      hvp_fun: Optional Hessian-vector product oracle for the Nyström subsampled Newton preconditioner. The hvp function should take optimization variable and vector (of the same shape and type) as its first and second arguments, respectively. It is also expected to have the same additional arguments as the provided objective function ``fun``. The returned result should have the same shapes and types as the the optimization variable (*i.e.* the first argument of ``fun``). For example, the function signature might take the form of ``hvp(params, vec, some_arg, data, reg, other_arg)``.
-      sqrt_hess_fun: Required oracle that computes the square root of the Hessian matrix for the subsampled Newton preconditioner (*i.e.* cannot be empty if ``precond`` is set to ``ssn``). The function should return a 2-dimensional array :math:`X` with :math:`X^{T}X = H` where :math:`H` is the Hessian of the unregularized objective function (*i.e.* the objective function without the :math:`L2` regularization term) with respect to the (flattened) first argument (*i.e.* the optimization variable). The function should take the same arguments as the objective function except for the regularization strength ``reg``. For example, the function signature might take the form of ``sqrt_hess_fun(params, some_arg, data, other_arg)``.
-      pre_update: Optional function to execute before optimizer's each update on the iterate. The function expects signature ``params, state = pre_update(params, state, *args, **kwargs)`` where ``state`` is the :class:`SketchySVRGState` object.
-      precond: Type of preconditioner to use (default ``nyssn``). Either ``nyssn`` for Nyström subsampled Newton or ``ssn`` for subsampled Newton.
-      rho: Regularization parameter for the preconditioner. Expect a non-negative value.
+      fun: Scalar-valued objective function. :term:`↪ More Details<fun>`
+      grad_fun: Optional gradient oracle corresponding to the provided objective function ``fun``. :term:`↪ More Details<grad_fun>`
+      hvp_fun: Optional Hessian-vector product oracle for the Nyström subsampled Newton preconditioner. :term:`↪ More Details<hvp_fun>`
+      sqrt_hess_fun: Required oracle that computes the square root of the Hessian matrix for the subsampled Newton preconditioner (*i.e.* cannot be empty if ``precond`` is set to ``ssn``). :term:`↪ More Details<sqrt_hess_fun>`
+      pre_update: Optional function to execute before optimizer's each update on the iterate. :term:`↪ More Details<pre_update>`
+      precond: Type of preconditioner to use (default ``nyssn``). Either ``nyssn`` for Nyström subsampled Newton or ``ssn`` for subsampled Newton. :term:`↪ More Details<precond>`
+      rho: Regularization parameter for the preconditioner. Expect a non-negative value (default ``1e-3``).
       rank: Rank of the Nyström subsampled Newton preconditioner. Expect a positive value (default ``10``).
       grad_batch_size: Size of the batch of data to compute stochastic gradient at each iteration. Expect a positive value.
       hess_batch_size: Size of the batch of data to estimate the stochastic Hessian when updating the preconditioner. Expect a positive value.
@@ -424,34 +429,30 @@ class SketchySVRG(PromiseSolver):
         ``numpy.inf``), the optimizer uses constant preconditioner that is constructed at
         the beginning of the optimization process.
       snapshop_update_freq: Update frequency of the snapshot. Expect a positive value.
-      seed: Initial seed for the random number generator.
-      learning_rate: Step size for applying updates (default ``0.5``). It can either be
-        a fixed scalar value or a schedule based on step count. If a fixed scalar value is
-        provided, the optimizer uses the value as the multiplier to the adaptively chosen
-        learning rate whenever the preconditioner is updated. If a schedule (in the form of a
-        function) is provided, the optimizer solely relies on the schedule and no longer
-        computes and determines the learning rate adaptively.
+      seed: Initial seed for the random number generator (default ``0``).
+      learning_rate: Step size for applying updates (default ``0.5``). It can either be a fixed scalar value or a schedule (callable) based on step count. :term:`↪ More Details<learning_rate>`
       maxiter: Maximum number of iterations to run the optimizer (default ``20``). Expect a positive value.
       tol: Threshold of the gradient norm used for terminating the optimizer (default ``1e-3``).
-      verbose: Whether to print diagnostic message (default ``false``).
-      jit: Whether to JIT-compile the optimization process (default ``true``).
+      verbose: Whether to print diagnostic message (default ``False``).
+      jit: Whether to JIT-compile the optimization process (default ``True``). :term:`↪ More Details<jit>`
+      sparse: Whether to sparsify the optimization process (default ``False``). :term:`↪ More Details<sparse>`
 
     """
 
     snapshop_update_freq: int
     learning_rate: Union[float, Callable] = 0.5
 
-    def _init_state(self) -> SketchySVRGState:
+    def _init_state(self, params, data, reg, *args, **kwargs) -> SketchySVRGState:
         r"""The function initializes the optimizer state."""
         return SketchySVRGState(
-            iter_num=jnp.asarray(0),
-            value=jnp.asarray(jnp.inf),
-            error=jnp.asarray(jnp.inf),
+            iter_num=integer_asarray(0),
+            value=inexact_asarray(jnp.inf),
+            error=inexact_asarray(jnp.inf),
             key=jax.random.PRNGKey(self.seed),
-            precond=jax.tree_util.Partial(lambda g: g),
-            full_grad=jnp.asarray(0.0),
-            snapshot=jnp.asarray(0.0),
-            step_size=jnp.asarray(0.0),
+            precond=self._init_precond(params, data, reg, *args, **kwargs),
+            full_grad=inexact_asarray(jnp.zeros((self.params_len,))),
+            snapshot=params,
+            step_size=inexact_asarray(0.0),
         )
 
     def _update_snapshot(
@@ -494,7 +495,10 @@ class SketchySVRG(PromiseSolver):
         unraveled_grad_snapshot, _ = ravel_tree(grad_snapshot)
 
         direction = unravel_fun(
-            state.precond(unraveled_grad - unraveled_grad_snapshot + state.full_grad),
+            self._grad_transform(
+                unraveled_grad - unraveled_grad_snapshot + state.full_grad,
+                state.precond,
+            ),
         )
 
         # perform an update
@@ -528,9 +532,9 @@ class SketchySVRG(PromiseSolver):
         params = init_params
         self.num_samples = jnp.shape(data)[0]
         self.params_len = jnp.size(ravel_tree(params)[0])
-        state = self._init_state()
+        state = self._init_state(params, data, reg, *args, **kwargs)
 
-        # jit update functions
+        # define partial functions
         update_params = lambda p, s: self._update_params(
             p, s, data, reg, *args, **kwargs
         )
@@ -540,6 +544,14 @@ class SketchySVRG(PromiseSolver):
         update_snapshot = lambda p, s: self._update_snapshot(
             p, s, data, reg, *args, **kwargs
         )
+
+        # sparsify functions if needed
+        if self.sparse:
+            update_params = sparse.sparsify(update_params)
+            update_precond = sparse.sparsify(update_precond)
+            update_snapshot = sparse.sparsify(update_snapshot)
+
+        # JIT-compile functions if needed
         if self.jit:
             update_params = (
                 jax.jit(update_params) if self.maxiter > 1 else update_params
@@ -557,6 +569,11 @@ class SketchySVRG(PromiseSolver):
 
         # run the optimization loop
         for i in range(self.maxiter):
+            # call custom pre-update function
+            if self.pre_update:
+                params, state = self.pre_update(
+                    params, state, *args, **kwargs, data=data, reg=reg
+                )
 
             # update snapshot
             if state.iter_num % self.snapshop_update_freq == 0:
@@ -568,18 +585,12 @@ class SketchySVRG(PromiseSolver):
             ):
                 state = update_precond(params, state)
 
-            # call custom pre-update function
-            if self.pre_update:
-                params, state = self.pre_update(
-                    params, state, *args, **kwargs, data=data, reg=reg
-                )
-
             # update iterate
             params, state = update_params(params, state)
 
             # break out of loop if tolerance has been reached
             if state.error < self.tol:
-                jax.debug.print(
+                print(
                     "Info: early termination because error tolerance has been reached."
                 )
                 break
@@ -595,7 +606,7 @@ class SketchySAGAState(NamedTuple):
       value: Objective value at the current iterate.
       error: Gradient norm of the current iterate.
       key: PRNG key for the next update.
-      precond: Preconditioner for the next update.
+      precond: Decomposition of the preconditioner for the next update.
       grad_table: Table of gradients of each individual component.
       table_avg: Average of the gradients in the table.
       step_size: Step size for the next update.
@@ -605,7 +616,7 @@ class SketchySAGAState(NamedTuple):
     value: Array
     error: Array
     key: KeyArray
-    precond: Callable
+    precond: tuple[Array, Array]
     grad_table: Array
     table_avg: Array
     step_size: Array
@@ -649,30 +660,26 @@ class SketchySAGA(PromiseSolver):
     - Z\. Frangella, P. Rathore, S. Zhao, and M. Udell, `PROMISE: Preconditioned Stochastic Optimization Methods by Incorporating Scalable Curvature Estimates <https://arxiv.org/abs/2309.02014>`_.
 
     Args:
-      fun: Scalar-valued objective function. The function needs to have the optimization variable as its first argument, and data input argument ``data`` as well as :math:`L2` regularization strength argument ``reg``. For example, the function signature might take the form of ``fun(params, some_arg, data, reg, other_arg)``.
-      grad_fun: Optional gradient oracle corresponding to the provided objective function ``fun``. The gradient function returns the gradient of the objective function with respect to its first argument (*i.e.* the optimization variable). The gradient function should have the same function signature as the objective function, and the returned gradient should have the same shapes and types as the the optimization variable (*i.e.* the first argument of ``fun``). For example, the function signature might take the form of ``grad_fun(params, some_arg, data, reg, other_arg)``.
-      hvp_fun: Optional Hessian-vector product oracle for the Nyström subsampled Newton preconditioner. The hvp function should take optimization variable and vector (of the same shape and type) as its first and second arguments, respectively. It is also expected to have the same additional arguments as the provided objective function ``fun``. The returned result should have the same shapes and types as the the optimization variable (*i.e.* the first argument of ``fun``). For example, the function signature might take the form of ``hvp(params, vec, some_arg, data, reg, other_arg)``.
-      sqrt_hess_fun: Required oracle that computes the square root of the Hessian matrix for the subsampled Newton preconditioner (*i.e.* cannot be empty if ``precond`` is set to ``ssn``). The function should return a 2-dimensional array :math:`X` with :math:`X^{T}X = H` where :math:`H` is the Hessian of the unregularized objective function (*i.e.* the objective function without the :math:`L2` regularization term) with respect to the (flattened) first argument (*i.e.* the optimization variable). The function should take the same arguments as the objective function except for the regularization strength ``reg``. For example, the function signature might take the form of ``sqrt_hess_fun(params, some_arg, data, other_arg)``.
-      pre_update: Optional function to execute before optimizer's each update on the iterate. The function expects signature ``params, state = pre_update(params, state, *args, **kwargs)`` where ``state`` is the :class:`SketchySAGAState` object.
-      precond: Type of preconditioner to use (default ``nyssn``). Either ``nyssn`` for Nyström subsampled Newton or ``ssn`` for subsampled Newton.
-      rho: Regularization parameter for the preconditioner. Expect a non-negative value.
+      fun: Scalar-valued objective function compatible with 1-dimensional ``data`` input. :term:`↪ More Details<fun>`
+      grad_fun: Optional gradient oracle corresponding to the provided objective function ``fun``. It also needs to be compatible with 1-dimensional ``data`` input. :term:`↪ More Details<grad_fun>`
+      hvp_fun: Optional Hessian-vector product oracle for the Nyström subsampled Newton preconditioner. :term:`↪ More Details<hvp_fun>`
+      sqrt_hess_fun: Required oracle that computes the square root of the Hessian matrix for the subsampled Newton preconditioner (*i.e.* cannot be empty if ``precond`` is set to ``ssn``). :term:`↪ More Details<sqrt_hess_fun>`
+      pre_update: Optional function to execute before optimizer's each update on the iterate. :term:`↪ More Details<pre_update>`
+      precond: Type of preconditioner to use (default ``nyssn``). Either ``nyssn`` for Nyström subsampled Newton or ``ssn`` for subsampled Newton. :term:`↪ More Details<precond>`
+      rho: Regularization parameter for the preconditioner. Expect a non-negative value (default ``1e-3``).
       rank: Rank of the Nyström subsampled Newton preconditioner. Expect a positive value (default ``10``).
       grad_batch_size: Size of the batch of data to compute stochastic gradient at each iteration. Expect a positive value.
       hess_batch_size: Size of the batch of data to estimate the stochastic Hessian when updating the preconditioner. Expect a positive value.
       update_freq: Update frequency of the preconditioner. When set to ``0`` or :math:`\infty` (*e.g.* ``jax.numpy.inf`` or
         ``numpy.inf``), the optimizer uses constant preconditioner that is constructed at
         the beginning of the optimization process.
-      seed: Initial seed for the random number generator.
-      learning_rate: Step size for applying updates (default ``0.5``). It can either be
-        a fixed scalar value or a schedule based on step count. If a fixed scalar value is
-        provided, the optimizer uses the value as the multiplier to the adaptively chosen
-        learning rate whenever the preconditioner is updated. If a schedule (in the form of a
-        function) is provided, the optimizer solely relies on the schedule and no longer
-        computes and determines the learning rate adaptively.
+      seed: Initial seed for the random number generator (default ``0``).
+      learning_rate: Step size for applying updates (default ``0.5``). It can either be a fixed scalar value or a schedule (callable) based on step count. :term:`↪ More Details<learning_rate>`
       maxiter: Maximum number of iterations to run the optimizer (default ``20``). Expect a positive value.
       tol: Threshold of the gradient norm used for terminating the optimizer (default ``1e-3``).
-      verbose: Whether to print diagnostic message (default ``false``).
-      jit: Whether to JIT-compile the optimization process (default ``true``).
+      verbose: Whether to print diagnostic message (default ``False``).
+      jit: Whether to JIT-compile the optimization process (default ``True``). :term:`↪ More Details<jit>`
+      sparse: Whether to sparsify the optimization process (default ``False``). :term:`↪ More Details<sparse>`
 
     """
 
@@ -694,17 +701,17 @@ class SketchySAGA(PromiseSolver):
 
         self._value_and_grad = value_and_grad
 
-    def _init_state(self, params, data) -> SketchySAGAState:
+    def _init_state(self, params, data, reg, *args, **kwargs) -> SketchySAGAState:
         r"""The function initializes the optimizer state."""
         return SketchySAGAState(
-            iter_num=jnp.asarray(0),
-            value=jnp.asarray(jnp.inf),
-            error=jnp.asarray(jnp.inf),
+            iter_num=integer_asarray(0),
+            value=inexact_asarray(jnp.inf),
+            error=inexact_asarray(jnp.inf),
             key=jax.random.PRNGKey(self.seed),
-            precond=jax.tree_util.Partial(lambda g: g),
-            grad_table=jnp.zeros((self.num_samples, self.params_len)),
-            table_avg=jnp.zeros(self.params_len),
-            step_size=jnp.asarray(0.0),
+            precond=self._init_precond(params, data, reg, *args, **kwargs),
+            grad_table=inexact_asarray(jnp.zeros((self.num_samples, self.params_len))),
+            table_avg=inexact_asarray(jnp.zeros((self.params_len,))),
+            step_size=inexact_asarray(0.0),
         )
 
     def _update_params(self, params, state, data, reg, *args, **kwargs) -> SolverState:
@@ -731,11 +738,13 @@ class SketchySAGA(PromiseSolver):
         # compute preconditioned variance-reduced stochastic gradient
         _, unravel_fun = ravel_tree(params)
         direction = unravel_fun(
-            state.precond(state.table_avg + (1 / self.grad_batch_size) * aux),
+            self._grad_transform(
+                state.table_avg + (1.0 / self.grad_batch_size) * aux, state.precond
+            ),
         )
 
         # update table average and gradient table
-        table_avg = state.table_avg + (1 / self.num_samples) * aux
+        table_avg = state.table_avg + (1.0 / self.num_samples) * aux
         grad_table = state.grad_table.at[batch_idx].set(unraveled_grads)
 
         # perform an update
@@ -771,15 +780,22 @@ class SketchySAGA(PromiseSolver):
         params = init_params
         self.num_samples = jnp.shape(data)[0]
         self.params_len = jnp.size(ravel_tree(params)[0])
-        state = self._init_state(init_params, data)
+        state = self._init_state(params, data, reg, *args, **kwargs)
 
-        # jit update functions
+        # define partial functions
         update_params = lambda p, s: self._update_params(
             p, s, data, reg, *args, **kwargs
         )
         update_precond = lambda p, s: self._update_precond(
             p, s, data, reg, *args, **kwargs
         )
+
+        # sparsify functions if needed
+        if self.sparse:
+            update_params = sparse.sparsify(update_params)
+            update_precond = sparse.sparsify(update_precond)
+
+        # JIT-compile functions if needed
         if self.jit:
             update_params = (
                 jax.jit(update_params) if self.maxiter > 1 else update_params
@@ -792,6 +808,11 @@ class SketchySAGA(PromiseSolver):
 
         # run the optimization loop
         for i in range(self.maxiter):
+            # call custom pre-update function
+            if self.pre_update:
+                params, state = self.pre_update(
+                    params, state, *args, **kwargs, data=data, reg=reg
+                )
 
             # update preconditioner
             if (self.update_freq == 0 and state.iter_num == 0) or (
@@ -799,18 +820,12 @@ class SketchySAGA(PromiseSolver):
             ):
                 state = update_precond(params, state)
 
-            # call custom pre-update function
-            if self.pre_update:
-                params, state = self.pre_update(
-                    params, state, *args, **kwargs, data=data, reg=reg
-                )
-
             # update iterate
             params, state = update_params(params, state)
 
             # break out of loop if tolerance has been reached
             if state.error < self.tol:
-                jax.debug.print(
+                print(
                     "Info: early termination because error tolerance has been reached."
                 )
                 break
@@ -826,7 +841,7 @@ class SketchyKatyushaState(NamedTuple):
       value: Objective value at the current iterate.
       error: Gradient norm of the current iterate.
       key: PRNG key for the next update.
-      precond: Preconditioner for the next update.
+      precond: Decomposition of the preconditioner for the next update.
       full_grad: Full gradient at the snapshot.
       snapshot: Snapshot of the iterate.
       z: Momentum of the iterate.
@@ -840,7 +855,7 @@ class SketchyKatyushaState(NamedTuple):
     value: Array
     error: Array
     key: KeyArray
-    precond: Callable
+    precond: tuple[Array, Array]
     full_grad: Array
     snapshot: Array
     z: Array
@@ -882,13 +897,13 @@ class SketchyKatyusha(PromiseSolver):
     - Z\. Frangella, P. Rathore, S. Zhao, and M. Udell, `PROMISE: Preconditioned Stochastic Optimization Methods by Incorporating Scalable Curvature Estimates <https://arxiv.org/abs/2309.02014>`_.
 
     Args:
-      fun: Scalar-valued objective function. The function needs to have the optimization variable as its first argument, and data input argument ``data`` as well as :math:`L2` regularization strength argument ``reg``. For example, the function signature might take the form of ``fun(params, some_arg, data, reg, other_arg)``.
-      grad_fun: Optional gradient oracle corresponding to the provided objective function ``fun``. The gradient function returns the gradient of the objective function with respect to its first argument (*i.e.* the optimization variable). The gradient function should have the same function signature as the objective function, and the returned gradient should have the same shapes and types as the the optimization variable (*i.e.* the first argument of ``fun``). For example, the function signature might take the form of ``grad_fun(params, some_arg, data, reg, other_arg)``.
-      hvp_fun: Optional Hessian-vector product oracle for the Nyström subsampled Newton preconditioner. The hvp function should take optimization variable and vector (of the same shape and type) as its first and second arguments, respectively. It is also expected to have the same additional arguments as the provided objective function ``fun``. The returned result should have the same shapes and types as the the optimization variable (*i.e.* the first argument of ``fun``). For example, the function signature might take the form of ``hvp(params, vec, some_arg, data, reg, other_arg)``.
-      sqrt_hess_fun: Required oracle that computes the square root of the Hessian matrix for the subsampled Newton preconditioner (*i.e.* cannot be empty if ``precond`` is set to ``ssn``). The function should return a 2-dimensional array :math:`X` with :math:`X^{T}X = H` where :math:`H` is the Hessian of the unregularized objective function (*i.e.* the objective function without the :math:`L2` regularization term) with respect to the (flattened) first argument (*i.e.* the optimization variable). The function should take the same arguments as the objective function except for the regularization strength ``reg``. For example, the function signature might take the form of ``sqrt_hess_fun(params, some_arg, data, other_arg)``.
-      pre_update: Optional function to execute before optimizer's each update on the iterate. The function expects signature ``params, state = pre_update(params, state, *args, **kwargs)`` where ``state`` is the :class:`SketchyKatyushaState` object.
-      precond: Type of preconditioner to use (default ``nyssn``). Either ``nyssn`` for Nyström subsampled Newton or ``ssn`` for subsampled Newton.
-      rho: Regularization parameter for the preconditioner. Expect a non-negative value.
+      fun: Scalar-valued objective function. :term:`↪ More Details<fun>`
+      grad_fun: Optional gradient oracle corresponding to the provided objective function ``fun``. :term:`↪ More Details<grad_fun>`
+      hvp_fun: Optional Hessian-vector product oracle for the Nyström subsampled Newton preconditioner. :term:`↪ More Details<hvp_fun>`
+      sqrt_hess_fun: Required oracle that computes the square root of the Hessian matrix for the subsampled Newton preconditioner (*i.e.* cannot be empty if ``precond`` is set to ``ssn``). :term:`↪ More Details<sqrt_hess_fun>`
+      pre_update: Optional function to execute before optimizer's each update on the iterate. :term:`↪ More Details<pre_update>`
+      precond: Type of preconditioner to use (default ``nyssn``). Either ``nyssn`` for Nyström subsampled Newton or ``ssn`` for subsampled Newton. :term:`↪ More Details<precond>`
+      rho: Regularization parameter for the preconditioner. Expect a non-negative value (default ``1e-3``).
       rank: Rank of the Nyström subsampled Newton preconditioner. Expect a positive value (default ``10``).
       mu: Strong convexity parameter. Expect a positive value.
       grad_batch_size: Size of the batch of data to compute stochastic gradient at each iteration. Expect a positive value.
@@ -897,19 +912,20 @@ class SketchyKatyusha(PromiseSolver):
         ``numpy.inf``), the optimizer uses constant preconditioner that is constructed at
         the beginning of the optimization process.
       snapshop_update_prob: Probability of updating the snapshot. Expect a value in :math:`(0,1)`.
-      seed: Initial seed for the random number generator.
+      seed: Initial seed for the random number generator (default ``0``).
       momentum_param: Momentum parameter (default ``1/2``).
       momentum_multiplier: Momentum multiplier (default ``2/3``).
       maxiter: Maximum number of iterations to run the optimizer (default ``20``). Expect a positive value.
       tol: Threshold of the gradient norm used for terminating the optimizer (default ``1e-3``).
-      verbose: Whether to print diagnostic message (default ``false``).
-      jit: Whether to JIT-compile the optimization process (default ``true``).
+      verbose: Whether to print diagnostic message (default ``False``).
+      jit: Whether to JIT-compile the optimization process (default ``True``). :term:`↪ More Details<jit>`
+      sparse: Whether to sparsify the optimization process (default ``False``). :term:`↪ More Details<sparse>`
 
     """
 
     mu: float
-    momentum_param: float = 1 / 2
-    momentum_multiplier: float = 2 / 3
+    momentum_param: float = 1.0 / 2
+    momentum_multiplier: float = 2.0 / 3
     snapshop_update_prob: float
 
     def _init_state(self, params, data, reg, *args, **kwargs) -> SketchyKatyushaState:
@@ -917,18 +933,18 @@ class SketchyKatyusha(PromiseSolver):
         _, full_grad = self._value_and_grad(params, *args, **kwargs, data=data, reg=reg)
         full_grad, _ = ravel_tree(full_grad)
         return SketchyKatyushaState(
-            iter_num=jnp.asarray(0),
-            value=jnp.asarray(jnp.inf),
-            error=jnp.asarray(jnp.inf),
+            iter_num=integer_asarray(0),
+            value=inexact_asarray(jnp.inf),
+            error=inexact_asarray(jnp.inf),
             key=jax.random.PRNGKey(self.seed),
-            precond=jax.tree_util.Partial(lambda g: g),
+            precond=self._init_precond(params, data, reg, *args, **kwargs),
             full_grad=full_grad,
             snapshot=params,
             z=params,
-            step_size=jnp.asarray(0.0),
-            L=jnp.asarray(0.0),
-            sigma=jnp.asarray(0.0),
-            theta=jnp.asarray(0.0),
+            step_size=inexact_asarray(0.0),
+            L=inexact_asarray(0.0),
+            sigma=inexact_asarray(0.0),
+            theta=inexact_asarray(0.0),
         )
 
     def _update_step_size(self, labda, state):
@@ -989,7 +1005,10 @@ class SketchyKatyusha(PromiseSolver):
         unraveled_grad_snapshot, _ = ravel_tree(grad_snapshot)
 
         direction = unravel_fun(
-            state.precond(unraveled_grad - unraveled_grad_snapshot + state.full_grad),
+            self._grad_transform(
+                unraveled_grad - unraveled_grad_snapshot + state.full_grad,
+                state.precond,
+            ),
         )
 
         # update snapshot
@@ -999,7 +1018,7 @@ class SketchyKatyusha(PromiseSolver):
         z = tree_scalar_mul(state.step_size * state.sigma, x)
         z = tree_add(z, state.z)
         z = tree_add_scalar_mul(z, -state.step_size / state.L, direction)
-        z = tree_scalar_mul(1 / (1 + state.step_size * state.sigma), z)
+        z = tree_scalar_mul(1.0 / (1 + state.step_size * state.sigma), z)
         params = tree_add_scalar_mul(x, state.theta, tree_sub(z, state.z))
 
         return SolverState(
@@ -1031,15 +1050,22 @@ class SketchyKatyusha(PromiseSolver):
         params = init_params
         self.num_samples = jnp.shape(data)[0]
         self.params_len = jnp.size(ravel_tree(params)[0])
-        state = self._init_state(init_params, data, reg, *args, **kwargs)
+        state = self._init_state(params, data, reg, *args, **kwargs)
 
-        # jit update functions
+        # define partial functions
         update_params = lambda p, s: self._update_params(
             p, s, data, reg, *args, **kwargs
         )
         update_precond = lambda p, s: self._update_precond(
             p, s, data, reg, *args, **kwargs
         )
+
+        # sparsify functions if needed
+        if self.sparse:
+            update_params = sparse.sparsify(update_params)
+            update_precond = sparse.sparsify(update_precond)
+
+        # JIT-compile functions if needed
         if self.jit:
             update_params = (
                 jax.jit(update_params) if self.maxiter > 1 else update_params
@@ -1052,6 +1078,11 @@ class SketchyKatyusha(PromiseSolver):
 
         # run the optimization loop
         for i in range(self.maxiter):
+            # call custom pre-update function
+            if self.pre_update:
+                params, state = self.pre_update(
+                    params, state, *args, **kwargs, data=data, reg=reg
+                )
 
             # update preconditioner
             if (self.update_freq == 0 and state.iter_num == 0) or (
@@ -1059,18 +1090,12 @@ class SketchyKatyusha(PromiseSolver):
             ):
                 state = update_precond(params, state)
 
-            # call custom pre-update function
-            if self.pre_update:
-                params, state = self.pre_update(
-                    params, state, *args, **kwargs, data=data, reg=reg
-                )
-
             # update iterate
             params, state = update_params(params, state)
 
             # break out of loop if tolerance has been reached
             if state.error < self.tol:
-                jax.debug.print(
+                print(
                     "Info: early termination because error tolerance has been reached."
                 )
                 break

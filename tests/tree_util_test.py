@@ -26,10 +26,10 @@ import numpy as np
 import pytest
 
 from sketchyopts import tree_util
-from tests import test_util
+from tests.test_util import TestCase
 
 
-class TestTreeUtil(test_util.TestCase):
+class TestTreeUtil(TestCase):
 
     @classmethod
     def setup_class(self):

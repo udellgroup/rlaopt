@@ -113,7 +113,7 @@ tree_structure.__doc__ = r"""Get the treedef for a pytree."""
 
 
 def broadcast_pytrees(*trees):
-    r"""Broadcasts leaf pytrees to match treedef shared by the other arguments.
+    r"""Broadcast leaf pytrees to match treedef shared by the other arguments.
 
     Args:
       *trees: A ``Sequence`` of pytrees such that all elements that are *not* leaf

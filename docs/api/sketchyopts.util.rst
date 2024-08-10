@@ -12,10 +12,10 @@ Utilities
     tree_scalar_mul
     tree_add_scalar_mul
     tree_l2_norm
-
-General Utilities
-~~~~~~~~~~~~~~~~~
-
+    default_floating_dtype
+    default_integer_dtype
+    inexact_asarray
+    integer_asarray
 
 Pytree Utilities
 ~~~~~~~~~~~~~~~~
@@ -30,3 +30,11 @@ Pytree Utilities
 .. autofunction:: tree_scalar_mul
 .. autofunction:: tree_add_scalar_mul
 .. autofunction:: tree_l2_norm
+
+Data Type Utilities
+~~~~~~~~~~~~~~~~~~~
+
+.. autofunction:: default_floating_dtype
+.. autofunction:: default_integer_dtype
+.. autofunction:: inexact_asarray
+.. autofunction:: integer_asarray

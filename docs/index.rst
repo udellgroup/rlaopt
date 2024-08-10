@@ -23,6 +23,14 @@ Citation
 
 .. toctree::
    :hidden:
+   :maxdepth: 2
+   :caption: Tutorials
+
+   tutorials/ridge_regression
+   tutorials/l2_logistic_regression
+
+.. toctree::
+   :hidden:
    :caption: API Reference
    :maxdepth: 2
 
@@ -39,14 +47,22 @@ Citation
    .. grid-item::
       :columns: 6 6 6 4
 
-      .. card:: :material-regular:`library_books;2em` Tutorials
+      .. card:: 
+         :material-regular:`library_books;2em` Tutorials
+         :text-align: center
+         :link: tutorials/index
+         :link-type: doc
 
    .. grid-item::
       :columns: 6 6 6 4
 
-      .. card:: :material-regular:`science;2em` Benchmarks
+      .. card:: 
+         :material-regular:`science;2em` Benchmarks
+         :text-align: center
 
    .. grid-item::
       :columns: 6 6 6 4
 
-      .. card:: :material-regular:`menu_book;2em` API Reference
+      .. card:: 
+         :material-regular:`menu_book;2em` API Reference
+         :text-align: center

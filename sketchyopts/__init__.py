@@ -22,6 +22,10 @@ tree_sub = util.tree_sub
 tree_scalar_mul = util.tree_scalar_mul
 tree_add_scalar_mul = util.tree_add_scalar_mul
 tree_l2_norm = util.tree_l2_norm
+default_floating_dtype = util.default_floating_dtype
+default_integer_dtype = util.default_integer_dtype
+inexact_asarray = util.inexact_asarray
+integer_asarray = util.integer_asarray
 InputDimError = errors.InputDimError
 MatrixNotSquareError = errors.MatrixNotSquareError
 
@@ -48,6 +52,10 @@ __all__ = (
     "tree_scalar_mul",
     "tree_add_scalar_mul",
     "tree_l2_norm",
+    "default_floating_dtype",
+    "default_integer_dtype",
+    "inexact_asarray",
+    "integer_asarray",
     "InputDimError",
     "MatrixNotSquareError",
 )

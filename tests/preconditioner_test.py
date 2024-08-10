@@ -4,10 +4,10 @@ import numpy as np
 import pytest
 
 from sketchyopts import errors, preconditioner
-from tests import test_util
+from tests.test_util import TestCase
 
 
-class TestNystromApprox(test_util.TestCase):
+class TestNystromApprox(TestCase):
 
     key = jax.random.PRNGKey(0)
 
@@ -35,7 +35,6 @@ class TestNystromApprox(test_util.TestCase):
         mean_relative_error = 0.0
         for i in range(num_repeats):
             approximation_key, subkey = jax.random.split(approximation_key)
-            # U, S = preconditioner.rand_nystrom_approx(A, approx_rank, subkey)
             U, S = nys_approx(A, subkey)
             A_nys = U @ jnp.diag(S) @ U.T
             # keep track of average element-wise relative errors

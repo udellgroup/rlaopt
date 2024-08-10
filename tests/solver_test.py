@@ -4,10 +4,10 @@ import numpy as np
 import pytest
 
 from sketchyopts import errors, solver
-from tests import test_util
+from tests.test_util import TestCase, l2_logistic_regression_sol, ridge_regression_sol
 
 
-class TestNystromPCG(test_util.TestCase):
+class TestNystromPCG(TestCase):
 
     key = jax.random.PRNGKey(0)
 
@@ -136,7 +136,7 @@ class TestNystromPCG(test_util.TestCase):
             solver.nystrom_pcg(A, b, mu, rank, subkey)
 
 
-def obj_fun(beta, data, reg):
+def ridge_obj_fun(beta, data, reg):
     """
     Objective function of ridge regression.
     The function works for both one-dimensional (single sample) or two-dimensional (a batch of samples) data input.
@@ -160,7 +160,7 @@ def obj_fun(beta, data, reg):
     )
 
 
-def sqrt_hess_fun(beta, data):
+def ridge_sqrt_hess_fun(beta, data):
     """
     Square root Hessian function of ridge regression.
     """
@@ -169,35 +169,90 @@ def sqrt_hess_fun(beta, data):
     return (1 / sqrt_n) * features
 
 
-class TestPromiseSolvers(test_util.TestCase):
+def logistic_obj_fun(beta, data, reg):
+    """
+    Objective function of logistic regression.
+    The function works for both one-dimensional (single sample) or two-dimensional (a batch of samples) data input.
+    """
+    if jnp.ndim(data) == 1:
+        features = jnp.expand_dims(data[:-1], axis=0)
+        labels = jnp.expand_dims(data[-1], axis=0)
+    else:
+        features = data[:, :-1]
+        labels = data[:, -1]
+    log_terms = jnp.log(
+        1
+        + jnp.exp(
+            -labels
+            * (
+                features[:, :2] @ beta[0]
+                + features[:, 2:5] @ beta[1]
+                + features[:, 5:] @ beta[2]
+            )
+        )
+    )
+    return jnp.mean(log_terms) + (reg / 2) * (
+        jnp.sum(jnp.square(beta[0]))
+        + jnp.sum(jnp.square(beta[1]))
+        + jnp.sum(jnp.square(beta[2]))
+    )
+
+
+def logistic_sqrt_hess_fun(beta, data):
+    """
+    Square root Hessian function of logistic regression.
+    """
+    sqrt_n = data.shape[0] ** 0.5
+    features = data[:, :-1]
+    scores = 1.0 / (
+        1
+        + jnp.exp(
+            features[:, :2] @ beta[0]
+            + features[:, 2:5] @ beta[1]
+            + features[:, 5:] @ beta[2]
+        )
+    )
+    return (1 / sqrt_n) * jnp.sqrt((scores * (1 - scores))).reshape(-1, 1) * features
+
+
+class TestPromiseSolvers(TestCase):
 
     key = jax.random.PRNGKey(0)
 
     # generate data
     num_samples = 20
     num_features = 10
-    reg = 0.1
+    reg = 0.01
     key, subkey1, subkey2 = jax.random.split(key, num=3)
     X = jax.random.normal(subkey1, (num_samples, num_features))
-    y = jax.random.normal(subkey2, (num_samples,))
-    data = jnp.hstack([X, jnp.expand_dims(y, 1)])
+
+    y_ridge = jax.random.normal(subkey2, (num_samples,))
+    data_ridge = jnp.hstack([X, jnp.expand_dims(y_ridge, 1)])
+
+    y_logistic = 2 * jax.random.randint(subkey2, (num_samples,), 0, 2) - 1
+    data_logistic = jnp.hstack([X, jnp.expand_dims(y_logistic, 1)])
 
     # initial parameters
     beta_0 = (jnp.zeros(2), jnp.zeros(3), jnp.zeros(5))
 
     # compute reference solution
     _, unravel_fun = jax._src.flatten_util.ravel_pytree(beta_0)
-    beta_sol = unravel_fun(test_util.ridge_regression_sol(X, y, reg))
-    value_sol = obj_fun(beta_sol, data, reg)
+
+    ridge_beta_sol = unravel_fun(ridge_regression_sol(X, y_ridge, reg))
+    ridge_value_sol = ridge_obj_fun(ridge_beta_sol, data_ridge, reg)
+
+    logistic_beta_sol = unravel_fun(l2_logistic_regression_sol(X, y_logistic, reg))
+    logistic_value_sol = logistic_obj_fun(logistic_beta_sol, data_logistic, reg)
 
     # solver hyperparameters
     rho = 0.1
     rank = 10
     grad_batch_size = 20
     hess_batch_size = 20
-    update_freq = 0
+    update_freq_ridge = 0
+    update_freq_logistic = 10
     seed = 0
-    maxiter = 50
+    maxiter = 100
     tol = 1e-05
 
     @pytest.mark.parametrize(
@@ -210,8 +265,6 @@ class TestPromiseSolvers(test_util.TestCase):
                 solver.SketchyKatyusha,
                 {
                     "mu": 0.1,
-                    "momentum_param": 1 / 3,
-                    "momentum_multiplier": 2 / 3,
                     "snapshop_update_prob": 0.5,
                 },
             ),
@@ -227,39 +280,120 @@ class TestPromiseSolvers(test_util.TestCase):
 
         # solver with the Nyström subsampled Newton preconditioner
         solver = solver_class(
-            fun=obj_fun,
+            fun=ridge_obj_fun,
             rank=self.rank,
             rho=self.rho,
             grad_batch_size=self.grad_batch_size,
             hess_batch_size=self.hess_batch_size,
-            update_freq=self.update_freq,
+            update_freq=self.update_freq_ridge,
             seed=self.seed,
             maxiter=self.maxiter,
             tol=self.tol,
             **solver_params,
         )
-        beta_final, solver_state = solver.run(self.beta_0, self.data, reg=self.reg)
+        beta_final, solver_state = solver.run(
+            self.beta_0, self.data_ridge, reg=self.reg
+        )
 
-        self.assertAllClose(self.value_sol, obj_fun(beta_final, self.data, self.reg))
+        self.assertAllClose(
+            self.ridge_value_sol, ridge_obj_fun(beta_final, self.data_ridge, self.reg)
+        )
         assert solver_state.iter_num <= self.maxiter
         assert solver_state.error <= self.tol
 
         # solver with the subsampled Newton preconditioner
         solver = solver_class(
-            fun=obj_fun,
-            sqrt_hess_fun=sqrt_hess_fun,
+            fun=ridge_obj_fun,
+            sqrt_hess_fun=ridge_sqrt_hess_fun,
             precond="ssn",
             rho=self.rho,
             grad_batch_size=self.grad_batch_size,
             hess_batch_size=self.hess_batch_size,
-            update_freq=self.update_freq,
+            update_freq=self.update_freq_ridge,
             seed=self.seed,
             maxiter=self.maxiter,
             tol=self.tol,
             **solver_params,
         )
-        beta_final, solver_state = solver.run(self.beta_0, self.data, reg=self.reg)
+        beta_final, solver_state = solver.run(
+            self.beta_0, self.data_ridge, reg=self.reg
+        )
 
-        self.assertAllClose(self.value_sol, obj_fun(beta_final, self.data, self.reg))
+        self.assertAllClose(
+            self.ridge_value_sol, ridge_obj_fun(beta_final, self.data_ridge, self.reg)
+        )
+        assert solver_state.iter_num <= self.maxiter
+        assert solver_state.error <= self.tol
+
+    @pytest.mark.parametrize(
+        "promise_solver",
+        [
+            (solver.SketchySGD, {"learning_rate": 0.5}),
+            (solver.SketchySVRG, {"learning_rate": 0.5, "snapshop_update_freq": 3}),
+            (solver.SketchySAGA, {"learning_rate": 0.5}),
+            (
+                solver.SketchyKatyusha,
+                {
+                    "mu": 0.1,
+                    "snapshop_update_prob": 0.5,
+                },
+            ),
+        ],
+    )
+    def test_logistic_regression(self, promise_solver):
+        """
+        Test PROMISE solvers on a logistic regression problem.
+        The parameters we seek to optimize has a tree-like structure.
+        We update the preconditioner at each iteration during the run.
+        """
+        solver_class, solver_params = promise_solver
+
+        # solver with the Nyström subsampled Newton preconditioner
+        solver = solver_class(
+            fun=logistic_obj_fun,
+            rank=self.rank,
+            rho=self.rho,
+            grad_batch_size=self.grad_batch_size,
+            hess_batch_size=self.hess_batch_size,
+            update_freq=self.update_freq_logistic,
+            seed=self.seed,
+            maxiter=self.maxiter,
+            tol=self.tol,
+            jit=True,
+            **solver_params,
+        )
+        beta_final, solver_state = solver.run(
+            self.beta_0, self.data_logistic, reg=self.reg
+        )
+
+        self.assertAllClose(
+            self.logistic_value_sol,
+            logistic_obj_fun(beta_final, self.data_logistic, self.reg),
+        )
+        assert solver_state.iter_num <= self.maxiter
+        assert solver_state.error <= self.tol
+
+        # solver with the subsampled Newton preconditioner
+        solver = solver_class(
+            fun=logistic_obj_fun,
+            sqrt_hess_fun=logistic_sqrt_hess_fun,
+            precond="ssn",
+            rho=self.rho,
+            grad_batch_size=self.grad_batch_size,
+            hess_batch_size=self.hess_batch_size,
+            update_freq=self.update_freq_logistic,
+            seed=self.seed,
+            maxiter=self.maxiter,
+            tol=self.tol,
+            **solver_params,
+        )
+        beta_final, solver_state = solver.run(
+            self.beta_0, self.data_logistic, reg=self.reg
+        )
+
+        self.assertAllClose(
+            self.logistic_value_sol,
+            logistic_obj_fun(beta_final, self.data_logistic, self.reg),
+        )
         assert solver_state.iter_num <= self.maxiter
         assert solver_state.error <= self.tol

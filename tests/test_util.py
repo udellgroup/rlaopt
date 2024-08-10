@@ -1,4 +1,4 @@
-# Test utilities are adapted from JAX and JAXopt with modifications.
+# Part of the test utilities are adapted from JAX and JAXopt with modifications.
 # - Original JAX type functions: https://github.com/google/jax/blob/main/jax/_src/dtypes.py
 # - Original JAXopt test utilities: https://github.com/google/jaxopt/blob/main/jaxopt/_src/test_util.py
 #
@@ -20,25 +20,56 @@
 # limitations under the License.
 
 import functools
+from collections import namedtuple
 
 import jax
 import jax.numpy as jnp
 import numpy as np
+from sklearn.linear_model import LogisticRegression
+
+Point = namedtuple("Point", ["x", "y", "z"])
 
 
 def ridge_regression_sol(X, y, reg):
+    """Compute the closed-form solution of the ridge regression problem (no bias/intercept)."""
     n, p = X.shape
     return jnp.linalg.solve(
-        (1 / n) * X.T @ X + reg * jnp.identity(p), (1 / n) * X.T @ y
+        (1.0 / n) * X.T @ X + reg * jnp.identity(p), (1.0 / n) * X.T @ y
     )
 
 
 def ridge_regression_grad(X, y, reg, beta):
-    return (1 / X.shape[0]) * X.T @ (X @ beta - y) + reg * beta
+    """Compute the gradient of the ridge regression objective."""
+    return (1.0 / X.shape[0]) * X.T @ (X @ beta - y) + reg * beta
 
 
 def ridge_regression_hessian(X, y, reg, beta):
-    return (1 / X.shape[0]) * X.T @ X + reg * jnp.identity(X.shape[1])
+    """Compute the Hessian of the ridge regression objective."""
+    return (1.0 / X.shape[0]) * X.T @ X + reg * jnp.identity(X.shape[1])
+
+
+def l2_logistic_regression_sol(X, y, reg):
+    """Estimate the solution of the l2-regularized logistic regression problem (no bias/intercept) using L-BFGS."""
+    unscaled_reg = reg * X.shape[0]
+    clf = LogisticRegression(
+        C=1.0 / unscaled_reg, fit_intercept=False, tol=1e-7, solver="lbfgs"
+    )
+    clf.fit(X, y)
+    return clf.coef_.reshape(-1)
+
+
+def l2_logistic_regression_grad(X, y, reg, beta):
+    """Compute the gradient of the l2-regularized logistic regression objective."""
+    s = 1.0 / (1 + jnp.exp(-y * (X @ beta)))
+    return jnp.mean(((s - 1) * y).reshape(-1, 1) * X) + reg * beta
+
+
+def l2_logistic_regression_hessian(X, y, reg, beta):
+    """Compute the Hessian of the l2-regularized logistic regression objective."""
+    s = 1.0 / (1 + jnp.exp(-y * (X @ beta)))
+    return (1.0 / X.shape[0]) * X.T @ jnp.diag(s * (1 - s)) @ X + reg * jnp.identity(
+        X.shape[1]
+    )
 
 
 _dtype_to_32bit_dtype = {

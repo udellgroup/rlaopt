@@ -6,12 +6,15 @@ import numpy as np
 import pytest
 
 from sketchyopts import base, errors
-from tests import test_util
+from tests.test_util import (
+    Point,
+    TestCase,
+    ridge_regression_grad,
+    ridge_regression_hessian,
+)
 
-Point = namedtuple("Point", ["x", "y", "z"])
 
-
-class TestHessianLinearOperator(test_util.TestCase):
+class TestHessianLinearOperator(TestCase):
 
     rng = np.random.RandomState(0)
 
@@ -189,7 +192,7 @@ class TestHessianLinearOperator(test_util.TestCase):
 SolverInteralState = namedtuple(
     "SolverInteralState",
     ["step_size", "iter_num", "key", "precond"],
-    defaults=[0, jax.random.PRNGKey(0), lambda x: x],
+    defaults=[0, jax.random.PRNGKey(0), None],
 )
 
 
@@ -219,9 +222,7 @@ def grad_fun(beta, data, reg):
     features = data[:, :-1]
     targets = data[:, -1]
     unraveled_beta, unravel_fun = jax._src.flatten_util.ravel_pytree(beta)
-    return unravel_fun(
-        test_util.ridge_regression_grad(features, targets, reg, unraveled_beta)
-    )
+    return unravel_fun(ridge_regression_grad(features, targets, reg, unraveled_beta))
 
 
 def sqrt_hess_fun(beta, data):
@@ -233,7 +234,7 @@ def sqrt_hess_fun(beta, data):
     return (1 / sqrt_n) * features
 
 
-class TestPromiseSolverClass(test_util.TestCase):
+class TestPromiseSolverClass(TestCase):
 
     key = jax.random.PRNGKey(0)
 
@@ -363,9 +364,6 @@ class TestPromiseSolverClass(test_util.TestCase):
         # compute decomposition of the Hessian
         U, S, _ = jnp.linalg.svd(H)
 
-        # obtain the constructed gradient transformation function
-        grad_transform = self.solver_nyssn._get_grad_transform_nyssn(U, S)
-
         # generate random vector
         v = jax.random.normal(subkey2, (self.num_features,))
 
@@ -373,7 +371,9 @@ class TestPromiseSolverClass(test_util.TestCase):
         precond = H + self.rho * jnp.identity(self.num_features)
         precond_v = jnp.linalg.solve(precond, v)
 
-        self.assertAllClose(precond_v, grad_transform(v), atol=1e-04)
+        self.assertAllClose(
+            precond_v, self.solver_nyssn._grad_transform(v, (U, S)), atol=1e-04
+        )
 
     def test_grad_transform_fun_ssn(self):
         """
@@ -400,14 +400,6 @@ class TestPromiseSolverClass(test_util.TestCase):
             upper=False,
         )
 
-        # obtain the constructed gradient transformation function
-        grad_transform_wide = self.solver_ssn._get_grad_transform_ssn(
-            L_wide, H_sqrt_wide
-        )
-        grad_transform_tall = self.solver_ssn._get_grad_transform_ssn(
-            L_tall, H_sqrt_tall
-        )
-
         # generate random vector
         v = jax.random.normal(subkey3, (self.num_features,))
 
@@ -417,8 +409,16 @@ class TestPromiseSolverClass(test_util.TestCase):
         precond_v_wide = jnp.linalg.solve(precond_wide, v)
         precond_v_tall = jnp.linalg.solve(precond_tall, v)
 
-        self.assertAllClose(precond_v_wide, grad_transform_wide(v), atol=1e-04)
-        self.assertAllClose(precond_v_tall, grad_transform_tall(v), atol=1e-04)
+        self.assertAllClose(
+            precond_v_wide,
+            self.solver_ssn._grad_transform(v, (L_wide, H_sqrt_wide)),
+            atol=1e-04,
+        )
+        self.assertAllClose(
+            precond_v_tall,
+            self.solver_ssn._grad_transform(v, (L_tall, H_sqrt_tall)),
+            atol=1e-04,
+        )
 
     def test_precond_smoothness_constant_estimate(self):
         """
@@ -447,18 +447,16 @@ class TestPromiseSolverClass(test_util.TestCase):
             data=self.data,
             reg=self.reg,
         )
-        grad_transform_nyssn = self.solver_nyssn._get_grad_transform_nyssn(U, S)
-        grad_transform_ssn = self.solver_ssn._get_grad_transform_ssn(L, H_sqrt)
 
         returned_labda_nyssn = self.solver_nyssn._estimate_constant(
-            H_operator, grad_transform_nyssn, subkey2
+            H_operator, (U, S), subkey2
         )
         returned_labda_ssn = self.solver_ssn._estimate_constant(
-            H_operator, grad_transform_ssn, subkey3
+            H_operator, (L, H_sqrt), subkey3
         )
 
         # compute the constant manually
-        H_true = test_util.ridge_regression_hessian(
+        H_true = ridge_regression_hessian(
             self.data[:, :-1], self.data[:, -1], self.reg, self.beta_0
         )
         inv_sqrt_precond = U @ jnp.diag(1.0 / jnp.sqrt(S + self.rho)) @ U.T
@@ -506,7 +504,7 @@ class TestPromiseSolverClass(test_util.TestCase):
         state = SolverInteralState(step_size=0.0, iter_num=iter_num)
 
         # compute true Hessian
-        H = test_util.ridge_regression_hessian(
+        H = ridge_regression_hessian(
             self.data[:, :-1], self.data[:, -1], self.reg, self.beta_0
         )
 
@@ -528,7 +526,11 @@ class TestPromiseSolverClass(test_util.TestCase):
             self.beta_0, state, self.data, reg=self.reg
         )
         assert returned_state.step_size == self.solver_nyssn.learning_rate(iter_num)
-        self.assertAllClose(returned_state.precond(v), precond_v, atol=1e-05)
+        self.assertAllClose(
+            self.solver_nyssn._grad_transform(v, returned_state.precond),
+            precond_v,
+            atol=1e-05,
+        )
         # for the subsampled Newton preconditioner
         returned_state = self.solver_ssn._update_precond(
             self.beta_0, state, self.data, reg=self.reg
@@ -538,7 +540,11 @@ class TestPromiseSolverClass(test_util.TestCase):
             self.beta_0, self.data
         ) + self.rho * jnp.identity(self.num_features)
         print(jnp.linalg.solve(H_t, v))
-        self.assertAllClose(returned_state.precond(v), precond_v, atol=1e-05)
+        self.assertAllClose(
+            self.solver_ssn._grad_transform(v, returned_state.precond),
+            precond_v,
+            atol=1e-05,
+        )
 
         # test the case when the learning rate is passed in as a multiplier
         lr = 0.5
@@ -556,7 +562,11 @@ class TestPromiseSolverClass(test_util.TestCase):
             self.beta_0, state, self.data, reg=self.reg
         )
         self.assertAllClose(returned_state.step_size, lr / labda)
-        self.assertAllClose(returned_state.precond(v), precond_v, atol=1e-05)
+        self.assertAllClose(
+            self.solver_nyssn._grad_transform(v, returned_state.precond),
+            precond_v,
+            atol=1e-05,
+        )
         # for the subsampled Newton preconditioner
         est_const = self.solver_ssn._estimate_constant
         self.solver_ssn._estimate_constant = lambda H_S, grad_transform, key: est_const(
@@ -566,4 +576,8 @@ class TestPromiseSolverClass(test_util.TestCase):
             self.beta_0, state, self.data, reg=self.reg
         )
         self.assertAllClose(returned_state.step_size, lr / labda)
-        self.assertAllClose(returned_state.precond(v), precond_v, atol=1e-05)
+        self.assertAllClose(
+            self.solver_ssn._grad_transform(v, returned_state.precond),
+            precond_v,
+            atol=1e-05,
+        )
