@@ -14,6 +14,7 @@ class TestNystromApprox(TestCase):
     def test_rand_nystrom_approx_correctness(self):
         """
         Test the approximation quality based on element-wise relative error.
+
         We generate the original matrix from Normal distirbution and repeatedly
         approximate the matrix with different keys. We then compute the average
         element-wise relative error from these runs.

@@ -8,6 +8,7 @@ from jax import Array
 from jax.typing import ArrayLike
 
 import sketchyopts
+from sketchyopts.util import inexact_asarray
 
 KeyArray = Array
 KeyArrayLike = ArrayLike
@@ -29,17 +30,21 @@ class SolverState(NamedTuple):
 class PromiseSolver(abc.ABC):
     r"""Base class for PROMISE solvers.
 
-    The class provides basic functionalities of the sketching-based preconditioned stochastic gradient algorithms.
+    The class provides basic functionalities of the sketching-based preconditioned
+    stochastic gradient algorithms.
 
-    It constructs function ``_value_and_grad`` that evaluates both the objective and gradient. It also implements
-    method ``_init_precond`` that initializes empty preconditioner decomposition, and ``_update_precond`` that
-    updates the Nyström subsampled Newton (NySSN) or subsampled Newton (SSN) preconditioner as well as the
-    corresponding preconditioned smoothness constant. Helper method ``_grad_transform`` applies preconditioner to
-    the provided gradient vector.
+    It constructs function ``_value_and_grad`` that evaluates both the objective and
+    gradient. It also implements
+    method ``_init_precond`` that initializes empty preconditioner decomposition, and
+    ``_update_precond`` that updates the Nyström subsampled Newton (NySSN) or subsampled
+    Newton (SSN) preconditioner as well as the corresponding preconditioned smoothness
+    constant. Helper method ``_grad_transform`` applies preconditioner to the provided
+    gradient vector.
 
     References:
-      - Z\. Frangella, P. Rathore, S. Zhao, and M. Udell, `PROMISE: Preconditioned Stochastic Optimization Methods by Incorporating Scalable Curvature Estimates <https://arxiv.org/abs/2309.02014>`_.
-
+      - Z\. Frangella, P. Rathore, S. Zhao, and M. Udell, `PROMISE: Preconditioned
+        Stochastic Optimization Methods by Incorporating Scalable Curvature Estimates
+        <https://arxiv.org/abs/2309.02014>`_.
     """
 
     fun: Callable
@@ -64,7 +69,8 @@ class PromiseSolver(abc.ABC):
     sparse: bool = False
 
     def __post_init__(self):
-        r"""The function constructs ``_value_and_grad`` that evaluates both the objective and gradient."""
+        r"""The function constructs ``_value_and_grad`` that evaluates both the
+        objective and gradient."""
         # validate preconditioner type and required oracle
         if self.precond == "ssn":
             if not callable(self.sqrt_hess_fun):
@@ -185,11 +191,13 @@ class PromiseSolver(abc.ABC):
         return labda
 
     def _update_step_size(self, labda, state):
-        r"""The function updates the step size using the learning rate from the class variable and the provided smoothness constant."""
+        r"""The function updates the step size using the learning rate from the class
+        variable and the provided smoothness constant."""
         return state._replace(step_size=self.learning_rate / labda)
 
     def _update_precond(self, params, state, data, reg, *args, **kwargs):
-        r"""The function updates the Nyström subsampled Newton (NySSN) or subsampled Newton (SSN) preconditioner and corresponding smoothness constant."""
+        r"""The function updates the Nyström subsampled Newton (NySSN) or subsampled
+        Newton (SSN) preconditioner and corresponding smoothness constant."""
         key, subkey = jax.random.split(state.key)
         batch_idx = jax.random.choice(
             subkey, self.num_samples, (self.hess_batch_size,), replace=False
@@ -201,12 +209,11 @@ class PromiseSolver(abc.ABC):
                 fun=self.fun,
                 grad_fun=self.grad_fun,
                 hvp_fun=self.hvp_fun,
-                sqrt_hess_fun=self.sqrt_hess_fun,
                 params=params,
-                data=data[batch_idx],
-                reg=0,
                 *args,
                 **kwargs,
+                data=data[batch_idx],
+                reg=0,
             )
             key, subkey = jax.random.split(key)
             U, S = sketchyopts.preconditioner.rand_nystrom_approx(
@@ -239,12 +246,11 @@ class PromiseSolver(abc.ABC):
                 fun=self.fun,
                 grad_fun=self.grad_fun,
                 hvp_fun=self.hvp_fun,
-                sqrt_hess_fun=self.sqrt_hess_fun,
                 params=params,
-                data=data[batch_idx],
-                reg=reg,
                 *args,
                 **kwargs,
+                data=data[batch_idx],
+                reg=reg,
             )
             labda = self._estimate_constant(H_S, precond, subkey)
             state = self._update_step_size(labda, state)
@@ -263,22 +269,20 @@ class LinearOperator(abc.ABC):
         Args:
           shape: Shape of the linear operator.
           ndim: Dimension of the linear operator.
-
         """
         self.shape = shape
         self.ndim = ndim
 
     @abc.abstractmethod
     def matmul(self, other: ArrayLike) -> Array:
-        r"""Compute a matrix-vector or matrix-matrix product between the operator and
-        a JAX array.
+        r"""Compute a matrix-vector or matrix-matrix product between the operator and a
+        JAX array.
 
         Args:
           other: JAX array with matching dimension.
 
         Returns:
           A JAX array representing the resulting vector or matrix.
-
         """
 
     def __matmul__(self, other: ArrayLike) -> Array:
@@ -292,44 +296,35 @@ class LinearOperator(abc.ABC):
 
 class HessianLinearOperator(LinearOperator):
     r"""Hessian operator for computing Hessian-vector product without explicitly forming
-    the Hessian matrix.
-    """
+    the Hessian matrix."""
 
     def __init__(
         self,
         fun,
         params,
-        data,
-        reg,
         grad_fun=None,
         hvp_fun=None,
-        sqrt_hess_fun=None,
         *args,
         **kwargs,
     ):
         r"""Initialize the Hessian linear operator.
 
-        The linear operator implicitly forms the Hessian of function ``fun`` with respect
-        to parameters ``params``. The function can have additional positional and keyword
-        arguments.
+        The linear operator implicitly forms the Hessian of function ``fun`` with
+        respect to parameters ``params``. The function can have additional positional
+        and keyword arguments.
 
         The operator uses automatic differentiation to compute Hessian-vector product,
         unless an oracle ``hvp_fun`` is provided.
-
-        The operator uses automatic differentiation to construct the full Hessian matrix,
-        unless ``sqrt_hess_fun`` is provided.
 
         Args:
           fun: Scalar-valued function.
           grad_fun: Optional gradient oracle.
           hvp_fun: Optional Hessian-vector product oracle.
-          sqrt_hess_fun: Optional oracle that computes the matrix form (2-dimensional array) of the square root of the Hessian (with respect to the objective that does not includes the regularization term).
           params: Parameters of the function.
-          data: Data to feed into the function.
-          reg: Regularization strength.
-          *args: Additional positional arguments to be passed to ``fun`` (and ``grad_fun``, ``hvp_fun``, ``sqrt_hess_fun`` if provided).
-          **kwargs: Additional keyword arguments to be passed to ``fun`` (and ``grad_fun``, ``hvp_fun``, ``sqrt_hess_fun`` if provided).
-
+          *args: Additional positional arguments to be passed to ``fun`` (and
+            ``grad_fun``, ``hvp_fun`` if provided).
+          **kwargs: Additional keyword arguments to be passed to ``fun`` (and
+            ``grad_fun``, ``hvp_fun`` if provided).
         """
         unraveled, unravel_fun = sketchyopts.util.ravel_tree(params)
         params_size = jnp.size(unraveled)
@@ -337,62 +332,39 @@ class HessianLinearOperator(LinearOperator):
         # construct Hessian-vector product function
         if hvp_fun:
             self.hvp_fn = lambda v: sketchyopts.util.ravel_tree(
-                hvp_fun(params, unravel_fun(v), *args, **kwargs, data=data, reg=reg)
+                hvp_fun(params, unravel_fun(v), *args, **kwargs)
             )[0]
         else:
             if grad_fun:
-                # grad_fun_partial = lambda x: grad_fun(unravel_fun(x), *args, **kwargs, data=data, reg=reg)
-                # hvp_fn = lambda v: jax.jvp(grad_fun_partial, [unraveled], [v])[1]
-                # self.hvp_fn = lambda v: sketchyopts.util.ravel_tree(hvp_fn(v))[0]
                 grad_fun_partial = lambda x: sketchyopts.util.ravel_tree(
-                    grad_fun(unravel_fun(x), *args, **kwargs, data=data, reg=reg)
+                    grad_fun(unravel_fun(x), *args, **kwargs)
                 )[0]
                 self.hvp_fn = lambda v: jax.jvp(grad_fun_partial, [unraveled], [v])[1]
             else:
-                fun_partial = lambda x: fun(
-                    unravel_fun(x), *args, **kwargs, data=data, reg=reg
-                )
+                fun_partial = lambda x: fun(unravel_fun(x), *args, **kwargs)
                 self.hvp_fn = lambda v: jax.jvp(
                     jax.grad(fun_partial), [unraveled], [v]
                 )[1]
-
-        # construct Hessian matrix function
-        if sqrt_hess_fun:
-
-            def h_mat_fn():
-                H = sqrt_hess_fun(params, *args, **kwargs, data=data)
-                return H.T @ H + reg * jnp.identity(params_size)
-
-            self.h_mat_fn = h_mat_fn
-        else:
-            if grad_fun:
-                grad_fun_partial = lambda x: sketchyopts.util.ravel_tree(
-                    grad_fun(unravel_fun(x), *args, **kwargs, data=data, reg=reg)
-                )[0]
-                self.h_mat_fn = lambda: jax.jacfwd(grad_fun_partial)(unraveled)
-            else:
-                fun_partial = lambda x: fun(
-                    unravel_fun(x), *args, **kwargs, data=data, reg=reg
-                )
-                self.h_mat_fn = lambda: jax.hessian(fun_partial)(unraveled)
 
         super().__init__(shape=(params_size, params_size), ndim=2)
 
     def matmul(self, other):
         r"""Compute the Hessian-vector or Hessian-matrix product.
 
-        The vector or matrix ``other`` the Hessian acts on must have the matching size of the parameters ``params``.
-        Specifically, the function expects ``(params_size)`` for a vector or ``(params_size, num_vectors)`` for a matrix.
-        If ``params`` is a pytree, the size should be the number of leaves of the tree (*i.e.* length of the flattened tree).
+        The vector or matrix ``other`` the Hessian acts on must have the matching size
+        of the parameters ``params``. Specifically, the function expects
+        ``(params_size)`` for a vector or ``(params_size, num_vectors)`` for a matrix.
+        If ``params`` is a pytree, the size should be the number of leaves of the tree
+        (*i.e.* length of the flattened tree).
 
-        The resulting array has size ``(params_size)`` for vector input or ``(params_size, num_vectors)`` for matrix input.
+        The resulting array has size ``(params_size)`` for vector input or
+        ``(params_size, num_vectors)`` for matrix input.
 
         Args:
           other: A 1-dimensional or 2-dimensional array with the matching size.
 
         Returns:
           Array representing the result.
-
         """
         if jnp.ndim(other) == 1:
             return self.hvp_fn(other)
@@ -401,15 +373,26 @@ class HessianLinearOperator(LinearOperator):
         else:
             raise sketchyopts.errors.InputDimError("operand 1", jnp.ndim(other), [1, 2])
 
-    def as_matrix(self):
-        r"""Construct the full Hessian matrix.
 
-        The function materializes the full Hessian matrix of size ``(params_size, params_size)``. Here ``params_size``
-        refers to the size of the (flattened) parameters ``params``. For instance, if ``params`` is a pytree, the size
-        is the number of leaves of the tree (*i.e.* length of the flattened tree).
+class AddLinearOperator(LinearOperator):
+    r"""Linear operator for adding two other linear operators together."""
 
-        Returns:
-          A 2-dimensional array representing the Hessian matrix.
+    def __init__(self, operator1, operator2):
+        r"""Construct the linear operator.
 
+        The function forms a new linear operator :math:`\mathrm{operator1}
+        + \mathrm{operator2}`.
+
+        Args:
+          operator1: First linear operator.
+          operator2: Second linear operator.
         """
-        return self.h_mat_fn()
+        if operator1.shape != operator1.shape:
+            raise ValueError("Incompatible linear operator shapes.")
+        self.operator1 = operator1
+        self.operator2 = operator2
+        super().__init__(shape=jnp.shape(self.operator1), ndim=jnp.ndim(self.operator1))
+
+    def matmul(self, other):
+        r"""Compute the matrix-vector or matrix-matrix product of the new operator."""
+        return self.operator1 @ other + self.operator2 @ other

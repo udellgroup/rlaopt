@@ -14,7 +14,9 @@ KeyArray = Array
 KeyArrayLike = ArrayLike
 
 
-def shifted_cholesky(target, shift):
+def _shifted_cholesky(target, shift):
+    """Cholesky factorization on a matrix with shifted eigenvalues (so that it is
+    positive definite if ``shift`` is positive)."""
     eigs, eigvectors = jsp.linalg.eigh(target)
     new_shift = shift + jnp.abs(jnp.min(eigs))
     L = jsp.linalg.cholesky(
@@ -39,15 +41,22 @@ def rand_nystrom_approx(
     only the eigenvalues (not the full diagonal matrix :math:`\hat{\Lambda}`).
 
     References:
-      - H\. Li, G. C. Linderman, A. Szlam, K. P. Stanton, Y. Kluger, and M. Tygert, `Algorithm 971: An implementation of a randomized algorithm for principal component analysis <https://dl.acm.org/doi/10.1145/3004053>`_, ACM Transactions on Mathematical Software (TOMS), 43: 1–14, 2017.
-      - J\. A. Tropp, A. Yurtsever, M. Udell, and V. Cevher, `Fixed-rank approximation of a positive-semidefinite matrix from streaming data <https://papers.nips.cc/paper_files/paper/2017/hash/4558dbb6f6f8bb2e16d03b85bde76e2c-Abstract.html>`_, Advances in Neural Information Processing Systems, 30, 2017.
+      - H\. Li, G. C. Linderman, A. Szlam, K. P. Stanton, Y. Kluger, and M. Tygert,
+        `Algorithm 971: An implementation of a randomized algorithm for principal
+        component analysis <https://dl.acm.org/doi/10.1145/3004053>`_, ACM Transactions
+        on Mathematical Software (TOMS), 43: 1–14, 2017.
+      - J\. A. Tropp, A. Yurtsever, M. Udell, and V. Cevher, `Fixed-rank approximation
+        of a positive-semidefinite matrix from streaming data
+        <https://papers.nips.cc/paper_files/paper/2017/hash/
+        4558dbb6f6f8bb2e16d03b85bde76e2c-Abstract.html>`_, Advances in Neural
+        Information Processing Systems, 30, 2017.
 
     Args:
       A: A two-dimensional array representing a positive-semidefinite matrix. This can
         either be an explicit JAX array or an implicit
         :class:`sketchyopts.util.LinearOperator` object.
-      l: Rank of the Nyström approximated matrix :math:`\hat{A}_{\mathrm{nys}}`
-        (which coincides with sketch size).
+      l: Rank of the Nyström approximated matrix :math:`\hat{A}_{\mathrm{nys}}` (which
+        coincides with sketch size).
       key: A PRNG key used as the random key.
 
     Returns:
@@ -84,7 +93,7 @@ def rand_nystrom_approx(
 
     C, shift = jax.lax.cond(
         jnp.any(jnp.isnan(C)),
-        shifted_cholesky,
+        _shifted_cholesky,
         lambda x, y: (C, shift),
         cholesky_target,
         shift,

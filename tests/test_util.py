@@ -1,9 +1,12 @@
 # Part of the test utilities are adapted from JAX and JAXopt with modifications.
-# - Original JAX type functions: https://github.com/google/jax/blob/main/jax/_src/dtypes.py
-# - Original JAXopt test utilities: https://github.com/google/jaxopt/blob/main/jaxopt/_src/test_util.py
+# - Original JAX type functions:
+#   https://github.com/google/jax/blob/main/jax/_src/dtypes.py
+# - Original JAXopt test utilities:
+#   https://github.com/google/jaxopt/blob/main/jaxopt/_src/test_util.py
 #
 # Copyright license information:
 #
+# Copyright 2019 The JAX Authors.
 # Copyright 2021 Google LLC
 # Modifications copyright 2024 the SketchyOpts authors
 #
@@ -25,13 +28,16 @@ from collections import namedtuple
 import jax
 import jax.numpy as jnp
 import numpy as np
-from sklearn.linear_model import LogisticRegression
+from sklearn.linear_model import ElasticNet, LogisticRegression
 
 Point = namedtuple("Point", ["x", "y", "z"])
 
 
 def ridge_regression_sol(X, y, reg):
-    """Compute the closed-form solution of the ridge regression problem (no bias/intercept)."""
+    """
+    Compute the closed-form solution of the ridge regression problem
+    (no bias/intercept term).
+    """
     n, p = X.shape
     return jnp.linalg.solve(
         (1.0 / n) * X.T @ X + reg * jnp.identity(p), (1.0 / n) * X.T @ y
@@ -39,17 +45,24 @@ def ridge_regression_sol(X, y, reg):
 
 
 def ridge_regression_grad(X, y, reg, beta):
-    """Compute the gradient of the ridge regression objective."""
+    """
+    Compute the gradient of the ridge regression objective.
+    """
     return (1.0 / X.shape[0]) * X.T @ (X @ beta - y) + reg * beta
 
 
 def ridge_regression_hessian(X, y, reg, beta):
-    """Compute the Hessian of the ridge regression objective."""
+    """
+    Compute the Hessian of the ridge regression objective.
+    """
     return (1.0 / X.shape[0]) * X.T @ X + reg * jnp.identity(X.shape[1])
 
 
 def l2_logistic_regression_sol(X, y, reg):
-    """Estimate the solution of the l2-regularized logistic regression problem (no bias/intercept) using L-BFGS."""
+    """
+    Estimate the solution of the l2-regularized logistic regression problem
+    (no bias/intercept term) using L-BFGS.
+    """
     unscaled_reg = reg * X.shape[0]
     clf = LogisticRegression(
         C=1.0 / unscaled_reg, fit_intercept=False, tol=1e-7, solver="lbfgs"
@@ -59,17 +72,31 @@ def l2_logistic_regression_sol(X, y, reg):
 
 
 def l2_logistic_regression_grad(X, y, reg, beta):
-    """Compute the gradient of the l2-regularized logistic regression objective."""
+    """
+    Compute the gradient of the l2-regularized logistic regression objective.
+    """
     s = 1.0 / (1 + jnp.exp(-y * (X @ beta)))
     return jnp.mean(((s - 1) * y).reshape(-1, 1) * X) + reg * beta
 
 
 def l2_logistic_regression_hessian(X, y, reg, beta):
-    """Compute the Hessian of the l2-regularized logistic regression objective."""
+    """
+    Compute the Hessian of the l2-regularized logistic regression objective.
+    """
     s = 1.0 / (1 + jnp.exp(-y * (X @ beta)))
     return (1.0 / X.shape[0]) * X.T @ jnp.diag(s * (1 - s)) @ X + reg * jnp.identity(
         X.shape[1]
     )
+
+
+def elastic_net_regression_sol(X, y, reg, l1_ratio):
+    """
+    Estimate the solution of the elastic net-regularized regression problem
+    (no bias/intercept term).
+    """
+    regr = ElasticNet(alpha=reg, l1_ratio=l1_ratio, fit_intercept=False, tol=1e-7)
+    regr.fit(X, y)
+    return regr.coef_.reshape(-1)
 
 
 _dtype_to_32bit_dtype = {
@@ -82,7 +109,9 @@ _dtype_to_32bit_dtype = {
 
 @functools.lru_cache(maxsize=None)
 def _canonicalize_dtype(x64_enabled, dtype):
-    """Convert from a dtype to a canonical dtype based on config.x64_enabled."""
+    """
+    Convert from a dtype to a canonical dtype based on config.x64_enabled.
+    """
     try:
         dtype = np.dtype(dtype)
     except TypeError as e:
@@ -98,7 +127,7 @@ def canonicalize_dtype(dtype):
     return _canonicalize_dtype(jax.config.x64_enabled, dtype)
 
 
-# Default dtypes corresponding to Python scalars.
+# default dtypes corresponding to Python scalars
 python_scalar_dtypes: dict = {
     bool: np.dtype("bool"),
     int: np.dtype("int64"),
@@ -115,7 +144,7 @@ def _dtype(x):
     )
 
 
-# Trivial vectorspace datatype needed for tangent values of int/bool primals
+# trivial vectorspace datatype needed for tangent values of int/bool primals
 float0: np.dtype = np.dtype([("float0", np.void, 0)])
 
 _default_tolerance = {
@@ -182,20 +211,26 @@ def is_sequence(x):
 
 
 class TestCase:
-    """Base class for tests."""
+    """
+    Base class for tests.
+    """
 
     def assertArraysEqual(self, x, y, *, check_dtypes=True, err_msg=""):
-        """Assert that x and y arrays are exactly equal."""
+        """
+        Assert that x and y arrays are exactly equal.
+        """
         if check_dtypes:
             self.assertDtypesMatch(x, y)
-        # Work around https://github.com/numpy/numpy/issues/18992
+        # work around https://github.com/numpy/numpy/issues/18992
         with np.errstate(over="ignore"):
             np.testing.assert_array_equal(x, y, err_msg=err_msg)
 
     def assertArraysAllClose(
         self, x, y, *, check_dtypes=True, atol=None, rtol=None, err_msg=""
     ):
-        """Assert that x and y are close (up to numerical tolerances)."""
+        """
+        Assert that x and y are close (up to numerical tolerances).
+        """
         assert x.shape == y.shape
         atol = max(tolerance(_dtype(x), atol), tolerance(_dtype(y), atol))
         rtol = max(tolerance(_dtype(x), rtol), tolerance(_dtype(y), rtol))
@@ -222,7 +257,9 @@ class TestCase:
         canonicalize_dtypes=True,
         err_msg="",
     ):
-        """Assert that x and y, either arrays or nested tuples/lists, are close."""
+        """
+        Assert that x and y, either arrays or nested tuples/lists, are close.
+        """
         if isinstance(x, dict):
             assert isinstance(y, dict), err_msg
             assert set(x.keys()) == set(y.keys()), err_msg

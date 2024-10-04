@@ -8,6 +8,7 @@ Base
     PromiseSolver
     LinearOperator
     HessianLinearOperator
+    AddLinearOperator
 
 PROMISE Solver
 ~~~~~~~~~~~~~~
@@ -20,5 +21,8 @@ Linear Operator
     :members:
     :special-members: __init__, __matmul__
 .. autoclass:: HessianLinearOperator
+    :members:
+    :special-members: __init__
+.. autoclass:: AddLinearOperator
     :members:
     :special-members: __init__

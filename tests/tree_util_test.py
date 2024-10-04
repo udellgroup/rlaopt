@@ -1,9 +1,9 @@
 # Tests for pytree utilities are adapted from JAXopt with modifications.
-# - Original JAXopt tests: https://github.com/google/jaxopt/blob/main/tests/tree_util_test.py
+# - Original JAXopt tests:
+#   https://github.com/google/jaxopt/blob/main/tests/tree_util_test.py
 #
 # Copyright license information:
 #
-# Copyright 2019 The JAX Authors
 # Copyright 2021 Google LLC
 # Modifications copyright 2024 the SketchyOpts authors
 #
@@ -33,6 +33,9 @@ class TestTreeUtil(TestCase):
 
     @classmethod
     def setup_class(self):
+        """
+        Set up test examples.
+        """
         rng = np.random.RandomState(0)
 
         self.tree_A = (rng.randn(20, 10) + 1j * rng.randn(20, 10), rng.randn(20))
@@ -46,10 +49,16 @@ class TestTreeUtil(TestCase):
         self.array_C = rng.randn(20) + 1j * rng.randn(20)
 
     def _assertTreesAllClose(self, tree_A, tree_B):
+        """
+        Assertion function for the type of pytree to be used in the tests.
+        """
         self.assertArraysAllClose(tree_A[0], tree_B[0])
         self.assertArraysAllClose(tree_A[1], tree_B[1])
 
     def test_tree_add(self):
+        """
+        Test tree_add.
+        """
         expected = self.array_A + self.array_B
         got = tree_util.tree_add(self.array_A, self.array_B)
         self._assertTreesAllClose(expected, got)
@@ -59,6 +68,9 @@ class TestTreeUtil(TestCase):
         self._assertTreesAllClose(expected, got)
 
     def test_tree_sub(self):
+        """
+        Test tree_sub.
+        """
         expected = self.array_A - self.array_B
         got = tree_util.tree_sub(self.array_A, self.array_B)
         self._assertTreesAllClose(expected, got)
@@ -68,6 +80,9 @@ class TestTreeUtil(TestCase):
         self._assertTreesAllClose(expected, got)
 
     def test_tree_mul(self):
+        """
+        Test tree_mul.
+        """
         expected = self.array_A * self.array_B
         got = tree_util.tree_mul(self.array_A, self.array_B)
         self._assertTreesAllClose(expected, got)
@@ -77,6 +92,9 @@ class TestTreeUtil(TestCase):
         self._assertTreesAllClose(expected, got)
 
     def test_tree_scalar_mul(self):
+        """
+        Test tree_scalar_mul.
+        """
         expected = 0.5 * self.array_A
         got = tree_util.tree_scalar_mul(0.5, self.array_A)
         self._assertTreesAllClose(expected, got)
@@ -86,6 +104,9 @@ class TestTreeUtil(TestCase):
         self._assertTreesAllClose(expected, got)
 
     def test_tree_add_scalar_mul(self):
+        """
+        Test tree_add_scalar_mul.
+        """
         expected = (
             self.tree_A[0] + 0.5 * self.tree_B[0],
             self.tree_A[1] + 0.5 * self.tree_B[1],
@@ -94,6 +115,9 @@ class TestTreeUtil(TestCase):
         self._assertTreesAllClose(expected, got)
 
     def test_tree_vdot(self):
+        """
+        Test tree_vdot.
+        """
         expected = jnp.vdot(self.array_A, self.array_B)
         got = tree_util.tree_vdot(self.array_A, self.array_B)
         self.assertAllClose(expected, got)
@@ -109,6 +133,9 @@ class TestTreeUtil(TestCase):
         self.assertAllClose(expected, got)
 
     def test_tree_vdot_real(self):
+        """
+        Test tree_vdot_real.
+        """
         expected = np.vdot(self.array_A, self.array_B).real
         got = tree_util.tree_vdot_real(self.array_A, self.array_B)
         self.assertAllClose(expected, got)
@@ -122,6 +149,9 @@ class TestTreeUtil(TestCase):
         self.assertAllClose(expected, got)
 
     def test_tree_div(self):
+        """
+        Test tree_div.
+        """
         expected = (self.tree_A[0] / self.tree_B[0], self.tree_A[1] / self.tree_B[1])
         got = tree_util.tree_div(self.tree_A, self.tree_B)
         self.assertAllClose(expected, got)
@@ -131,6 +161,9 @@ class TestTreeUtil(TestCase):
         self.assertAllClose(expected, got)
 
     def test_tree_sum(self):
+        """
+        Test tree_sum.
+        """
         expected = jnp.sum(self.array_A)
         got = tree_util.tree_sum(self.array_A)
         self.assertAllClose(expected, got)
@@ -140,6 +173,9 @@ class TestTreeUtil(TestCase):
         self.assertAllClose(expected, got)
 
     def test_tree_l2_norm(self):
+        """
+        Test tree_l2_norm.
+        """
         expected = jnp.sqrt(jnp.vdot(self.array_A, self.array_A).real)
         got = tree_util.tree_l2_norm(self.array_A)
         self.assertAllClose(expected, got)
@@ -152,6 +188,9 @@ class TestTreeUtil(TestCase):
         self.assertAllClose(expected, got)
 
     def test_tree_inf_norm(self):
+        """
+        Test tree_inf_norm.
+        """
         expected = jnp.max(jnp.abs(self.array_A))
         got = tree_util.tree_inf_norm(self.array_A)
         self.assertAllClose(expected, got)
@@ -171,6 +210,9 @@ class TestTreeUtil(TestCase):
         self.assertAllClose(expected, got)
 
     def test_tree_conj(self):
+        """
+        Test tree_conj.
+        """
         expected = np.conj(self.array_A)
         got = tree_util.tree_conj(self.array_A)
         self.assertAllClose(expected, got)
@@ -180,6 +222,9 @@ class TestTreeUtil(TestCase):
         self.assertAllClose(expected, got)
 
     def test_tree_real(self):
+        """
+        Test tree_real.
+        """
         expected = np.real(self.array_A)
         got = tree_util.tree_real(self.array_A)
         self.assertAllClose(expected, got)
@@ -189,6 +234,9 @@ class TestTreeUtil(TestCase):
         self.assertAllClose(expected, got)
 
     def test_tree_imag(self):
+        """
+        Test tree_imag.
+        """
         expected = np.imag(self.array_A)
         got = tree_util.tree_imag(self.array_A)
         self.assertAllClose(expected, got)
@@ -198,10 +246,24 @@ class TestTreeUtil(TestCase):
         self.assertAllClose(expected, got)
 
     def test_tree_zeros_like(self):
+        """
+        Test tree_zeros_like.
+        """
         tree = tree_util.tree_zeros_like(self.tree_A)
         self.assertAllClose(tree_util.tree_l2_norm(tree), 0.0)
 
+    def test_tree_ones_like(self):
+        """
+        Test tree_ones_like.
+        """
+        got = tree_util.tree_ones_like(self.tree_A)
+        expected = (np.ones_like(self.tree_A[0]), np.ones_like(self.tree_A[1]))
+        self.assertAllClose(expected, got)
+
     def test_tree_where(self):
+        """
+        Test tree_where.
+        """
         c = jnp.array([True, False, True, False]), jnp.array([True, False, False, True])
         a = jnp.array([1.0, 2.0, 3.0, 4.0]), jnp.array([5.0, 6.0, 7.0, 8.0])
         b = jnp.array(42.0), jnp.array(13.0)
@@ -223,7 +285,10 @@ class TestTreeUtil(TestCase):
         self.assertAllClose(d[1], jnp.array([42.0, 42.0, 42.0, 42.0]))
 
     def test_broadcast_pytrees(self):
-        # No leaf pytrees, treedefs match.
+        """
+        Test broadcast_pytrees.
+        """
+        # pytrees without leaves; expect matching treedefs
         trees_in = (
             [jnp.asarray(1.0), jnp.asarray(2.0)],
             [jnp.asarray(3.0), jnp.asarray(4.0)],
@@ -232,8 +297,8 @@ class TestTreeUtil(TestCase):
         for l_in, l_out in zip(jtu.tree_leaves(trees_in), jtu.tree_leaves(trees_out)):
             self.assertAllClose(l_in, l_out)
 
-        # One leaf pytree. `a_out` should match the structure of `b_in` and `b_out`
-        # by broadcasting `a_in`.
+        # pytree with one leaf; expect `a_out` match the structure of `b_in` and `b_out`
+        # by broadcasting `a_in`
         a_in = jnp.asarray(1.0)
         b_in = [jnp.asarray(2.0), jnp.asarray(3.0)]
         a_out, b_out = tree_util.broadcast_pytrees(a_in, b_in)
@@ -242,7 +307,7 @@ class TestTreeUtil(TestCase):
         self.assertAllClose(b_out[0], b_in[0])
         self.assertAllClose(b_out[1], b_in[1])
 
-        # Treedefs do not match.
+        # treedefs do not match
         a_in = [jnp.asarray(1.0)]
         b_in = [jnp.asarray(2.0), jnp.asarray(3.0)]
         with pytest.raises(ValueError):
@@ -251,6 +316,9 @@ class TestTreeUtil(TestCase):
     @pytest.mark.parametrize("high_precision", [True, False])
     @pytest.mark.parametrize("convert_in_jax_dtype", [True, False])
     def test_tree_single_dtype(self, high_precision, convert_in_jax_dtype):
+        """
+        Test tree_single_dtype.
+        """
         current_precision = jax.config.jax_enable_x64
         if high_precision:
             jax.config.update("jax_enable_x64", True)
@@ -298,6 +366,9 @@ class TestTreeUtil(TestCase):
         jax.config.update("jax_enable_x64", current_precision)
 
     def test_get_real_dtype(self):
+        """
+        Test get_real_dtype.
+        """
         complex_dtype = jnp.asarray(1j * 1.0).dtype
         real_dtype = jnp.asarray(1.0).dtype
         assert tree_util.get_real_dtype(complex_dtype) == real_dtype

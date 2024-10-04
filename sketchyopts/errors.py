@@ -15,7 +15,6 @@ class InputDimError(SketchyOptsError):
     r"""Incorrect Input Dimension.
 
     This error occurs when an argument of a function has unexpected dimension.
-
     """
 
     def __init__(
@@ -41,7 +40,6 @@ class MatrixNotSquareError(SketchyOptsError):
 
     This error occurs when an argument representing a non-square matrix gets passed to a
     function that expects a square matrix.
-
     """
 
     def __init__(self, input_name: str, actual_shape: tuple[int, ...]) -> None:

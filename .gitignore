@@ -2,6 +2,7 @@
 *.pyc
 sketchyopts/__pycache__/
 tests/__pycache__/
+.pytest_cache/
 .ipynb_checkpoints/
 
 # virtual environment
@@ -10,8 +11,10 @@ tests/__pycache__/
 # OS files
 .DS_Store
 
-# pre-commit config
+# config files
 .pre-commit-config.yaml
+*.sublime-project
+*.sublime-workspace
 
 # built documentation
 docs/_build/

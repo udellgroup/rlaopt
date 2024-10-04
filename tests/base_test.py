@@ -51,9 +51,6 @@ class TestHessianLinearOperator(TestCase):
             raveled_v, _ = jax._src.flatten_util.ravel_pytree(v)
             return ravel_fun(data.T @ data @ raveled_v + reg * raveled_v)
 
-        def sqrt_hess_fun(p, data):
-            return data
-
         data = self.rng.randn(20, 3)
         reg = self.rng.uniform(1)
         vec = self.rng.randn(3).astype("float32")
@@ -63,14 +60,12 @@ class TestHessianLinearOperator(TestCase):
         expected_shape = (prams_size, prams_size)
         expected_vec = data.T @ data @ vec + reg * vec
         expected_mat = data.T @ data @ mat + reg * mat
-        expected_H = data.T @ data + reg * jnp.identity(prams_size)
 
         # objective only
         H = base.HessianLinearOperator(
             fun=fun,
             grad_fun=None,
             hvp_fun=None,
-            sqrt_hess_fun=None,
             params=params,
             data=data,
             reg=reg,
@@ -78,30 +73,25 @@ class TestHessianLinearOperator(TestCase):
         assert H.shape == expected_shape
         self.assertAllClose(H @ vec, expected_vec)
         self.assertAllClose(H @ mat, expected_mat)
-        self.assertAllClose(H.as_matrix(), expected_H)
 
         # objective + gradient oracle
         H = base.HessianLinearOperator(
             fun=fun,
             grad_fun=grad_fun,
             hvp_fun=None,
-            sqrt_hess_fun=None,
             params=params,
             data=data,
             reg=reg,
         )
         assert H.shape == expected_shape
-        print(H.as_matrix())
         self.assertAllClose(H @ vec, expected_vec)
         self.assertAllClose(H @ mat, expected_mat)
-        self.assertAllClose(H.as_matrix(), expected_H)
 
         # objective + hvp oracle and square root Hessian oracle
         H = base.HessianLinearOperator(
             fun=fun,
             grad_fun=None,
             hvp_fun=hvp_fun,
-            sqrt_hess_fun=sqrt_hess_fun,
             params=params,
             data=data,
             reg=reg,
@@ -109,7 +99,6 @@ class TestHessianLinearOperator(TestCase):
         assert H.shape == expected_shape
         self.assertAllClose(H @ vec, expected_vec)
         self.assertAllClose(H @ mat, expected_mat)
-        self.assertAllClose(H.as_matrix(), expected_H)
 
     def test_scalar_params(self):
         """
@@ -118,7 +107,6 @@ class TestHessianLinearOperator(TestCase):
         fun = lambda x, data, reg: jnp.log(1 / x) + 0.5 * reg * (x**2)
         grad_fun = lambda x, data, reg: -1 / x + reg * x
         hvp_fun = lambda x, v, data, reg: (1 / jnp.square(x)) * v + reg * v
-        sqrt_hess_fun = lambda x, data: (1 / x) * jnp.ones((1, 1))
 
         params = 10.0
         data = None
@@ -127,49 +115,42 @@ class TestHessianLinearOperator(TestCase):
 
         expected_shape = (1, 1)
         expected_result = (1 / (params**2)) * vec + reg * vec
-        expected_H = (1 / (params**2)) * jnp.ones((1, 1))
 
         # objective only
         H = base.HessianLinearOperator(
             fun=fun,
             grad_fun=None,
             hvp_fun=None,
-            sqrt_hess_fun=None,
             params=params,
             data=data,
             reg=reg,
         )
         assert H.shape == expected_shape
         self.assertAllClose(H @ vec, expected_result)
-        self.assertAllClose(H.as_matrix(), expected_H)
 
         # objective + gradient oracle
         H = base.HessianLinearOperator(
             fun=fun,
             grad_fun=grad_fun,
             hvp_fun=None,
-            sqrt_hess_fun=None,
             params=params,
             data=data,
             reg=reg,
         )
         assert H.shape == expected_shape
         self.assertAllClose(H @ vec, expected_result)
-        self.assertAllClose(H.as_matrix(), expected_H)
 
         # objective + hvp oracle and square root Hessian oracle
         H = base.HessianLinearOperator(
             fun=fun,
             grad_fun=None,
             hvp_fun=hvp_fun,
-            sqrt_hess_fun=sqrt_hess_fun,
             params=params,
             data=data,
             reg=reg,
         )
         assert H.shape == expected_shape
         self.assertAllClose(H @ vec, expected_result)
-        self.assertAllClose(H.as_matrix(), expected_H)
 
     def test_dimension_error(self):
         """
@@ -280,7 +261,8 @@ class TestPromiseSolverClass(TestCase):
         seed=seed,
     )
 
-    # manually set class variables (since these are set to the actual values only inside the run function)
+    # manually set class variables
+    # (since these are set to the actual values only inside the run function)
     solver_nyssn.num_samples = num_samples
     solver_ssn.num_samples = num_samples
 
@@ -352,8 +334,11 @@ class TestPromiseSolverClass(TestCase):
 
     def test_grad_transform_fun_nyssn(self):
         """
-        Test the ``_get_grad_transform`` function of the solve with the Nyström subsampled Newton preconditioner.
-        The function should return an oracle that computes :math:`P^{-1} g` where :math:`P` is the preconditioner and :math:`g` is any vector of matching size.
+        Test the ``_get_grad_transform`` function of the solve with the Nyström
+        subsampled Newton preconditioner.
+
+        The function should return an oracle that computes :math:`P^{-1} g` where
+        :math:`P` is the preconditioner and :math:`g` is any vector of matching size.
         """
         self.key, subkey1, subkey2 = jax.random.split(self.key, num=3)
 
@@ -377,8 +362,11 @@ class TestPromiseSolverClass(TestCase):
 
     def test_grad_transform_fun_ssn(self):
         """
-        Test the ``_get_grad_transform`` function of the solve with the subsampled Newton preconditioner.
-        The function should return an oracle that computes :math:`P^{-1} g` where :math:`P` is the preconditioner and :math:`g` is any vector of matching size.
+        Test the ``_get_grad_transform`` function of the solve with the subsampled
+        Newton preconditioner.
+
+        The function should return an oracle that computes :math:`P^{-1} g` where
+        :math:`P` is the preconditioner and :math:`g` is any vector of matching size.
         """
         self.key, subkey1, subkey2, subkey3 = jax.random.split(self.key, num=4)
 
@@ -423,7 +411,9 @@ class TestPromiseSolverClass(TestCase):
     def test_precond_smoothness_constant_estimate(self):
         """
         Test the ``_estimate_constant`` function of the solver.
-        The function should return the largest eigenvalue of :math:`P^{-1/2} H P^{-1/2}` where :math:`P` is the preconditioner and :math:`H` is the Hessian.
+
+        The function should return the largest eigenvalue of :math:`P^{-1/2} H P^{-1/2}`
+        where :math:`P` is the preconditioner and :math:`H` is the Hessian.
         """
         self.key, subkey1, subkey2, subkey3 = jax.random.split(self.key, num=4)
 
@@ -442,7 +432,6 @@ class TestPromiseSolverClass(TestCase):
             fun=obj_fun,
             grad_fun=None,
             hvp_fun=None,
-            sqrt_hess_fun=sqrt_hess_fun,
             params=self.beta_0,
             data=self.data,
             reg=self.reg,
@@ -470,7 +459,10 @@ class TestPromiseSolverClass(TestCase):
     def test_step_size_update(self):
         """
         Test the ``_update_step_size`` function of the solver.
-        The function should update the ``step_size`` attribute with :math:`\alpha / \\lambda_P` where :math:`\alpha` is the learning rate multiplier and :math:`\\lambda_P` is the smoothness constant of the preconditioner.
+
+        The function should update the ``step_size`` attribute with
+        :math:`\alpha / \\lambda_P` where :math:`\alpha` is the learning rate multiplier
+        and :math:`\\lambda_P` is the smoothness constant of the preconditioner.
         """
         lr = 0.5
         labda = 10
@@ -539,7 +531,6 @@ class TestPromiseSolverClass(TestCase):
         H_t = sqrt_hess_fun(self.beta_0, self.data).T @ sqrt_hess_fun(
             self.beta_0, self.data
         ) + self.rho * jnp.identity(self.num_features)
-        print(jnp.linalg.solve(H_t, v))
         self.assertAllClose(
             self.solver_ssn._grad_transform(v, returned_state.precond),
             precond_v,
@@ -550,8 +541,9 @@ class TestPromiseSolverClass(TestCase):
         lr = 0.5
         self.solver_nyssn.learning_rate = lr
         self.solver_ssn.learning_rate = lr
-        # we override the smoothness constant estimation function with the one that runs for more iterations
-        # for the Nyström subsampled Newton preconditioner
+        # we override the smoothness constant estimation function with the one that runs
+        # for more iterations
+        # Nyström subsampled Newton preconditioner
         est_const = self.solver_nyssn._estimate_constant
         self.solver_nyssn._estimate_constant = (
             lambda H_S, grad_transform, key: est_const(
@@ -567,7 +559,7 @@ class TestPromiseSolverClass(TestCase):
             precond_v,
             atol=1e-05,
         )
-        # for the subsampled Newton preconditioner
+        # subsampled Newton preconditioner
         est_const = self.solver_ssn._estimate_constant
         self.solver_ssn._estimate_constant = lambda H_S, grad_transform, key: est_const(
             H_S, grad_transform, key, p_maxiter=500

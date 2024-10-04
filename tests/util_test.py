@@ -23,7 +23,8 @@ def test_default_types():
 
 def test_asarray_no_copy():
     """
-    Test inexact_asarray and integer_asarray and expect the converted array is the original array (not a copy).
+    Test inexact_asarray and integer_asarray and expect the converted array is the
+    original array (not a copy).
     """
     # direct transformation
     x_float = jnp.array([1.0])
@@ -40,7 +41,8 @@ def test_asarray_no_copy():
 
 def test_asarray_result():
     """
-    Test inexact_asarray and integer_asarray and expect the converted array has the correct data type.
+    Test inexact_asarray and integer_asarray and expect the converted array has the
+    correct data type.
     """
     # define examples
     objs = [1, 1.0, True, jnp.array([1]), jnp.array(1.0), np.array(1.0), np.array(1)]
