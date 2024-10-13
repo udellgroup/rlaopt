@@ -30,6 +30,7 @@ Citation
    :maxdepth: 2
    :caption: Tutorials
 
+   tutorials/support_vector_machine
    tutorials/ridge_regression
    tutorials/l2_logistic_regression
 

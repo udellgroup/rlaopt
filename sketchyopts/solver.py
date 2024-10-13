@@ -326,8 +326,6 @@ class NysADMM:
     ``abs_tol`` and ``rel_tol`` specify absolute and relative tolerances for terminating 
     the optimizer. Specifically, the optimization stops when 
 
-    - the Nyström PCG has failed to solve the subproblem to the required tolerance 
-      (based on the tolerance sequence)
     - or, the maximal number of iterations has been reached
     - or, the following stopping criteria have been met
 
@@ -360,9 +358,14 @@ class NysADMM:
         reg_g_params = {'scaling': reg * (1 - l1_ratio)}
         prox_reg_h_params = {'l1reg': reg * l1_ratio}
 
-        opt = NysADMM(least_squares_objective, l2_squared_reg, prox_l1, ...)
-        opt.run(init_params, data, reg_g_params=reg_g_params, 
-        prox_reg_h_params=prox_reg_h_params)
+        opt = NysADMM(fun=least_squares_objective, 
+                      reg_g=l2_squared_reg, 
+                      prox_reg_h=prox_l1, 
+                      ...)
+        params, state = opt.run(init_params, 
+                                data, 
+                                reg_g_params=reg_g_params, 
+                                prox_reg_h_params=prox_reg_h_params)
 
     References:
       - S\. Zhao, Z. Frangella, and M. Udell, `NysADMM: faster composite convex
@@ -471,16 +474,11 @@ class NysADMM:
         grad_g = jax.grad(lambda x: self.reg_g(unravel_fun(x), **reg_g_params))
 
         # terminate the loop if one of the following holds:
-        # - x step PCG did not converge to the tolerance
         # - maximal number of iterations has been reached
         # - stopping criteria have been met
         def cond_fun(value):
             x, z, u, r_p, r_d, iter_num, pcg_status, _ = value
-            return (
-                pcg_status[0]
-                & (iter_num < self.maxiter)
-                & (~self._is_terminable(x, z, u, r_p, r_d))
-            )
+            return (iter_num < self.maxiter) & (~self._is_terminable(x, z, u, r_p, r_d))
 
         def body_fun(value):
             x, z, u, r_p, r_d, iter_num, _, key = value
@@ -633,8 +631,8 @@ class SketchySGD(PromiseSolver):
             residuals = jnp.dot(X, params) - y
             return jnp.mean(residuals ** 2) + 0.5 * reg * jnp.dot(w ** 2)
 
-        opt = SketchySGD(ridge_reg_objective, ...)
-        opt.run(init_params, data, reg)
+        opt = SketchySGD(fun=ridge_reg_objective, ...)
+        params, state = opt.run(init_params, data, reg)
 
     References:
       - Z\. Frangella, P. Rathore, S. Zhao, and M. Udell, `SketchySGD: Reliable
@@ -849,8 +847,8 @@ class SketchySVRG(PromiseSolver):
             residuals = jnp.dot(X, params) - y
             return jnp.mean(residuals ** 2) + 0.5 * reg * jnp.dot(w ** 2)
 
-        opt = SketchySVRG(ridge_reg_objective, ...)
-        opt.run(init_params, data, reg)
+        opt = SketchySVRG(fun=ridge_reg_objective, ...)
+        params, state = opt.run(init_params, data, reg)
 
     .. rubric:: References
 
@@ -1124,8 +1122,8 @@ class SketchySAGA(PromiseSolver):
             residuals = jnp.dot(X, params) - y
             return jnp.mean(residuals ** 2) + 0.5 * reg * jnp.dot(w ** 2)
 
-        opt = SketchySAGA(ridge_reg_objective, ...)
-        opt.run(init_params, data, reg)
+        opt = SketchySAGA(fun=ridge_reg_objective, ...)
+        params, state = opt.run(init_params, data, reg)
 
     .. rubric:: References
 
@@ -1397,8 +1395,8 @@ class SketchyKatyusha(PromiseSolver):
             residuals = jnp.dot(X, params) - y
             return jnp.mean(residuals ** 2) + 0.5 * reg * jnp.dot(w ** 2)
 
-        opt = SketchyKatyusha(ridge_reg_objective, ...)
-        opt.run(init_params, data, reg)
+        opt = SketchyKatyusha(fun=ridge_reg_objective, ...)
+        params, state = opt.run(init_params, data, reg)
 
     .. rubric:: References
 

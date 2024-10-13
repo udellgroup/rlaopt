@@ -8,6 +8,13 @@ This section contains tutorials for solving various problems with SketchyOpts. W
 Nyström PCG
 ~~~~~~~~~~~
 
+NysADMM
+~~~~~~~
+.. toctree::
+  :maxdepth: 1
+
+  support_vector_machine
+
 PROMISE Solvers
 ~~~~~~~~~~~~~~~
 .. toctree::
@@ -15,6 +22,3 @@ PROMISE Solvers
 
   ridge_regression
   l2_logistic_regression
-
-NysADMM
-~~~~~~~
