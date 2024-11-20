@@ -4,25 +4,13 @@ Base
 .. currentmodule:: sketchyopts.base
 
 .. autosummary::
+    LinearSolveState
     SolverState
-    PromiseSolver
-    LinearOperator
-    HessianLinearOperator
-    AddLinearOperator
 
-PROMISE Solver
-~~~~~~~~~~~~~~
+Linear Solve State
+~~~~~~~~~~~~~~~~~~
+.. autoclass:: LinearSolveState
+
+Solver State
+~~~~~~~~~~~~
 .. autoclass:: SolverState
-.. autoclass:: PromiseSolver
-
-Linear Operator
-~~~~~~~~~~~~~~~
-.. autoclass:: LinearOperator
-    :members:
-    :special-members: __init__, __matmul__
-.. autoclass:: HessianLinearOperator
-    :members:
-    :special-members: __init__
-.. autoclass:: AddLinearOperator
-    :members:
-    :special-members: __init__

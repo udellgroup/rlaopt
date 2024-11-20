@@ -10,6 +10,8 @@ dependencies = [
   "jax",
   "jaxlib",
   "numpy ~= 1.26.4",
+  "equinox",
+  "lineax",
 ]
 
 [project.optional-dependencies]

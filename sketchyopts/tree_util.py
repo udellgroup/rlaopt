@@ -141,6 +141,25 @@ tree_structure.__annotations__ = {}
 tree_structure.__doc__ = r"""Get the treedef for a pytree."""
 
 
+def tree_size(tree):
+    r"""Get the size of the (flattened) tree.
+
+    The function computes the size of the tree, which is the sum of the sizes of all
+    leaves.
+
+    Args:
+      tree: Pytree of interest.
+
+    Returns:
+      Size of the tree.
+    """
+    # leaves, _ = tree_leaves(tree)
+    # return sum(math.prod(leaf.shape) for leaf in leaves)
+    # return sum(leaf.size for leaf in leaves)
+    unraveled, _ = ravel_tree(tree)
+    return unraveled.size
+
+
 def broadcast_pytrees(*trees):
     r"""Broadcast leaf pytrees to match treedef shared by the other arguments.
 

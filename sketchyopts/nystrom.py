@@ -7,8 +7,8 @@ import numpy as np
 from jax import Array
 from jax.typing import ArrayLike
 
-from sketchyopts.base import LinearOperator
 from sketchyopts.errors import InputDimError, MatrixNotSquareError
+from sketchyopts.operator import LinearOperator
 
 KeyArray = Array
 KeyArrayLike = ArrayLike

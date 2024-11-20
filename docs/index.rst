@@ -39,9 +39,12 @@ Citation
    :caption: API Reference
    :maxdepth: 2
 
-   api/sketchyopts.preconditioner
    api/sketchyopts.solver
+   api/sketchyopts.linear_solve
+   api/sketchyopts.nystrom
+   api/sketchyopts.sketching
    api/sketchyopts.base
+   api/sketchyopts.operator
    api/sketchyopts.prox
    api/sketchyopts.util
    api/sketchyopts.error

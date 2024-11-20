@@ -1,5 +1,8 @@
+from typing import Iterable, Union
+
 import jax
 import jax.numpy as jnp
+import numpy as np
 from jax import Array
 from jax.typing import ArrayLike
 
@@ -12,6 +15,7 @@ ravel_tree = tree_util.ravel_tree
 tree_map = tree_util.tree_map
 tree_flatten = tree_util.tree_flatten
 tree_unflatten = tree_util.tree_unflatten
+tree_size = tree_util.tree_size
 tree_leaves = tree_util.tree_leaves
 tree_add = tree_util.tree_add
 tree_sub = tree_util.tree_sub
@@ -91,3 +95,65 @@ def integer_asarray(x):
     if not jnp.issubdtype(dtype, jnp.integer):
         dtype = default_integer_dtype()
     return jnp.asarray(x, dtype=dtype)
+
+
+def is_array(item):
+    r"""Check if the input is an array.
+
+    This function checks if the input intem is an array or not.
+
+    Args:
+      item: Input item.
+
+    Returns:
+      ``True`` if the input is an array, ``False`` otherwise.
+    """
+    return isinstance(item, (np.ndarray, np.generic, jax.Array))
+
+
+def sample_indices(num_indices: int, num_samples: int, key: KeyArray) -> Array:
+    r"""Sample indices without replacement.
+
+    Args:
+      num_indices: Total number of indices.
+      num_samples: Number of indices to sample.
+      key: Random key.
+
+    Returns:
+      Sampled indices without replacement.
+    """
+    return jax.random.choice(key, num_indices, (num_samples,), replace=False)
+
+
+def form_dense_vector(
+    indices: Array, values: Array, num_indices: int, scalar: Union[float, Array] = 1.0
+) -> Array:
+    r"""Form a dense vector from sparse representation.
+
+    Args:
+      indices: Indices of the non-zero entries.
+      values: Values of the non-zero entries.
+      num_indices: Total number of indices.
+      scalar: Scalar multiplier.
+
+    Returns:
+      Dense vector.
+    """
+    return jnp.zeros(num_indices).at[indices].add(scalar * values)
+
+
+def frozenset(x: Union[object, Iterable[object]]) -> frozenset[object]:
+    r"""Convert the input to a frozenset.
+
+    Args:
+      x: Input object or iterable.
+
+    Returns:
+      Frozenset of the input.
+    """
+    try:
+        iter_x = iter(x)  # type: ignore
+    except TypeError:
+        return frozenset([x])
+    else:
+        return frozenset(iter_x)

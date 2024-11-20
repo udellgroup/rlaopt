@@ -27,7 +27,7 @@ import numpy as np
 import pytest
 
 from sketchyopts import prox
-from sketchyopts.util import ravel_tree, tree_l2_norm, tree_map, tree_ones_like
+from sketchyopts.util import ravel_tree, tree_map, tree_ones_like
 from tests.test_util import TestCase
 
 

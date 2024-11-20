@@ -2,173 +2,16 @@ from collections import namedtuple
 
 import jax
 import jax.numpy as jnp
-import numpy as np
 import pytest
 
-from sketchyopts import base, errors
+from sketchyopts import operator, solver
 from tests.test_util import (
-    Point,
     TestCase,
+    l2_logistic_regression_sol,
     ridge_regression_grad,
     ridge_regression_hessian,
+    ridge_regression_sol,
 )
-
-
-class TestHessianLinearOperator(TestCase):
-
-    rng = np.random.RandomState(0)
-
-    @pytest.mark.parametrize(
-        "params",
-        [
-            rng.randn(3),
-            (rng.randn(1), rng.randn(2)),
-            (rng.randn(1), {"a": rng.randn(1), "b": rng.randn(1)}),
-            Point(rng.randn(1), rng.randn(1), rng.randn(1)),
-        ],
-    )
-    def test_ridge_obective(self, params):
-        """
-        Test the operator with the objective of ridge regression:
-
-            0.5 * || data @ params ||_2^2 + 0.5 * reg * || params ||_2^2
-
-        The operator should work for any pytree structure for ``params``.
-        """
-
-        def fun(p, data, reg):
-            raveled_p, _ = jax._src.flatten_util.ravel_pytree(p)
-            return 0.5 * jnp.sum(jnp.square(data @ raveled_p)) + 0.5 * reg * jnp.sum(
-                jnp.square(raveled_p)
-            )
-
-        def grad_fun(p, data, reg):
-            raveled_p, ravel_fun = jax._src.flatten_util.ravel_pytree(p)
-            return ravel_fun(data.T @ data @ raveled_p + reg * raveled_p)
-
-        def hvp_fun(p, v, data, reg):
-            _, ravel_fun = jax._src.flatten_util.ravel_pytree(p)
-            raveled_v, _ = jax._src.flatten_util.ravel_pytree(v)
-            return ravel_fun(data.T @ data @ raveled_v + reg * raveled_v)
-
-        data = self.rng.randn(20, 3)
-        reg = self.rng.uniform(1)
-        vec = self.rng.randn(3).astype("float32")
-        mat = self.rng.randn(3, 10).astype("float32")
-
-        prams_size = len(jax._src.flatten_util.ravel_pytree(params)[0])
-        expected_shape = (prams_size, prams_size)
-        expected_vec = data.T @ data @ vec + reg * vec
-        expected_mat = data.T @ data @ mat + reg * mat
-
-        # objective only
-        H = base.HessianLinearOperator(
-            fun=fun,
-            grad_fun=None,
-            hvp_fun=None,
-            params=params,
-            data=data,
-            reg=reg,
-        )
-        assert H.shape == expected_shape
-        self.assertAllClose(H @ vec, expected_vec)
-        self.assertAllClose(H @ mat, expected_mat)
-
-        # objective + gradient oracle
-        H = base.HessianLinearOperator(
-            fun=fun,
-            grad_fun=grad_fun,
-            hvp_fun=None,
-            params=params,
-            data=data,
-            reg=reg,
-        )
-        assert H.shape == expected_shape
-        self.assertAllClose(H @ vec, expected_vec)
-        self.assertAllClose(H @ mat, expected_mat)
-
-        # objective + hvp oracle and square root Hessian oracle
-        H = base.HessianLinearOperator(
-            fun=fun,
-            grad_fun=None,
-            hvp_fun=hvp_fun,
-            params=params,
-            data=data,
-            reg=reg,
-        )
-        assert H.shape == expected_shape
-        self.assertAllClose(H @ vec, expected_vec)
-        self.assertAllClose(H @ mat, expected_mat)
-
-    def test_scalar_params(self):
-        """
-        Test the operator with an objective that accepts a scalar parameter.
-        """
-        fun = lambda x, data, reg: jnp.log(1 / x) + 0.5 * reg * (x**2)
-        grad_fun = lambda x, data, reg: -1 / x + reg * x
-        hvp_fun = lambda x, v, data, reg: (1 / jnp.square(x)) * v + reg * v
-
-        params = 10.0
-        data = None
-        reg = 0.0
-        vec = self.rng.randn(1, 10)
-
-        expected_shape = (1, 1)
-        expected_result = (1 / (params**2)) * vec + reg * vec
-
-        # objective only
-        H = base.HessianLinearOperator(
-            fun=fun,
-            grad_fun=None,
-            hvp_fun=None,
-            params=params,
-            data=data,
-            reg=reg,
-        )
-        assert H.shape == expected_shape
-        self.assertAllClose(H @ vec, expected_result)
-
-        # objective + gradient oracle
-        H = base.HessianLinearOperator(
-            fun=fun,
-            grad_fun=grad_fun,
-            hvp_fun=None,
-            params=params,
-            data=data,
-            reg=reg,
-        )
-        assert H.shape == expected_shape
-        self.assertAllClose(H @ vec, expected_result)
-
-        # objective + hvp oracle and square root Hessian oracle
-        H = base.HessianLinearOperator(
-            fun=fun,
-            grad_fun=None,
-            hvp_fun=hvp_fun,
-            params=params,
-            data=data,
-            reg=reg,
-        )
-        assert H.shape == expected_shape
-        self.assertAllClose(H @ vec, expected_result)
-
-    def test_dimension_error(self):
-        """
-        Test the operator when applied to an array with more than two dimensions.
-        """
-        params = jnp.ones(3)
-        vec = jnp.ones((3, 2, 10))
-        H = base.HessianLinearOperator(
-            fun=lambda x, data, reg: jnp.sum(x),
-            grad_fun=None,
-            hvp_fun=None,
-            params=params,
-            data=None,
-            reg=None,
-        )
-        with pytest.raises(errors.InputDimError):
-            H @ vec
-
 
 SolverInteralState = namedtuple(
     "SolverInteralState",
@@ -240,7 +83,7 @@ class TestPromiseSolverClass(TestCase):
     seed = 0
 
     # initialize solver objects
-    solver_nyssn = base.PromiseSolver(
+    solver_nyssn = solver.PromiseSolver(
         fun=obj_fun,
         rho=rho,
         rank=rank,
@@ -250,7 +93,7 @@ class TestPromiseSolverClass(TestCase):
         seed=seed,
     )
 
-    solver_ssn = base.PromiseSolver(
+    solver_ssn = solver.PromiseSolver(
         fun=obj_fun,
         sqrt_hess_fun=sqrt_hess_fun,
         precond="ssn",
@@ -299,7 +142,7 @@ class TestPromiseSolverClass(TestCase):
 
         # with both the objective and gradient functions
         # for the Nyström subsampled Newton preconditioner
-        solver = base.PromiseSolver(
+        promise_solver = solver.PromiseSolver(
             fun=obj_fun,
             grad_fun=grad_fun,
             rho=self.rho,
@@ -309,13 +152,13 @@ class TestPromiseSolverClass(TestCase):
             update_freq=self.update_freq,
             seed=self.seed,
         )
-        val, grad = solver._value_and_grad(
+        val, grad = promise_solver._value_and_grad(
             params, data=self.data, reg=self.reg
         )  # params should be the first positional argument
         self.assertAllClose(val, obj_fun(beta=params, data=self.data, reg=self.reg))
         self.assertAllClose(grad, grad_fun(beta=params, data=self.data, reg=self.reg))
         # for the subsampled Newton preconditioner
-        solver = base.PromiseSolver(
+        promise_solver = solver.PromiseSolver(
             fun=obj_fun,
             grad_fun=grad_fun,
             sqrt_hess_fun=sqrt_hess_fun,
@@ -326,7 +169,7 @@ class TestPromiseSolverClass(TestCase):
             update_freq=self.update_freq,
             seed=self.seed,
         )
-        val, grad = solver._value_and_grad(
+        val, grad = promise_solver._value_and_grad(
             params, data=self.data, reg=self.reg
         )  # params should be the first positional argument
         self.assertAllClose(val, obj_fun(beta=params, data=self.data, reg=self.reg))
@@ -428,7 +271,7 @@ class TestPromiseSolverClass(TestCase):
         )
 
         # obtained the constant estimate
-        H_operator = base.HessianLinearOperator(
+        H_operator = operator.HessianLinearOperator(
             fun=obj_fun,
             grad_fun=None,
             hvp_fun=None,
@@ -573,3 +416,273 @@ class TestPromiseSolverClass(TestCase):
             precond_v,
             atol=1e-05,
         )
+
+
+def ridge_obj_fun(beta, data, reg):
+    """
+    Objective function of ridge regression.
+
+    The function works for both one-dimensional (single sample) or two-dimensional (a
+    batch of samples) data input.
+    """
+    if jnp.ndim(data) == 1:
+        features = jnp.expand_dims(data[:-1], axis=0)
+        targets = jnp.expand_dims(data[-1], axis=0)
+    else:
+        features = data[:, :-1]
+        targets = data[:, -1]
+    preds = (
+        features[:, :2] @ beta[0]
+        + features[:, 2:5] @ beta[1]
+        + features[:, 5:] @ beta[2]
+    )
+    res = targets - preds
+    return (1 / 2) * jnp.mean(jnp.square(res)) + (0.5 * reg) * (
+        jnp.sum(jnp.square(beta[0]))
+        + jnp.sum(jnp.square(beta[1]))
+        + jnp.sum(jnp.square(beta[2]))
+    )
+
+
+def ridge_sqrt_hess_fun(beta, data):
+    """
+    Square root Hessian function of ridge regression.
+    """
+    sqrt_n = data.shape[0] ** 0.5
+    features = data[:, :-1]
+    return (1 / sqrt_n) * features
+
+
+def logistic_obj_fun(beta, data, reg):
+    """
+    Objective function of logistic regression.
+
+    The function works for both one-dimensional (single sample) or two-dimensional (a
+    batch of samples) data input.
+    """
+    if jnp.ndim(data) == 1:
+        features = jnp.expand_dims(data[:-1], axis=0)
+        labels = jnp.expand_dims(data[-1], axis=0)
+    else:
+        features = data[:, :-1]
+        labels = data[:, -1]
+    log_terms = jnp.log(
+        1
+        + jnp.exp(
+            -labels
+            * (
+                features[:, :2] @ beta[0]
+                + features[:, 2:5] @ beta[1]
+                + features[:, 5:] @ beta[2]
+            )
+        )
+    )
+    return jnp.mean(log_terms) + (reg / 2) * (
+        jnp.sum(jnp.square(beta[0]))
+        + jnp.sum(jnp.square(beta[1]))
+        + jnp.sum(jnp.square(beta[2]))
+    )
+
+
+def logistic_sqrt_hess_fun(beta, data):
+    """
+    Square root Hessian function of logistic regression.
+    """
+    sqrt_n = data.shape[0] ** 0.5
+    features = data[:, :-1]
+    scores = 1.0 / (
+        1
+        + jnp.exp(
+            features[:, :2] @ beta[0]
+            + features[:, 2:5] @ beta[1]
+            + features[:, 5:] @ beta[2]
+        )
+    )
+    return (1 / sqrt_n) * jnp.sqrt((scores * (1 - scores))).reshape(-1, 1) * features
+
+
+class TestPromiseSolvers(TestCase):
+
+    key = jax.random.PRNGKey(0)
+
+    # generate data
+    num_samples = 20
+    num_features = 10
+    reg = 0.01
+    key, subkey1, subkey2 = jax.random.split(key, num=3)
+    X = jax.random.normal(subkey1, (num_samples, num_features))
+
+    y_ridge = jax.random.normal(subkey2, (num_samples,))
+    data_ridge = jnp.hstack([X, jnp.expand_dims(y_ridge, 1)])
+
+    y_logistic = 2 * jax.random.randint(subkey2, (num_samples,), 0, 2) - 1
+    data_logistic = jnp.hstack([X, jnp.expand_dims(y_logistic, 1)])
+
+    # initial parameters
+    beta_0 = (jnp.zeros(2), jnp.zeros(3), jnp.zeros(5))
+
+    # compute reference solution
+    _, unravel_fun = jax._src.flatten_util.ravel_pytree(beta_0)
+
+    ridge_beta_sol = unravel_fun(ridge_regression_sol(X, y_ridge, reg))
+    ridge_value_sol = ridge_obj_fun(ridge_beta_sol, data_ridge, reg)
+
+    logistic_beta_sol = unravel_fun(l2_logistic_regression_sol(X, y_logistic, reg))
+    logistic_value_sol = logistic_obj_fun(logistic_beta_sol, data_logistic, reg)
+
+    # solver hyperparameters
+    rho = 0.1
+    rank = 10
+    grad_batch_size = 20
+    hess_batch_size = 20
+    update_freq_ridge = 0
+    update_freq_logistic = 10
+    seed = 0
+    maxiter = 100
+    tol = 1e-05
+
+    @pytest.mark.parametrize(
+        "promise_solver",
+        [
+            (solver.SketchySGD, {"learning_rate": 0.5}),
+            (solver.SketchySVRG, {"learning_rate": 0.5, "snapshop_update_freq": 1}),
+            (solver.SketchySAGA, {"learning_rate": 0.5}),
+            (
+                solver.SketchyKatyusha,
+                {
+                    "mu": 0.1,
+                    "snapshop_update_prob": 0.5,
+                },
+            ),
+        ],
+    )
+    def test_ridge_regression(self, promise_solver):
+        """
+        Test PROMISE solvers on a ridge regression problem.
+
+        The parameters we seek to optimize has a tree-like structure.
+        The problem has a constant Hessian and therefore we do not update the
+        preconditioner during the run.
+        """
+        solver_class, solver_params = promise_solver
+
+        # solver with the Nyström subsampled Newton preconditioner
+        promise_solver = solver_class(
+            fun=ridge_obj_fun,
+            rank=self.rank,
+            rho=self.rho,
+            grad_batch_size=self.grad_batch_size,
+            hess_batch_size=self.hess_batch_size,
+            update_freq=self.update_freq_ridge,
+            seed=self.seed,
+            maxiter=self.maxiter,
+            tol=self.tol,
+            **solver_params,
+        )
+        beta_final, solver_state = promise_solver.run(
+            self.beta_0, self.data_ridge, reg=self.reg
+        )
+
+        self.assertAllClose(
+            self.ridge_value_sol, ridge_obj_fun(beta_final, self.data_ridge, self.reg)
+        )
+        assert solver_state.iter_num <= self.maxiter
+        assert solver_state.error <= self.tol
+
+        # solver with the subsampled Newton preconditioner
+        promise_solver = solver_class(
+            fun=ridge_obj_fun,
+            sqrt_hess_fun=ridge_sqrt_hess_fun,
+            precond="ssn",
+            rho=self.rho,
+            grad_batch_size=self.grad_batch_size,
+            hess_batch_size=self.hess_batch_size,
+            update_freq=self.update_freq_ridge,
+            seed=self.seed,
+            maxiter=self.maxiter,
+            tol=self.tol,
+            **solver_params,
+        )
+        beta_final, solver_state = promise_solver.run(
+            self.beta_0, self.data_ridge, reg=self.reg
+        )
+
+        self.assertAllClose(
+            self.ridge_value_sol, ridge_obj_fun(beta_final, self.data_ridge, self.reg)
+        )
+        assert solver_state.iter_num <= self.maxiter
+        assert solver_state.error <= self.tol
+
+    @pytest.mark.parametrize(
+        "promise_solver",
+        [
+            (solver.SketchySGD, {"learning_rate": 0.5}),
+            (solver.SketchySVRG, {"learning_rate": 0.5, "snapshop_update_freq": 3}),
+            (solver.SketchySAGA, {"learning_rate": 0.5}),
+            (
+                solver.SketchyKatyusha,
+                {
+                    "mu": 0.1,
+                    "snapshop_update_prob": 0.5,
+                },
+            ),
+        ],
+    )
+    def test_logistic_regression(self, promise_solver):
+        """
+        Test PROMISE solvers on a logistic regression problem.
+
+        The parameters we seek to optimize has a tree-like structure.
+        We update the preconditioner at each iteration during the run.
+        """
+        solver_class, solver_params = promise_solver
+
+        # solver with the Nyström subsampled Newton preconditioner
+        promise_solver = solver_class(
+            fun=logistic_obj_fun,
+            rank=self.rank,
+            rho=self.rho,
+            grad_batch_size=self.grad_batch_size,
+            hess_batch_size=self.hess_batch_size,
+            update_freq=self.update_freq_logistic,
+            seed=self.seed,
+            maxiter=self.maxiter,
+            tol=self.tol,
+            jit=True,
+            **solver_params,
+        )
+        beta_final, solver_state = promise_solver.run(
+            self.beta_0, self.data_logistic, reg=self.reg
+        )
+
+        self.assertAllClose(
+            self.logistic_value_sol,
+            logistic_obj_fun(beta_final, self.data_logistic, self.reg),
+        )
+        assert solver_state.iter_num <= self.maxiter
+        assert solver_state.error <= self.tol
+
+        # solver with the subsampled Newton preconditioner
+        promise_solver = solver_class(
+            fun=logistic_obj_fun,
+            sqrt_hess_fun=logistic_sqrt_hess_fun,
+            precond="ssn",
+            rho=self.rho,
+            grad_batch_size=self.grad_batch_size,
+            hess_batch_size=self.hess_batch_size,
+            update_freq=self.update_freq_logistic,
+            seed=self.seed,
+            maxiter=self.maxiter,
+            tol=self.tol,
+            **solver_params,
+        )
+        beta_final, solver_state = promise_solver.run(
+            self.beta_0, self.data_logistic, reg=self.reg
+        )
+
+        self.assertAllClose(
+            self.logistic_value_sol,
+            logistic_obj_fun(beta_final, self.data_logistic, self.reg),
+        )
+        assert solver_state.iter_num <= self.maxiter
+        assert solver_state.error <= self.tol

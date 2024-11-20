@@ -20,6 +20,10 @@ Utilities
     default_integer_dtype
     inexact_asarray
     integer_asarray
+    is_array
+    sample_indices
+    form_dense_vector
+    frozenset
 
 Pytree Utilities
 ~~~~~~~~~~~~~~~~
@@ -50,3 +54,11 @@ Data Type Utilities
 .. autofunction:: default_integer_dtype
 .. autofunction:: inexact_asarray
 .. autofunction:: integer_asarray
+.. autofunction:: is_array
+.. autofunction:: frozenset
+
+Sketching Utilities
+~~~~~~~~~~~~~~~~~~~
+
+.. autofunction:: sample_indices
+.. autofunction:: form_dense_vector
