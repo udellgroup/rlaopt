@@ -6,7 +6,7 @@ from jax import Array
 from jax.typing import ArrayLike
 
 from sketchyopts.base import LinearSolveState, SolverState
-from sketchyopts.nystrom import rand_nystrom_approx
+from sketchyopts.low_rank_approx import rand_nystrom_approx
 from sketchyopts.util import tree_size, tree_zeros_like
 
 from .cg import abstract_cg

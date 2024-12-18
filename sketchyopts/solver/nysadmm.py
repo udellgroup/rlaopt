@@ -7,7 +7,7 @@ import jax.numpy as jnp
 from jax import Array
 
 from sketchyopts.base import SolverState
-from sketchyopts.nystrom import rand_nystrom_approx
+from sketchyopts.low_rank_approx import rand_nystrom_approx
 from sketchyopts.operator import AddLinearOperator, HessianLinearOperator
 from sketchyopts.util import (
     inexact_asarray,

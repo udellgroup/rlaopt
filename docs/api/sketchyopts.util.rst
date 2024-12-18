@@ -21,9 +21,16 @@ Utilities
     inexact_asarray
     integer_asarray
     is_array
+    frozenset
     sample_indices
     form_dense_vector
-    frozenset
+
+.. currentmodule:: sketchyopts.sketching
+
+.. autosummary::
+    hadamard_transform
+
+.. currentmodule:: sketchyopts.util
 
 Pytree Utilities
 ~~~~~~~~~~~~~~~~
@@ -62,3 +69,4 @@ Sketching Utilities
 
 .. autofunction:: sample_indices
 .. autofunction:: form_dense_vector
+.. autofunction:: sketchyopts.sketching.hadamard_transform

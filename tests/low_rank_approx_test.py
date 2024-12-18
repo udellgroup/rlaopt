@@ -2,7 +2,7 @@ import jax
 import jax.numpy as jnp
 import pytest
 
-from sketchyopts import errors, nystrom
+from sketchyopts import errors, low_rank_approx
 from tests.test_util import TestCase
 
 
@@ -28,7 +28,9 @@ class TestNystromApprox(TestCase):
         A = jax.random.uniform(generation_key, (rank, size))
         A = A.T @ A
         # jit the approximation function
-        nys_approx = jax.jit(lambda a, k: nystrom.rand_nystrom_approx(a, rank, k))
+        nys_approx = jax.jit(
+            lambda a, k: low_rank_approx.rand_nystrom_approx(a, rank, k)
+        )
         # compute randomized Nyström approximations
         mean_relative_error = 0.0
         for i in range(num_repeats):
@@ -55,7 +57,7 @@ class TestNystromApprox(TestCase):
             errors.InputDimError,
             match="Input A is expected to have dimension 2 but has 0.",
         ):
-            nystrom.rand_nystrom_approx(A, rank, subkey)
+            low_rank_approx.rand_nystrom_approx(A, rank, subkey)
 
         A = jnp.ones(10)
         self.key, subkey = jax.random.split(self.key)
@@ -63,7 +65,7 @@ class TestNystromApprox(TestCase):
             errors.InputDimError,
             match="Input A is expected to have dimension 2 but has 1.",
         ):
-            nystrom.rand_nystrom_approx(A, rank, subkey)
+            low_rank_approx.rand_nystrom_approx(A, rank, subkey)
 
         A = jnp.ones((10, 10, 10))
         self.key, subkey = jax.random.split(self.key)
@@ -71,7 +73,7 @@ class TestNystromApprox(TestCase):
             errors.InputDimError,
             match="Input A is expected to have dimension 2 but has 3.",
         ):
-            nystrom.rand_nystrom_approx(A, rank, subkey)
+            low_rank_approx.rand_nystrom_approx(A, rank, subkey)
 
         # wrong shape
         A = jnp.ones((10, 5))
@@ -80,4 +82,4 @@ class TestNystromApprox(TestCase):
             errors.MatrixNotSquareError,
             match="Input A is expected to be a square matrix but has shape \\(10, 5\\).",
         ):
-            nystrom.rand_nystrom_approx(A, rank, subkey)
+            low_rank_approx.rand_nystrom_approx(A, rank, subkey)

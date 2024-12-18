@@ -4,21 +4,30 @@ Sketching
 .. currentmodule:: sketchyopts.sketching
 
 .. autosummary::
-    RandomizedSketching
+    Sketching
     GaussianEmbedding
+    OrthonormalEmbedding
+    SJLT
     SRTT
-    SparseSignEmbedding
+    SRHT
+    LESS
+    UniformRowSampling
+    RowNormSampling
 
 Randomized Sketching Class
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-.. autoclass:: RandomizedSketching
+.. autoclass:: Sketching
     :members:
 
 Sketching Types
 ~~~~~~~~~~~~~~~
 
 .. autoclass:: GaussianEmbedding
+.. autoclass:: OrthonormalEmbedding
+.. autoclass:: SJLT
 .. autoclass:: SRTT
-.. autoclass:: SparseSignEmbedding
-
+.. autoclass:: SRHT
+.. autoclass:: LESS
+.. autoclass:: UniformRowSampling
+.. autoclass:: RowNormSampling

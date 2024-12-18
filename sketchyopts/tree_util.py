@@ -540,7 +540,7 @@ def get_real_dtype(dtype):
     if dtype not in [f"complex{i}" for i in [4, 8, 16, 32, 64, 128]]:
         return dtype
     else:
-        return dtype.type(0).real.dtype
+        return dtype.type(0).real.dtype  # type: ignore
 
 
 def tree_conj(tree):

@@ -58,13 +58,15 @@ def sketch_and_solve(
     key = jax.random.PRNGKey(seed)
     if is_array(operator):
         operator = lx.MatrixLinearOperator(operator)
-    sketched_op = SKETCH_TYPE_OPTIONS["sketch_type"](
-        operator, sketch_size, key, **sketch_args
+    sketching = SKETCH_TYPE_OPTIONS["sketch_type"](
+        sketch_size, operator.out_size(), key, **sketch_args
     )
+    sketched_op = sketching.matrix_sketch(operator)
+    sketched_rhs = sketching.vector_sketch(right_hand_side)
 
     return lx._solve.linear_solve(
         sketched_op,
-        sketched_op.apply_sketch(right_hand_side),
+        sketched_rhs,
         solver,
         options=solver_args,
         state=solver_state,
@@ -126,10 +128,11 @@ def sketch_and_precondition(
     key = jax.random.PRNGKey(seed)
     if is_array(operator):
         operator = lx.MatrixLinearOperator(operator)
-    sketched_op = SKETCH_TYPE_OPTIONS["sketch_type"](
-        operator, sketch_size, key, **sketch_args
+    sketching = SKETCH_TYPE_OPTIONS["sketch_type"](
+        sketch_size, operator.out_size(), key, **sketch_args
     )
-    sketched_rhs = sketched_op.apply_sketch(right_hand_side)
+    sketched_op = sketching.matrix_sketch(operator)
+    sketched_rhs = sketching.vector_sketch(right_hand_side)
 
     # compute initial guess
     Q, R = jnp.linalg.qr(sketched_op.as_matrix(), mode="reduced")

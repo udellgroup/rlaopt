@@ -41,7 +41,7 @@ Citation
 
    api/sketchyopts.solver
    api/sketchyopts.linear_solve
-   api/sketchyopts.nystrom
+   api/sketchyopts.low_rank_approx
    api/sketchyopts.sketching
    api/sketchyopts.base
    api/sketchyopts.operator

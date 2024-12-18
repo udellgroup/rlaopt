@@ -204,7 +204,9 @@ class PromiseSolver(abc.ABC):
                 reg=0,
             )
             key, subkey = jax.random.split(key)
-            U, S = sketchyopts.nystrom.rand_nystrom_approx(H_S, self.rank, subkey)
+            U, S = sketchyopts.low_rank_approx.rand_nystrom_approx(
+                H_S, self.rank, subkey
+            )
             precond = (U, S)
         # update SSN preconditioner
         else:

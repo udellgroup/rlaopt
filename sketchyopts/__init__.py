@@ -2,7 +2,7 @@ from sketchyopts import (
     base,
     errors,
     linear_solve,
-    nystrom,
+    low_rank_approx,
     operator,
     prox,
     sketching,
@@ -25,11 +25,17 @@ from .solver import abstract_lsqr as abstract_lsqr
 from .solver import nystrom_pcg as nystrom_pcg
 from .solver import sgmres as sgmres
 
-rand_nystrom_approx = nystrom.rand_nystrom_approx
-RandomizedSketching = sketching.RandomizedSketching
+rand_nystrom_approx = low_rank_approx.rand_nystrom_approx
+Sketching = sketching.Sketching
+hadamard_transform = sketching.hadamard_transform
 GaussianEmbedding = sketching.GaussianEmbedding
+OrthonormalEmbedding = sketching.OrthonormalEmbedding
+SJLT = sketching.SJLT
 SRTT = sketching.SRTT
-SparseSignEmbedding = sketching.SparseSignEmbedding
+SRHT = sketching.SRHT
+LESS = sketching.LESS
+UniformRowSampling = sketching.UniformRowSampling
+RowNormSampling = sketching.RowNormSampling
 sketch_and_solve = linear_solve.sketch_and_solve
 sketch_and_precondition = linear_solve.sketch_and_precondition
 SolverState = base.SolverState
@@ -89,10 +95,15 @@ __all__ = (
     "SketchyKatyushaState",
     "abstract_cg",
     "abstract_lsqr",
-    "RandomizedSketching",
+    "Sketching",
     "GaussianEmbedding",
+    "OrthonormalEmbedding",
+    "SJLT",
     "SRTT",
-    "SparseSignEmbedding",
+    "SRHT",
+    "LESS",
+    "UniformRowSampling",
+    "RowNormSampling",
     "SolverState",
     "PromiseSolver",
     "LinearOperator",
@@ -130,6 +141,7 @@ __all__ = (
     "sample_indices",
     "form_dense_vector",
     "frozenset",
+    "hadamard_transform",
     "InputDimError",
     "MatrixNotSquareError",
 )
