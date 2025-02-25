@@ -3,20 +3,20 @@ from typing import Union
 
 import torch
 
-from rlaopt.models.linops import LinOp
+from rlaopt.models import LinOp
 
 
 class Preconditioner(ABC):
-    def __init__(self, params):
+    def __init__(self, params: dict):
         self._check_inputs(params)
         self.params = params
 
     @abstractmethod
-    def _check_inputs(self, params):
+    def _check_inputs(self, params: dict):
         pass
 
     @abstractmethod
-    def _update(self, A: Union[torch.Tensor, LinOp], *args, **kwargs):
+    def _update(self, A: Union[torch.Tensor, LinOp], *args: list, **kwargs: dict):
         pass
 
     @abstractmethod
