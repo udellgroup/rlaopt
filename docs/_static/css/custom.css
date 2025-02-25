@@ -1,8 +1,0 @@
-/* make math expressions (in displaystyle) flush to the left (row) or center-aligned (column) */
-div.math {
-  flex-direction: column;
-}
-
-div.sd-card-title {
-  margin-bottom: 0rem;
-}
