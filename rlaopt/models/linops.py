@@ -1,5 +1,5 @@
 from abc import ABC
-from typing import Callable
+from typing import Callable, Optional
 
 import torch
 from torch import vmap
@@ -7,7 +7,10 @@ from torch import vmap
 
 class LinOp(ABC):
     def __init__(
-        self, shape: tuple[int, int], matvec: Callable, matmat: Callable = None
+        self,
+        shape: tuple[int, int],
+        matvec: Callable,
+        matmat: Optional[Callable] = None,
     ):
         self._check_shape(shape)
         self._check_callable(matvec, "matvec")
@@ -53,8 +56,8 @@ class TwoSidedLinOp(LinOp):
         shape: tuple[int, int],
         matvec: Callable,
         rmatvec: Callable,
-        matmat: Callable = None,
-        rmatmat: Callable = None,
+        matmat: Optional[Callable] = None,
+        rmatmat: Optional[Callable] = None,
     ):
         # TODO(pratik): eliminate redundancy in the checks
         self._check_shape(shape)

@@ -13,7 +13,7 @@ class PCG:
         self.r, self.z, self.p, self.rz = self._init_pcg()
 
     def _init_pcg(self):
-        r = self.system.b - self.system.A @ self.w
+        r = self.system.b - (self.system.A @ self.w + self.system.reg * self.w)
         z = self.P._inv @ r
         p = z.clone()
         rz = torch.dot(r, z)
@@ -28,7 +28,7 @@ class PCG:
         return P
 
     def _step(self):
-        Ap = self.system.A @ self.p
+        Ap = self.system.A @ self.p + self.system.reg * self.p
         alpha = self.rz / torch.dot(Ap, self.p)
         self.w += alpha * self.p
         self.r -= alpha * Ap
