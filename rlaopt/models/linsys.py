@@ -1,7 +1,8 @@
-from typing import Union, Optional
+from typing import Callable, Union, Optional
 
 import torch
 
+from rlaopt.solvers import PCG
 from rlaopt.models.linops import LinOp
 
 
@@ -37,5 +38,35 @@ class LinSys:
         if not isinstance(reg, float) or reg < 0:
             raise ValueError("reg must be a non-negative float")
 
-    def solve():
-        raise NotImplementedError
+    def solve(
+        self,
+        solver_name: str,
+        solver_params: dict,
+        callback_fn: Optional[Callable] = None,
+        callback_args: Optional[list] = [],
+        callback_kwargs: Optional[dict] = {},
+        callback_freq: Optional[int] = 10,
+    ):
+        log = {}
+
+        if solver_name not in ["pcg"]:
+            raise ValueError(f"Solver {solver_name} is not supported")
+        # To Do make generic training loop that allows for early stopping
+        if solver_name == "pcg":
+            solver = PCG(self, solver_params["w_init"], solver_params["precond_params"])
+            tol = solver_params["tol"]
+            for i in range(solver_params["max_iters"]):
+                solver._step()
+                if i % callback_freq == 0:
+                    rel_res = torch.linalg.norm(
+                        self.b - (self.A @ solver.w + self.reg * solver.w)
+                    ) / torch.linalg.norm(self.b)
+                    log[i] = {"rel_res": rel_res}
+                    if callback_fn is not None:
+                        callback_log = callback_fn(
+                            solver.w, self, *callback_args, **callback_kwargs
+                        )
+                        log[i]["callback"] = callback_log
+                    if rel_res <= tol:
+                        break
+            return solver.w, log

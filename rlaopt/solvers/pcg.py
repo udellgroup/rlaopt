@@ -1,11 +1,16 @@
+from typing import TYPE_CHECKING
+
 import torch
 
-from rlaopt.models import LinSys
+from rlaopt.solvers.solver import Solver
 from rlaopt.preconditioners import Nystrom
 
+if TYPE_CHECKING:
+    from rlaopt.models.linsys import LinSys  # Import only for type hints
 
-class PCG:
-    def __init__(self, system: LinSys, w_init: torch.Tensor, precond_params: dict):
+
+class PCG(Solver):
+    def __init__(self, system: "LinSys", w_init: torch.Tensor, precond_params: dict):
         self.system = system
         self.precond_params = precond_params
         self.w = w_init.clone()
