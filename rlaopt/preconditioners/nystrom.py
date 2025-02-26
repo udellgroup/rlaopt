@@ -6,7 +6,6 @@ from rlaopt.preconditioners.preconditioner import Preconditioner
 class Nystrom(Preconditioner):
     def __init__(self, params):
         super().__init__(params)
-
         self.U = None
         self.S = None
 
