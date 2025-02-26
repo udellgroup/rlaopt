@@ -4,11 +4,12 @@ from typing import Union
 import torch
 
 from rlaopt.models import LinOp
+from rlaopt.preconditioners.configs import PreconditionerConfig
 
 
 class Preconditioner(ABC):
-    def __init__(self, params: dict):
-        self.params = params
+    def __init__(self, config: PreconditionerConfig):
+        self.config = config
 
     @abstractmethod
     def _update(self, A: Union[torch.Tensor, LinOp], *args: list, **kwargs: dict):

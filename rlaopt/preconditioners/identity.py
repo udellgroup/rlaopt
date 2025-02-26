@@ -1,9 +1,10 @@
 from rlaopt.preconditioners.preconditioner import Preconditioner
+from rlaopt.preconditioners.configs import IdentityConfig
 
 
 class Identity(Preconditioner):
-    def __init__(self, params):
-        super().__init__(params)
+    def __init__(self, config: IdentityConfig):
+        super().__init__(config)
 
     def _update(self, A):
         pass

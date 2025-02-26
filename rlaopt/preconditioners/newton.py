@@ -1,11 +1,12 @@
 import torch
 
 from rlaopt.preconditioners.preconditioner import Preconditioner
+from rlaopt.preconditioners.configs import NewtonConfig
 
 
 class Newton(Preconditioner):
-    def __init__(self, params):
-        super().__init__(params)
+    def __init__(self, config: NewtonConfig):
+        super().__init__(config)
         self.L = None
 
     def _update(self, A):
@@ -13,8 +14,8 @@ class Newton(Preconditioner):
         if isinstance(A, torch.Tensor):
             A_true = A
         else:
-            A_true = A @ torch.eye(A.shape[1], device=self.params["device"])
-        A_true.diagonal().add_(self.params["rho"])  # Add rho to the diagonal in-place
+            A_true = A @ torch.eye(A.shape[1], device=self.config.device)
+        A_true.diagonal().add_(self.config.rho)  # Add rho to the diagonal in-place
         self.L = torch.linalg.cholesky(A_true, upper=False)
 
     def __matmul__(self, x):

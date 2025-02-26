@@ -4,15 +4,25 @@ import torch
 
 from rlaopt.solvers.solver import Solver
 from rlaopt.preconditioners import Nystrom, Identity
+from rlaopt.preconditioners.configs import (
+    PreconditionerConfig,
+    NystromConfig,
+    IdentityConfig,
+)
 
 if TYPE_CHECKING:
     from rlaopt.models.linsys import LinSys  # Import only for type hints
 
 
 class PCG(Solver):
-    def __init__(self, system: "LinSys", w_init: torch.Tensor, precond_params: dict):
+    def __init__(
+        self,
+        system: "LinSys",
+        w_init: torch.Tensor,
+        precond_config: PreconditionerConfig,
+    ):
         self.system = system
-        self.precond_params = precond_params
+        self.precond_config = precond_config
         self.w = w_init.clone()
         self.P = self._get_precond()
         self.r, self.z, self.p, self.rz = self._init_pcg()
@@ -25,12 +35,13 @@ class PCG(Solver):
         return r, z, p, rz
 
     def _get_precond(self):
-        if self.precond_params["type"] == "nystrom":
-            P = Nystrom(self.precond_params["params"])
-        elif self.precond_params["type"] == "identity":
-            P = Identity(self.precond_params["params"])
+        if isinstance(self.precond_config, NystromConfig):
+            P = Nystrom(self.precond_config)
+        elif isinstance(self.precond_config, IdentityConfig):
+            P = Identity(self.precond_config)
         else:
             raise ValueError("Invalid preconditioner type")
+        print(self.system.A.shape)
         P._update(self.system.A)
         return P
 
