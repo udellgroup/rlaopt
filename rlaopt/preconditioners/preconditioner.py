@@ -8,12 +8,7 @@ from rlaopt.models import LinOp
 
 class Preconditioner(ABC):
     def __init__(self, params: dict):
-        self._check_inputs(params)
         self.params = params
-
-    @abstractmethod
-    def _check_inputs(self, params: dict):
-        pass
 
     @abstractmethod
     def _update(self, A: Union[torch.Tensor, LinOp], *args: list, **kwargs: dict):
