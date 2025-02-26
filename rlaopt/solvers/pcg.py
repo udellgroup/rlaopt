@@ -3,7 +3,7 @@ from typing import TYPE_CHECKING
 import torch
 
 from rlaopt.solvers.solver import Solver
-from rlaopt.preconditioners import Nystrom
+from rlaopt.preconditioners import Nystrom, Identity
 
 if TYPE_CHECKING:
     from rlaopt.models.linsys import LinSys  # Import only for type hints
@@ -27,6 +27,8 @@ class PCG(Solver):
     def _get_precond(self):
         if self.precond_params["type"] == "nystrom":
             P = Nystrom(self.precond_params["params"])
+        elif self.precond_params["type"] == "identity":
+            P = Identity(self.precond_params["params"])
         else:
             raise ValueError("Invalid preconditioner type")
         P._update(self.system.A)

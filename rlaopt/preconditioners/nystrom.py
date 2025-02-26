@@ -23,7 +23,7 @@ class Nystrom(Preconditioner):
 
         # Compute Nyström approximation
         L = torch.linalg.cholesky(
-            Core + shift * torch.eye(self.params["rank"], device=self.params["device"]),
+            Core.diagonal().add_(shift),
             upper=False,
         )
         B = torch.linalg.solve_triangular(L, Y.T, upper=False)
