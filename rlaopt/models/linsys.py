@@ -8,8 +8,16 @@ from rlaopt.models.linops import LinOp
 class LinSys:
     def __init__(self, A: Union[LinOp, torch.Tensor], b: torch.Tensor):
         self._check_inputs(A, b)
-        self.A = A
-        self.b = b
+        self._A = A
+        self._b = b
+
+    @property
+    def A(self):
+        return self._A
+
+    @property
+    def b(self):
+        return self._b
 
     def _check_inputs(self, A: Union[LinOp, torch.Tensor], b: torch.Tensor):
         if not isinstance(A, (LinOp, torch.Tensor)):

@@ -14,13 +14,17 @@ class LinOp(ABC):
         if matmat is not None:
             self._check_callable(matmat, "matmat")
 
-        self.shape = shape
+        self._shape = shape
         self._matvec = matvec
 
         if matmat is None:
             self._matmat = vmap(self._matvec, in_dims=1, out_dims=1)
         else:
             self._matmat = matmat
+
+    @property
+    def shape(self):
+        return self._shape
 
     def _check_shape(self, shape: tuple[int, int]):
         if not isinstance(shape, tuple):
