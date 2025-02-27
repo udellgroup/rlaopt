@@ -11,7 +11,7 @@ from rlaopt.preconditioners import (
 )
 
 if TYPE_CHECKING:
-    from rlaopt.models.linsys import LinSys  # Import only for type hints
+    from rlaopt.models import LinSys  # Import only for type hints
 
 
 class PCG(Solver):
