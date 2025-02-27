@@ -3,9 +3,8 @@ from typing import Callable, Union, Optional
 import torch
 
 from rlaopt.models.model import Model
-from rlaopt.solvers import PCG, _is_solver_config
+from rlaopt.solvers import PCG, _is_solver_name_and_solver_config_valid
 from rlaopt.utils import (
-    _is_str,
     _is_linop_or_torch_tensor,
     _is_torch_tensor,
     _is_nonneg_float,
@@ -123,40 +122,38 @@ class LinSys(Model):
         log_in_wandb: Optional[bool] = False,
         wandb_init_kwargs: Optional[dict] = None,
     ):
-
-        _is_str(solver_name, "solver_name")
-        if solver_name not in ["pcg"]:
-            raise ValueError(f"Solver {solver_name} is not supported")
-        _is_solver_config(solver_config, "solver_config")
+        _is_solver_name_and_solver_config_valid(
+            solver_name, solver_config, "solver_config"
+        )
         _is_torch_tensor(w_init, "w_init")
         if log_in_wandb and wandb_init_kwargs is None:
             raise ValueError(
                 "wandb_init_kwargs must be specified if log_in_wandb is True"
             )
 
-        # TODO(pratik): make generic training loop
+        # Termination criteria
+        atol, rtol = solver_config.atol, solver_config.rtol
+
+        def termination_fn(internal_metrics):
+            return self._check_termination_criteria(internal_metrics, atol, rtol)
+
+        # Setup logging
+        log_fn = self._get_log_fn(callback_fn, callback_args, callback_kwargs)
+        wandb_kwargs = self._get_wandb_kwargs(
+            log_in_wandb=log_in_wandb,
+            wandb_init_kwargs=wandb_init_kwargs,
+            solver_name=solver_name,
+            solver_config=solver_config,
+            callback_freq=callback_freq,
+        )
+        logger = Logger(
+            log_freq=callback_freq,
+            log_fn=log_fn,
+            wandb_kwargs=wandb_kwargs,
+        )
+
+        # Get solver
         if solver_name == "pcg":
-            atol, rtol = solver_config.atol, solver_config.rtol
-
-            def termination_fn(internal_metrics):
-                return self._check_termination_criteria(internal_metrics, atol, rtol)
-
-            log_fn = self._get_log_fn(callback_fn, callback_args, callback_kwargs)
-
-            wandb_kwargs = self._get_wandb_kwargs(
-                log_in_wandb=log_in_wandb,
-                wandb_init_kwargs=wandb_init_kwargs,
-                solver_name=solver_name,
-                solver_config=solver_config,
-                callback_freq=callback_freq,
-            )
-
-            logger = Logger(
-                log_freq=callback_freq,
-                log_fn=log_fn,
-                wandb_kwargs=wandb_kwargs,
-            )
-
             solver = PCG(
                 self,
                 w_init=w_init,
@@ -164,11 +161,12 @@ class LinSys(Model):
                 precond_config=solver_config.precond_config,
             )
 
-            solution, log = self._train(
-                logger=logger,
-                termination_fn=termination_fn,
-                solver=solver,
-                max_iters=solver_config.max_iters,
-            )
+        # Run solver
+        solution, log = self._train(
+            logger=logger,
+            termination_fn=termination_fn,
+            solver=solver,
+            max_iters=solver_config.max_iters,
+        )
 
-            return solution, log
+        return solution, log

@@ -4,7 +4,8 @@ from rlaopt.solvers.configs import (
     SAPAccelParams,
     SolverConfig,
     PCGConfig,
-    _is_solver_config,
+    SAPConfig,
+    _is_solver_name_and_solver_config_valid,
 )
 
 __all__ = [
@@ -13,5 +14,6 @@ __all__ = [
     "SAPAccelParams",
     "SolverConfig",
     "PCGConfig",
-    "_is_solver_config",
+    "SAPConfig",
+    "_is_solver_name_and_solver_config_valid",
 ]

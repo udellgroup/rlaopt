@@ -97,9 +97,30 @@ class SAPConfig(SolverConfig):
         _is_pos_int(self.power_iters, "power_iters")
 
 
-def _is_solver_config(param: Any, param_name: str):
-    if not isinstance(param, SolverConfig):
-        raise TypeError(
-            f"{param_name} is of type {type(param).__name__}, "
-            "but expected type SolverConfig"
-        )
+def _is_valid_solver_name(solver_name: str):
+    if solver_name not in ["pcg", "sap"]:
+        raise ValueError(f"Solver {solver_name} is not supported")
+
+
+def _is_solver_config_matching_solver(
+    solver_name: str, solver_config: SolverConfig, solver_config_name: str
+):
+    if solver_name == "pcg":
+        if not isinstance(solver_config, PCGConfig):
+            raise TypeError(
+                f"{solver_config_name} is of type {type(solver_config).__name__}, "
+                "but expected type PCGConfig for {solver_name} solver"
+            )
+    elif solver_name == "sap":
+        if not isinstance(solver_config, SAPConfig):
+            raise TypeError(
+                f"{solver_config_name} is of type {type(solver_config).__name__}, "
+                "but expected type SAPConfig for {solver_name} solver"
+            )
+
+
+def _is_solver_name_and_solver_config_valid(
+    solver_name: str, solver_config: SolverConfig, solver_config_name: str
+):
+    _is_valid_solver_name(solver_name)
+    _is_solver_config_matching_solver(solver_name, solver_config, solver_config_name)
