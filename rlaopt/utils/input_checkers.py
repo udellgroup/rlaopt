@@ -15,6 +15,11 @@ def _is_int(param: Any, param_name: str):
         raise TypeError(f"{param_name} is of type {type(param)}, but expected type int")
 
 
+def _is_str(param: Any, param_name: str):
+    if not isinstance(param, str):
+        raise TypeError(f"{param_name} is of type {type(param)}, but expected type str")
+
+
 def _is_torch_device(param: Any, param_name: str):
     if not isinstance(param, torch.device):
         raise TypeError(

@@ -20,10 +20,12 @@ class PCG(Solver):
         system: "LinSys",
         w_init: torch.Tensor,
         precond_config: PreconditionerConfig,
+        device: torch.device,
     ):
         self.system = system
         self.precond_config = precond_config
         self._w = w_init.clone()
+        self.device = device
         self.P = self._get_precond()
         self.r, self.z, self.p, self.rz = self._init_pcg()
 
@@ -46,7 +48,7 @@ class PCG(Solver):
         else:
             raise ValueError("Invalid preconditioner type")
         print(self.system.A.shape)
-        P._update(self.system.A)
+        P._update(self.system.A, self.device)
         return P
 
     def _step(self):

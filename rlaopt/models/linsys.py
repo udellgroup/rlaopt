@@ -55,7 +55,10 @@ class LinSys:
         # To Do make generic training loop that allows for early stopping
         if solver_name == "pcg":
             solver = PCG(
-                self, w_init=w_init, precond_config=solver_config.precond_config
+                self,
+                w_init=w_init,
+                device=solver_config.device,
+                precond_config=solver_config.precond_config,
             )
             atol, rtol = solver_config.atol, solver_config.rtol
             for i in range(solver_config.max_iters):

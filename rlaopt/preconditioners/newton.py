@@ -9,12 +9,12 @@ class Newton(Preconditioner):
         super().__init__(config)
         self.L = None
 
-    def _update(self, A):
+    def _update(self, A, device):
         # Handle the tensor and linear operator cases
         if isinstance(A, torch.Tensor):
             A_true = A
         else:
-            A_true = A @ torch.eye(A.shape[1], device=self.config.device)
+            A_true = A @ torch.eye(A.shape[1], device=device)
         A_true.diagonal().add_(self.config.rho)  # Add rho to the diagonal in-place
         self.L = torch.linalg.cholesky(A_true, upper=False)
 

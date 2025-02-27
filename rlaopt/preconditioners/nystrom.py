@@ -10,9 +10,9 @@ class Nystrom(Preconditioner):
         self.U = None
         self.S = None
 
-    def _update(self, A):
+    def _update(self, A, device):
         # Compute sketching matrix
-        Omega = torch.randn(A.shape[1], self.config.rank, device=self.config.device)
+        Omega = torch.randn(A.shape[1], self.config.rank, device=device)
         Omega = torch.linalg.qr(Omega, mode="reduced")[0]
 
         # Compute core matrix

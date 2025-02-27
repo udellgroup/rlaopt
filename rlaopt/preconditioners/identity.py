@@ -6,7 +6,7 @@ class Identity(Preconditioner):
     def __init__(self, config: IdentityConfig):
         super().__init__(config)
 
-    def _update(self, A):
+    def _update(self, A, device):
         pass
 
     def __matmul__(self, x):

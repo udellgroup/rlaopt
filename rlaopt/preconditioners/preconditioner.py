@@ -12,7 +12,13 @@ class Preconditioner(ABC):
         self.config = config
 
     @abstractmethod
-    def _update(self, A: Union[torch.Tensor, LinOp], *args: list, **kwargs: dict):
+    def _update(
+        self,
+        A: Union[torch.Tensor, LinOp],
+        device: torch.device,
+        *args: list,
+        **kwargs: dict
+    ):
         pass
 
     @abstractmethod
