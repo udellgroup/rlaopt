@@ -1,8 +1,10 @@
-from typing import Union, Optional
+from typing import Callable, Union, Optional
 
 import torch
 
 from rlaopt.models.linops import LinOp
+from rlaopt.solvers import PCG, SolverConfig, _is_solver_config
+from rlaopt.utils import _is_str, _is_torch_tensor
 
 
 class LinSys:
@@ -37,5 +39,46 @@ class LinSys:
         if not isinstance(reg, float) or reg < 0:
             raise ValueError("reg must be a non-negative float")
 
-    def solve():
-        raise NotImplementedError
+    def solve(
+        self,
+        solver_name: str,
+        solver_config: SolverConfig,
+        w_init: torch.Tensor,
+        callback_fn: Optional[Callable] = None,
+        callback_args: Optional[list] = [],
+        callback_kwargs: Optional[dict] = {},
+        callback_freq: Optional[int] = 10,
+    ):
+
+        _is_str(solver_name, "solver_name")
+        if solver_name not in ["pcg"]:
+            raise ValueError(f"Solver {solver_name} is not supported")
+        _is_solver_config(solver_config, "solver_config")
+        _is_torch_tensor(w_init, "w_init")
+
+        log = {}
+        # TODO make generic training loop that allows for early stopping
+        if solver_name == "pcg":
+            solver = PCG(
+                self,
+                w_init=w_init,
+                device=solver_config.device,
+                precond_config=solver_config.precond_config,
+            )
+            atol, rtol = solver_config.atol, solver_config.rtol
+            for i in range(solver_config.max_iters):
+                solver._step()
+                if i % callback_freq == 0:
+                    abs_res = torch.linalg.norm(
+                        self.b - (self.A @ solver.w + self.reg * solver.w)
+                    )
+                    rel_res = abs_res / torch.linalg.norm(self.b)
+                    log[i] = {"abs_res": abs_res, "rel_res": rel_res}
+                    if callback_fn is not None:
+                        callback_log = callback_fn(
+                            solver.w, self, *callback_args, **callback_kwargs
+                        )
+                        log[i]["callback"] = callback_log
+                    if abs_res <= max(rtol * torch.linalg.norm(self.b), atol):
+                        break
+            return solver.w, log
