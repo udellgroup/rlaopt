@@ -1,3 +1,4 @@
+from rlaopt.preconditioners.preconditioner import Preconditioner
 from rlaopt.preconditioners.configs import (
     PreconditionerConfig,
     IdentityConfig,
@@ -8,6 +9,7 @@ from rlaopt.preconditioners.configs import (
 from rlaopt.preconditioners.preconditioner_factory import _get_precond
 
 __all__ = [
+    "Preconditioner",
     "PreconditionerConfig",
     "IdentityConfig",
     "NewtonConfig",

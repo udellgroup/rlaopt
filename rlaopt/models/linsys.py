@@ -42,6 +42,14 @@ class LinSys(Model):
     def reg(self):
         return self._reg
 
+    @property
+    def A_row_oracle(self):
+        return self._A_row_oracle
+
+    @property
+    def A_blk_oracle(self):
+        return self._A_blk_oracle
+
     def _check_inputs(
         self,
         A: Union[LinOp, torch.Tensor],

@@ -9,7 +9,21 @@ from rlaopt.preconditioners import (
     IdentityConfig,
     _is_precond_config,
 )
-from rlaopt.utils import _is_nonneg_float, _is_pos_int, _is_torch_device
+from rlaopt.utils import _is_nonneg_float, _is_pos_float, _is_pos_int, _is_torch_device
+
+
+@dataclass(kw_only=True, frozen=False)
+class SAPAccelParams:
+    mu: float
+    nu: float
+
+    def __post_init__(self):
+        _is_pos_float(self.mu, "mu")
+        _is_pos_float(self.nu, "nu")
+        if self.mu > self.nu:
+            raise ValueError("mu must be less than or equal to nu")
+        if self.mu * self.nu > 1:
+            raise ValueError("mu * nu must be less than or equal to 1")
 
 
 @dataclass(kw_only=True, frozen=False)
