@@ -5,11 +5,15 @@ import wandb
 
 
 class Logger:
-    def __init__(self, log_freq: int, log_in_wandb: bool, wandb_kwargs: dict):
+    def __init__(self, log_freq: int, log_fn: Callable, wandb_kwargs: dict):
         self.log_freq = log_freq
-        self.log_in_wandb = log_in_wandb
-        if self.log_in_wandb:
+        self.log_fn = log_fn
+
+        if wandb_kwargs is not None:
+            self.log_in_wandb = True
             wandb.init(**wandb_kwargs)
+        else:
+            self.log_in_wandb = False
 
         self.start_time = time.time()
         self.iter_time = 0
@@ -22,12 +26,12 @@ class Logger:
         self.iter_time = time.time() - self.start_time
         self.cum_time += self.iter_time
 
-    def _compute_log(self, i: int, compute_fn: Callable, *args, **kwargs):
+    def _compute_log(self, i: int, *args, **kwargs):
         if i % self.log_freq != 0:
             return None
         else:
             self._update_cum_time()
-            metrics = compute_fn(*args, **kwargs)
+            metrics = self.log_fn(*args, **kwargs)
 
             log_dict = {"iter_time": self.iter_time, "cum_time": self.cum_time}
             log_dict["metrics"] = metrics

@@ -1,5 +1,4 @@
 from typing import Callable, Union, Optional
-from warnings import warn
 
 import torch
 
@@ -53,7 +52,7 @@ class LinSys(Model):
         abs_res = internal_metrics["abs_res"]
         return abs_res <= max(rtol * torch.linalg.norm(self.b), atol)
 
-    def _get_logger_fn(
+    def _get_log_fn(
         self,
         callback_fn: Optional[Callable],
         callback_args: Optional[list],
@@ -61,7 +60,7 @@ class LinSys(Model):
     ):
         if callback_fn is not None:
 
-            def logger_fn(w):
+            def log_fn(w):
                 callback_log = callback_fn(w, self, *callback_args, **callback_kwargs)
                 internal_metrics_log = self._compute_internal_metrics(w)
                 return {
@@ -71,11 +70,11 @@ class LinSys(Model):
 
         else:
 
-            def logger_fn(w):
+            def log_fn(w):
                 internal_metrics_log = self._compute_internal_metrics(w)
                 return {"internal_metrics": internal_metrics_log}
 
-        return logger_fn
+        return log_fn
 
     def solve(
         self,
@@ -107,36 +106,19 @@ class LinSys(Model):
             def termination_fn(internal_metrics):
                 return self._check_termination_criteria(internal_metrics, atol, rtol)
 
-            logger_fn = self._get_logger_fn(callback_fn, callback_args, callback_kwargs)
+            log_fn = self._get_log_fn(callback_fn, callback_args, callback_kwargs)
 
-            if log_in_wandb:
-                wandb_kwargs = {
-                    "config": {
-                        "solver_name": solver_name,
-                        "solver_config": solver_config.to_dict(),
-                        "callback_freq": callback_freq,
-                    },
-                }
-
-                # Ensure wandb_init_kwargs is merged into wandb_args
-                if wandb_init_kwargs is not None:
-                    for key, value in wandb_init_kwargs.items():
-                        if key == "config":
-                            warn(
-                                "Found 'config' key in wandb_init_kwargs. "
-                                "Merging with internally specified 'config' key."
-                            )
-
-                            # Merge the config dictionary
-                            wandb_kwargs["config"].update(value)
-                        else:
-                            wandb_kwargs[key] = value
-            else:
-                wandb_kwargs = {}
+            wandb_kwargs = self._get_wandb_kwargs(
+                log_in_wandb=log_in_wandb,
+                wandb_init_kwargs=wandb_init_kwargs,
+                solver_name=solver_name,
+                solver_config=solver_config,
+                callback_freq=callback_freq,
+            )
 
             logger = Logger(
                 log_freq=callback_freq,
-                log_in_wandb=log_in_wandb,
+                log_fn=log_fn,
                 wandb_kwargs=wandb_kwargs,
             )
 
@@ -149,12 +131,9 @@ class LinSys(Model):
 
             solution, log = self._train(
                 logger=logger,
-                logger_fn=logger_fn,
                 termination_fn=termination_fn,
                 solver=solver,
                 max_iters=solver_config.max_iters,
             )
-
-            logger._terminate()
 
             return solution, log
