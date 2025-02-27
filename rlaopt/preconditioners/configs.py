@@ -1,6 +1,10 @@
 from abc import ABC
 from dataclasses import dataclass
+from typing import Any
+
 import torch
+
+from rlaopt.utils import _is_torch_device, _is_nonneg_float, _is_pos_int
 
 
 @dataclass(kw_only=True, frozen=False)
@@ -19,12 +23,8 @@ class NewtonConfig(PreconditionerConfig):
     device: torch.device
 
     def __post_init__(self):
-        # Check that "device" and "rho" are valid
-        # TODO make these checks helper functions
-        if not isinstance(self.rho, float) or self.rho < 0:
-            raise ValueError("rho must be a non-negative float")
-        if not isinstance(self.device, torch.device):
-            raise ValueError("device must be a torch.device object")
+        _is_nonneg_float(self.rho, "rho")
+        _is_torch_device(self.device, "device")
 
 
 @dataclass(kw_only=True, frozen=False)
@@ -35,10 +35,14 @@ class NystromConfig(PreconditionerConfig):
     type: str = "gauss"
 
     def __post_init__(self):
-        # Check that "rank" and "rho" are valid
-        if not isinstance(self.rank, int) or self.rank <= 0:
-            raise ValueError("rank must be a positve integer")
-        if not isinstance(self.rho, float) or self.rho < 0:
-            raise ValueError("rho must be a non-negative float")
-        if not isinstance(self.device, torch.device):
-            raise ValueError("device must be a torch.device object")
+        _is_pos_int(self.rank, "rank")
+        _is_nonneg_float(self.rho, "rho")
+        _is_torch_device(self.device, "device")
+
+
+def _is_precond_config(param: Any, param_name: str):
+    if not isinstance(param, PreconditionerConfig):
+        raise TypeError(
+            f"{param_name} is of type {type(param)}, but expected \
+                type PreconditionerConfig"
+        )

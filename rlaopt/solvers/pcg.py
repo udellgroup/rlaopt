@@ -4,7 +4,7 @@ import torch
 
 from rlaopt.solvers.solver import Solver
 from rlaopt.preconditioners import Nystrom, Identity
-from rlaopt.preconditioners.configs import (
+from rlaopt.preconditioners import (
     PreconditionerConfig,
     NystromConfig,
     IdentityConfig,
@@ -23,12 +23,16 @@ class PCG(Solver):
     ):
         self.system = system
         self.precond_config = precond_config
-        self.w = w_init.clone()
+        self._w = w_init.clone()
         self.P = self._get_precond()
         self.r, self.z, self.p, self.rz = self._init_pcg()
 
+    @property
+    def w(self):
+        return self._w
+
     def _init_pcg(self):
-        r = self.system.b - (self.system.A @ self.w + self.system.reg * self.w)
+        r = self.system.b - (self.system.A @ self._w + self.system.reg * self._w)
         z = self.P._inv @ r
         p = z.clone()
         rz = torch.dot(r, z)
@@ -48,7 +52,7 @@ class PCG(Solver):
     def _step(self):
         Ap = self.system.A @ self.p + self.system.reg * self.p
         alpha = self.rz / torch.dot(Ap, self.p)
-        self.w += alpha * self.p
+        self._w += alpha * self.p
         self.r -= alpha * Ap
         self.z = self.P._inv @ self.r
         rz_new = torch.dot(self.r, self.z)
