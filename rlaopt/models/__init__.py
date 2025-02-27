@@ -1,4 +1,4 @@
-from rlaopt.models.linops import LinOp, TwoSidedLinOp, SymmetricLinOp
+from rlaopt.models.model import Model
 from rlaopt.models.linsys import LinSys
 
-__all__ = ["LinOp", "TwoSidedLinOp", "SymmetricLinOp", "LinSys"]
+__all__ = ["Model", "LinSys"]

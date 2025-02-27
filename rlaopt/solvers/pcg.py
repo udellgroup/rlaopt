@@ -3,15 +3,11 @@ from typing import TYPE_CHECKING
 import torch
 
 from rlaopt.solvers.solver import Solver
-from rlaopt.preconditioners import Nystrom, Identity
-from rlaopt.preconditioners import (
-    PreconditionerConfig,
-    NystromConfig,
-    IdentityConfig,
-)
+from rlaopt.preconditioners import PreconditionerConfig
+from rlaopt.preconditioners import _get_precond as _pf_get_precond
 
 if TYPE_CHECKING:
-    from rlaopt.models.linsys import LinSys  # Import only for type hints
+    from rlaopt.models import LinSys  # Import only for type hints
 
 
 class PCG(Solver):
@@ -41,13 +37,7 @@ class PCG(Solver):
         return r, z, p, rz
 
     def _get_precond(self):
-        if isinstance(self.precond_config, NystromConfig):
-            P = Nystrom(self.precond_config)
-        elif isinstance(self.precond_config, IdentityConfig):
-            P = Identity(self.precond_config)
-        else:
-            raise ValueError("Invalid preconditioner type")
-        print(self.system.A.shape)
+        P = _pf_get_precond(self.precond_config)
         P._update(self.system.A, self.device)
         return P
 

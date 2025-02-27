@@ -3,19 +3,32 @@ from typing import Callable, Union, Optional
 import torch
 
 from rlaopt.models.model import Model
-from rlaopt.models.linops import LinOp
 from rlaopt.solvers import PCG, _is_solver_config
-from rlaopt.utils import _is_str, _is_torch_tensor, Logger
+from rlaopt.utils import (
+    _is_str,
+    _is_linop_or_torch_tensor,
+    _is_torch_tensor,
+    _is_nonneg_float,
+    Logger,
+    LinOp,
+)
 
 
 class LinSys(Model):
     def __init__(
-        self, A: Union[LinOp, torch.Tensor], b: torch.Tensor, reg: Optional[float] = 0.0
+        self,
+        A: Union[LinOp, torch.Tensor],
+        b: torch.Tensor,
+        reg: Optional[float] = 0.0,
+        A_row_oracle: Optional[Callable] = None,
+        A_blk_oracle: Optional[Callable] = None,
     ):
-        self._check_inputs(A, b, reg)
+        self._check_inputs(A, b, reg, A_row_oracle, A_blk_oracle)
         self._A = A
         self._b = b
         self._reg = reg
+        self._A_row_oracle = A_row_oracle
+        self._A_blk_oracle = A_blk_oracle
 
     @property
     def A(self):
@@ -29,17 +42,31 @@ class LinSys(Model):
     def reg(self):
         return self._reg
 
-    def _check_inputs(self, A: Union[LinOp, torch.Tensor], b: torch.Tensor, reg: float):
-        # TODO(pratik): turn these into separate utility functions
-        if not isinstance(A, (LinOp, torch.Tensor)):
+    def _check_inputs(
+        self,
+        A: Union[LinOp, torch.Tensor],
+        b: torch.Tensor,
+        reg: float,
+        A_row_oracle: Optional[Callable],
+        A_blk_oracle: Optional[Callable],
+    ):
+        _is_linop_or_torch_tensor(A, "A")
+        _is_torch_tensor(b, "b")
+        _is_nonneg_float(reg, "reg")
+        if A_row_oracle is not None and not callable(A_row_oracle):
+            raise ValueError("A_row_oracle must be a callable function")
+        if A_blk_oracle is not None and not callable(A_blk_oracle):
+            raise ValueError("A_blk_oracle must be a callable function")
+
+        # If one of the oracles is provided, the other must also be provided
+        if A_row_oracle is not None and A_blk_oracle is None:
             raise ValueError(
-                f"A must be an instance of LinOp or a torch.Tensor. \
-                             Received {type(A)}"
+                "A_blk_oracle must be provided if A_row_oracle is provided"
             )
-        if not isinstance(b, torch.Tensor):
-            raise ValueError(f"b must be a torch.Tensor. Received {type(b)}")
-        if not isinstance(reg, float) or reg < 0:
-            raise ValueError("reg must be a non-negative float")
+        if A_blk_oracle is not None and A_row_oracle is None:
+            raise ValueError(
+                "A_row_oracle must be provided if A_blk_oracle is provided"
+            )
 
     def _compute_internal_metrics(self, w: torch.Tensor):
         abs_res = torch.linalg.norm(self.b - (self.A @ w + self.reg * w))

@@ -3,7 +3,7 @@ from typing import Union
 
 import torch
 
-from rlaopt.models import LinOp
+from rlaopt.utils import LinOp
 from rlaopt.preconditioners.configs import PreconditionerConfig
 
 
