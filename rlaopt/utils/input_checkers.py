@@ -27,6 +27,13 @@ def _is_torch_device(param: Any, param_name: str):
         )
 
 
+def _is_torch_tensor(param: Any, param_name: str):
+    if not isinstance(param, torch.Tensor):
+        raise TypeError(
+            f"{param_name} is of type {type(param)}, but expected type torch.Tensor"
+        )
+
+
 def _is_nonneg_float(param: Any, param_name: str):
     _is_float(param, param_name)
     if param < 0:

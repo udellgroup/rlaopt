@@ -2,8 +2,9 @@ from typing import Callable, Union, Optional
 
 import torch
 
-from rlaopt.solvers import PCG, SolverConfig
 from rlaopt.models.linops import LinOp
+from rlaopt.solvers import PCG, SolverConfig, _is_solver_config
+from rlaopt.utils import _is_str, _is_torch_tensor
 
 
 class LinSys:
@@ -48,11 +49,15 @@ class LinSys:
         callback_kwargs: Optional[dict] = {},
         callback_freq: Optional[int] = 10,
     ):
-        log = {}
 
+        _is_str(solver_name, "solver_name")
         if solver_name not in ["pcg"]:
             raise ValueError(f"Solver {solver_name} is not supported")
-        # To Do make generic training loop that allows for early stopping
+        _is_solver_config(solver_config, "solver_config")
+        _is_torch_tensor(w_init, "w_init")
+
+        log = {}
+        # TODO make generic training loop that allows for early stopping
         if solver_name == "pcg":
             solver = PCG(
                 self,

@@ -1,5 +1,6 @@
 from abc import ABC
 from dataclasses import dataclass
+from typing import Any
 
 import torch
 
@@ -30,3 +31,10 @@ class PCGConfig(SolverConfig):
         _is_nonneg_float(self.atol, "atol")
         _is_nonneg_float(self.rtol, "rtol")
         _is_precond_config(self.precond_config, "precond_config")
+
+
+def _is_solver_config(param: Any, param_name: str):
+    if not isinstance(param, SolverConfig):
+        raise TypeError(
+            f"{param_name} is of type {type(param)}, but expected type SolverConfig"
+        )
