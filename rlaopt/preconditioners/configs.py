@@ -38,6 +38,6 @@ class NystromConfig(PreconditionerConfig):
 def _is_precond_config(param: Any, param_name: str):
     if not isinstance(param, PreconditionerConfig):
         raise TypeError(
-            f"{param_name} is of type {type(param)}, but expected \
-                type PreconditionerConfig"
+            f"{param_name} is of type {type(param).__name__}, "
+            "but expected type PreconditionerConfig"
         )

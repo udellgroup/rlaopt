@@ -36,5 +36,6 @@ class PCGConfig(SolverConfig):
 def _is_solver_config(param: Any, param_name: str):
     if not isinstance(param, SolverConfig):
         raise TypeError(
-            f"{param_name} is of type {type(param)}, but expected type SolverConfig"
+            f"{param_name} is of type {type(param).__name__}, "
+            "but expected type SolverConfig"
         )
