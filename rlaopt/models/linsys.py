@@ -2,12 +2,13 @@ from typing import Callable, Union, Optional
 
 import torch
 
+from rlaopt.models.model import Model
 from rlaopt.models.linops import LinOp
-from rlaopt.solvers import PCG, SolverConfig, _is_solver_config
+from rlaopt.solvers import PCG, _is_solver_config
 from rlaopt.utils import _is_str, _is_torch_tensor, Logger
 
 
-class LinSys:
+class LinSys(Model):
     def __init__(
         self, A: Union[LinOp, torch.Tensor], b: torch.Tensor, reg: Optional[float] = 0.0
     ):
@@ -29,7 +30,7 @@ class LinSys:
         return self._reg
 
     def _check_inputs(self, A: Union[LinOp, torch.Tensor], b: torch.Tensor, reg: float):
-        # TODO(pratik): turn these into spearate utility functions
+        # TODO(pratik): turn these into separate utility functions
         if not isinstance(A, (LinOp, torch.Tensor)):
             raise ValueError(
                 f"A must be an instance of LinOp or a torch.Tensor. \
@@ -77,9 +78,9 @@ class LinSys:
 
     def solve(
         self,
-        solver_name: str,
-        solver_config: SolverConfig,
-        w_init: torch.Tensor,
+        solver_name,
+        solver_config,
+        w_init,
         callback_fn: Optional[Callable] = None,
         callback_args: Optional[list] = [],
         callback_kwargs: Optional[dict] = {},
@@ -92,8 +93,7 @@ class LinSys:
         _is_solver_config(solver_config, "solver_config")
         _is_torch_tensor(w_init, "w_init")
 
-        log = {}
-        # TODO make generic training loop that allows for early stopping
+        # TODO(pratik): make generic training loop
         if solver_name == "pcg":
             atol, rtol = solver_config.atol, solver_config.rtol
 
@@ -110,18 +110,12 @@ class LinSys:
                 precond_config=solver_config.precond_config,
             )
 
-            # Get initial log and check for termination
-            log[0] = logger._compute_log(0, logger_fn, solver.w)
-            if termination_fn(log[0]["metrics"]["internal_metrics"]):
-                return solver.w, log
+            solution, log = self._train(
+                logger=logger,
+                logger_fn=logger_fn,
+                termination_fn=termination_fn,
+                solver=solver,
+                max_iters=solver_config.max_iters,
+            )
 
-            # Training loop
-            for i in range(1, solver_config.max_iters + 1):
-                solver._step()
-                log_i = logger._compute_log(i, logger_fn, solver.w)
-                if log_i is not None:
-                    log[i] = log_i
-                    if termination_fn(log[i]["metrics"]["internal_metrics"]):
-                        break
-
-            return solver.w, log
+            return solution, log
