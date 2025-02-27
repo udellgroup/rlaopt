@@ -1,7 +1,3 @@
-from rlaopt.preconditioners.preconditioner import Preconditioner
-from rlaopt.preconditioners.identity import Identity
-from rlaopt.preconditioners.nystrom import Nystrom
-from rlaopt.preconditioners.newton import Newton
 from rlaopt.preconditioners.configs import (
     PreconditionerConfig,
     IdentityConfig,
@@ -9,15 +5,13 @@ from rlaopt.preconditioners.configs import (
     NystromConfig,
     _is_precond_config,
 )
+from rlaopt.preconditioners.preconditioner_factory import _get_precond
 
 __all__ = [
-    "Preconditioner",
-    "Identity",
-    "Nystrom",
-    "Newton",
     "PreconditionerConfig",
     "IdentityConfig",
     "NewtonConfig",
     "NystromConfig",
     "_is_precond_config",
+    "_get_precond",
 ]
