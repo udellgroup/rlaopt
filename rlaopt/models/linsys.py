@@ -1,4 +1,5 @@
 from typing import Callable, Union, Optional
+from warnings import warn
 
 import torch
 
@@ -86,7 +87,7 @@ class LinSys(Model):
         callback_kwargs: Optional[dict] = {},
         callback_freq: Optional[int] = 10,
         log_in_wandb: Optional[bool] = False,
-        wandb_project: Optional[str] = None,
+        wandb_init_kwargs: Optional[dict] = None,
     ):
 
         _is_str(solver_name, "solver_name")
@@ -94,8 +95,10 @@ class LinSys(Model):
             raise ValueError(f"Solver {solver_name} is not supported")
         _is_solver_config(solver_config, "solver_config")
         _is_torch_tensor(w_init, "w_init")
-        if log_in_wandb and wandb_project is None:
-            raise ValueError("wandb_project must be specified if log_in_wandb is True")
+        if log_in_wandb and wandb_init_kwargs is None:
+            raise ValueError(
+                "wandb_init_kwargs must be specified if log_in_wandb is True"
+            )
 
         # TODO(pratik): make generic training loop
         if solver_name == "pcg":
@@ -105,20 +108,36 @@ class LinSys(Model):
                 return self._check_termination_criteria(internal_metrics, atol, rtol)
 
             logger_fn = self._get_logger_fn(callback_fn, callback_args, callback_kwargs)
-            wandb_args = (
-                {
-                    "project": wandb_project,
+
+            if log_in_wandb:
+                wandb_kwargs = {
                     "config": {
                         "solver_name": solver_name,
                         "solver_config": solver_config.to_dict(),
                         "callback_freq": callback_freq,
                     },
                 }
-                if log_in_wandb
-                else {}
-            )
+
+                # Ensure wandb_init_kwargs is merged into wandb_args
+                if wandb_init_kwargs is not None:
+                    for key, value in wandb_init_kwargs.items():
+                        if key == "config":
+                            warn(
+                                "Found 'config' key in wandb_init_kwargs. "
+                                "Merging with internally specified 'config' key."
+                            )
+
+                            # Merge the config dictionary
+                            wandb_kwargs["config"].update(value)
+                        else:
+                            wandb_kwargs[key] = value
+            else:
+                wandb_kwargs = {}
+
             logger = Logger(
-                log_freq=callback_freq, log_in_wandb=log_in_wandb, wandb_args=wandb_args
+                log_freq=callback_freq,
+                log_in_wandb=log_in_wandb,
+                wandb_kwargs=wandb_kwargs,
             )
 
             solver = PCG(

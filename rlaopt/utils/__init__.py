@@ -6,6 +6,7 @@ from rlaopt.utils.input_checkers import (
     _is_pos_int,
 )
 from rlaopt.utils.logger import Logger
+from rlaopt.utils.wandb_utils import set_wandb_api_key
 
 __all__ = [
     "_is_str",
@@ -14,4 +15,5 @@ __all__ = [
     "_is_nonneg_float",
     "_is_pos_int",
     "Logger",
+    "set_wandb_api_key",
 ]

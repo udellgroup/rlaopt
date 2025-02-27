@@ -5,11 +5,11 @@ import wandb
 
 
 class Logger:
-    def __init__(self, log_freq: int, log_in_wandb: bool, wandb_args: dict):
+    def __init__(self, log_freq: int, log_in_wandb: bool, wandb_kwargs: dict):
         self.log_freq = log_freq
         self.log_in_wandb = log_in_wandb
         if self.log_in_wandb:
-            wandb.init(**wandb_args)
+            wandb.init(**wandb_kwargs)
 
         self.start_time = time.time()
         self.iter_time = 0

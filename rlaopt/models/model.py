@@ -64,6 +64,6 @@ class Model(ABC):
         callback_kwargs: Optional[dict] = {},
         callback_freq: Optional[int] = 10,
         log_in_wandb: Optional[bool] = False,
-        wandb_project: Optional[str] = None,
+        wandb_init_kwargs: Optional[dict] = None,
     ):
         pass
