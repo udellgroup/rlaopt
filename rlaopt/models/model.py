@@ -63,5 +63,7 @@ class Model(ABC):
         callback_args: Optional[list] = [],
         callback_kwargs: Optional[dict] = {},
         callback_freq: Optional[int] = 10,
+        log_in_wandb: Optional[bool] = False,
+        wandb_project: Optional[str] = None,
     ):
         pass

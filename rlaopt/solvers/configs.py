@@ -1,5 +1,5 @@
 from abc import ABC
-from dataclasses import dataclass
+from dataclasses import dataclass, asdict
 from typing import Any
 
 import torch
@@ -14,7 +14,16 @@ from rlaopt.utils import _is_nonneg_float, _is_pos_int, _is_torch_device
 
 @dataclass(kw_only=True, frozen=False)
 class SolverConfig(ABC):
-    pass
+    def to_dict(self) -> dict:
+        data_dict = asdict(self)
+        for key, value in data_dict.items():
+            if isinstance(value, torch.device):
+                data_dict[key] = str(value)  # Convert torch.device to string
+            elif isinstance(value, PreconditionerConfig):
+                data_dict[
+                    key
+                ] = value.to_dict()  # Ensure nested configs are also converted
+        return data_dict
 
 
 @dataclass(kw_only=True, frozen=False)
