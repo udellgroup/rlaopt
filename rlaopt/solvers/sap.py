@@ -1,4 +1,4 @@
-from typing import TYPE_CHECKING
+from typing import Optional, TYPE_CHECKING
 
 import numpy as np
 import torch
@@ -21,7 +21,7 @@ class SAP(Solver):
         device: torch.device,
         blk_sz: int,
         accel: bool,
-        accel_params: SAPAccelParams,
+        accel_params: Optional[SAPAccelParams],
         power_iters: int,
     ):
         self.system = system

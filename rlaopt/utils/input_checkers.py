@@ -5,6 +5,13 @@ import torch
 from rlaopt.utils.linops import LinOp
 
 
+def _is_bool(param: Any, param_name: str):
+    if not isinstance(param, bool):
+        raise TypeError(
+            f"{param_name} is of type {type(param).__name__}, but expected type bool"
+        )
+
+
 def _is_float(param: Any, param_name: str):
     if not isinstance(param, float):
         raise TypeError(

@@ -1,6 +1,6 @@
 from abc import ABC
 from dataclasses import dataclass, asdict
-from typing import Any
+from typing import Any, Optional
 
 import torch
 
@@ -9,7 +9,13 @@ from rlaopt.preconditioners import (
     IdentityConfig,
     _is_precond_config,
 )
-from rlaopt.utils import _is_nonneg_float, _is_pos_float, _is_pos_int, _is_torch_device
+from rlaopt.utils import (
+    _is_bool,
+    _is_nonneg_float,
+    _is_pos_float,
+    _is_pos_int,
+    _is_torch_device,
+)
 
 
 @dataclass(kw_only=True, frozen=False)
@@ -24,6 +30,14 @@ class SAPAccelParams:
             raise ValueError("mu must be less than or equal to nu")
         if self.mu * self.nu > 1:
             raise ValueError("mu * nu must be less than or equal to 1")
+
+
+def _is_sap_accel_params(param: Any, param_name: str):
+    if not isinstance(param, SAPAccelParams):
+        raise TypeError(
+            f"{param_name} is of type {type(param).__name__}, "
+            "but expected type SAPAccelParams"
+        )
 
 
 @dataclass(kw_only=True, frozen=False)
@@ -54,6 +68,33 @@ class PCGConfig(SolverConfig):
         _is_nonneg_float(self.atol, "atol")
         _is_nonneg_float(self.rtol, "rtol")
         _is_precond_config(self.precond_config, "precond_config")
+
+
+@dataclass(kw_only=True, frozen=False)
+class SAPConfig(SolverConfig):
+    device: torch.device
+    max_iters: int = 1000
+    atol: float = 0.0
+    rtol: float = 1e-5
+    precond_config: PreconditionerConfig = IdentityConfig()
+    blk_sz: int
+    accel: bool = True
+    accel_params: Optional[SAPAccelParams] = (None,)
+    power_iters: int = 10
+
+    def __post_init__(self):
+        _is_torch_device(self.device, "device")
+        _is_pos_int(self.max_iters, "max_iters")
+        _is_nonneg_float(self.atol, "atol")
+        _is_nonneg_float(self.rtol, "rtol")
+        _is_precond_config(self.precond_config, "precond_config")
+        _is_pos_int(self.blk_sz, "blk_sz")
+        _is_bool(self.accel, "accel")
+        if self.accel:
+            if self.accel_params is None:
+                raise ValueError("accel_params must be specified if accel is True")
+            _is_sap_accel_params(self.accel_params, "accel_params")
+        _is_pos_int(self.power_iters, "power_iters")
 
 
 def _is_solver_config(param: Any, param_name: str):
