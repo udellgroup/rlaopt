@@ -93,7 +93,6 @@ class Model(ABC):
     @abstractmethod
     def solve(
         self,
-        solver_name: str,
         solver_config: SolverConfig,
         w_init: torch.Tensor,
         callback_fn: Optional[Callable] = None,

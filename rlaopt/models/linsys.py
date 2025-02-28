@@ -3,9 +3,8 @@ from typing import Callable, Union, Optional
 import torch
 
 from rlaopt.models.model import Model
-from rlaopt.solvers import PCG, _is_solver_config
+from rlaopt.solvers import _is_solver_config, _get_solver_name, _get_solver
 from rlaopt.utils import (
-    _is_str,
     _is_linop_or_torch_tensor,
     _is_torch_tensor,
     _is_nonneg_float,
@@ -42,6 +41,14 @@ class LinSys(Model):
     def reg(self):
         return self._reg
 
+    @property
+    def A_row_oracle(self):
+        return self._A_row_oracle
+
+    @property
+    def A_blk_oracle(self):
+        return self._A_blk_oracle
+
     def _check_inputs(
         self,
         A: Union[LinOp, torch.Tensor],
@@ -58,7 +65,7 @@ class LinSys(Model):
         if A_blk_oracle is not None and not callable(A_blk_oracle):
             raise ValueError("A_blk_oracle must be a callable function")
 
-        # If one of the oracles is provided, the other must also be provided
+        # If one of the oracles is provided, the other one must also be provided
         if A_row_oracle is not None and A_blk_oracle is None:
             raise ValueError(
                 "A_blk_oracle must be provided if A_row_oracle is provided"
@@ -105,7 +112,6 @@ class LinSys(Model):
 
     def solve(
         self,
-        solver_name,
         solver_config,
         w_init,
         callback_fn: Optional[Callable] = None,
@@ -115,10 +121,6 @@ class LinSys(Model):
         log_in_wandb: Optional[bool] = False,
         wandb_init_kwargs: Optional[dict] = None,
     ):
-
-        _is_str(solver_name, "solver_name")
-        if solver_name not in ["pcg"]:
-            raise ValueError(f"Solver {solver_name} is not supported")
         _is_solver_config(solver_config, "solver_config")
         _is_torch_tensor(w_init, "w_init")
         if log_in_wandb and wandb_init_kwargs is None:
@@ -126,41 +128,36 @@ class LinSys(Model):
                 "wandb_init_kwargs must be specified if log_in_wandb is True"
             )
 
-        # TODO(pratik): make generic training loop
-        if solver_name == "pcg":
-            atol, rtol = solver_config.atol, solver_config.rtol
+        # Termination criteria
+        atol, rtol = solver_config.atol, solver_config.rtol
 
-            def termination_fn(internal_metrics):
-                return self._check_termination_criteria(internal_metrics, atol, rtol)
+        def termination_fn(internal_metrics):
+            return self._check_termination_criteria(internal_metrics, atol, rtol)
 
-            log_fn = self._get_log_fn(callback_fn, callback_args, callback_kwargs)
+        # Setup logging
+        log_fn = self._get_log_fn(callback_fn, callback_args, callback_kwargs)
+        wandb_kwargs = self._get_wandb_kwargs(
+            log_in_wandb=log_in_wandb,
+            wandb_init_kwargs=wandb_init_kwargs,
+            solver_name=_get_solver_name(solver_config),
+            solver_config=solver_config,
+            callback_freq=callback_freq,
+        )
+        logger = Logger(
+            log_freq=callback_freq,
+            log_fn=log_fn,
+            wandb_kwargs=wandb_kwargs,
+        )
 
-            wandb_kwargs = self._get_wandb_kwargs(
-                log_in_wandb=log_in_wandb,
-                wandb_init_kwargs=wandb_init_kwargs,
-                solver_name=solver_name,
-                solver_config=solver_config,
-                callback_freq=callback_freq,
-            )
+        # Get solver
+        solver = _get_solver(model=self, w_init=w_init, solver_config=solver_config)
 
-            logger = Logger(
-                log_freq=callback_freq,
-                log_fn=log_fn,
-                wandb_kwargs=wandb_kwargs,
-            )
+        # Run solver
+        solution, log = self._train(
+            logger=logger,
+            termination_fn=termination_fn,
+            solver=solver,
+            max_iters=solver_config.max_iters,
+        )
 
-            solver = PCG(
-                self,
-                w_init=w_init,
-                device=solver_config.device,
-                precond_config=solver_config.precond_config,
-            )
-
-            solution, log = self._train(
-                logger=logger,
-                termination_fn=termination_fn,
-                solver=solver,
-                max_iters=solver_config.max_iters,
-            )
-
-            return solution, log
+        return solution, log
