@@ -73,3 +73,9 @@ def _is_pos_int(param: Any, param_name: str):
     _is_int(param, param_name)
     if param < 0:
         raise ValueError(f"{param_name} must be positive, but received {param}")
+
+
+def _is_sketch(sketch: str):
+    valid_sketches = ["gauss", "ortho", "sparse"]
+    if sketch not in ["gauss", "ortho", "sparse"]:
+        raise ValueError(f"sketch must be in {valid_sketches}, but received {sketch}")

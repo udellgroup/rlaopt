@@ -7,6 +7,7 @@ from rlaopt.utils.input_checkers import (
     _is_nonneg_float,
     _is_pos_float,
     _is_pos_int,
+    _is_sketch,
 )
 from rlaopt.utils.linops import LinOp, TwoSidedLinOp, SymmetricLinOp
 from rlaopt.utils.logger import Logger
@@ -21,6 +22,7 @@ __all__ = [
     "_is_nonneg_float",
     "_is_pos_float",
     "_is_pos_int",
+    "_is_sketch",
     "LinOp",
     "TwoSidedLinOp",
     "SymmetricLinOp",
