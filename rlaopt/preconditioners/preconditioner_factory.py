@@ -21,9 +21,8 @@ CONFIG_TO_PRECONDITIONER = {
 
 def _get_precond(precond_config: PreconditionerConfig):
     # Get the class of precond_config
-    precond_class = precond_config.__class__
+    precond_config_class = precond_config.__class__
     # Get the corresponding preconditioner class
-    preconditioner_class = CONFIG_TO_PRECONDITIONER.get(precond_class)
-    if preconditioner_class is None:
-        raise ValueError("Invalid preconditioner type")
-    return preconditioner_class(precond_config)
+    precond_class = CONFIG_TO_PRECONDITIONER.get(precond_config_class)
+
+    return precond_class(precond_config)
