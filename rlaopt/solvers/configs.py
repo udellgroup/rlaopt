@@ -1,6 +1,6 @@
 from abc import ABC
 from dataclasses import dataclass, asdict
-from typing import Any, Optional
+from typing import Any
 
 import torch
 
@@ -19,7 +19,7 @@ from rlaopt.utils import (
 
 
 @dataclass(kw_only=True, frozen=False)
-class SAPAccelParams:
+class SAPAccelConfig:
     mu: float
     nu: float
 
@@ -32,11 +32,11 @@ class SAPAccelParams:
             raise ValueError("mu * nu must be less than or equal to 1")
 
 
-def _is_sap_accel_params(param: Any, param_name: str):
-    if not isinstance(param, SAPAccelParams):
+def _is_sap_accel_config(param: Any, param_name: str):
+    if not isinstance(param, SAPAccelConfig):
         raise TypeError(
             f"{param_name} is of type {type(param).__name__}, "
-            "but expected type SAPAccelParams"
+            "but expected type SAPAccelConfig"
         )
 
 
@@ -79,7 +79,7 @@ class SAPConfig(SolverConfig):
     precond_config: PreconditionerConfig = IdentityConfig()
     blk_sz: int
     accel: bool = True
-    accel_params: Optional[SAPAccelParams] = (None,)
+    accel_config: SAPAccelConfig = (None,)
     power_iters: int = 10
 
     def __post_init__(self):
@@ -91,36 +91,26 @@ class SAPConfig(SolverConfig):
         _is_pos_int(self.blk_sz, "blk_sz")
         _is_bool(self.accel, "accel")
         if self.accel:
-            if self.accel_params is None:
-                raise ValueError("accel_params must be specified if accel is True")
-            _is_sap_accel_params(self.accel_params, "accel_params")
+            if self.accel_config is None:
+                raise ValueError("accel_config must be specified if accel is True")
+            _is_sap_accel_config(self.accel_config, "accel_config")
         _is_pos_int(self.power_iters, "power_iters")
 
 
-def _is_valid_solver_name(solver_name: str):
-    if solver_name not in ["pcg", "sap"]:
-        raise ValueError(f"Solver {solver_name} is not supported")
+def _is_solver_config(param: Any, param_name: str):
+    if not isinstance(param, SolverConfig):
+        raise TypeError(
+            f"{param_name} is of type {type(param).__name__}, "
+            "but expected type SolverConfig"
+        )
 
 
-def _is_solver_config_matching_solver(
-    solver_name: str, solver_config: SolverConfig, solver_config_name: str
-):
-    if solver_name == "pcg":
-        if not isinstance(solver_config, PCGConfig):
-            raise TypeError(
-                f"{solver_config_name} is of type {type(solver_config).__name__}, "
-                "but expected type PCGConfig for {solver_name} solver"
-            )
-    elif solver_name == "sap":
-        if not isinstance(solver_config, SAPConfig):
-            raise TypeError(
-                f"{solver_config_name} is of type {type(solver_config).__name__}, "
-                "but expected type SAPConfig for {solver_name} solver"
-            )
+CONFIG_TO_NAME = {
+    PCGConfig: "pcg",
+    SAPConfig: "sap",
+}
 
 
-def _is_solver_name_and_solver_config_valid(
-    solver_name: str, solver_config: SolverConfig, solver_config_name: str
-):
-    _is_valid_solver_name(solver_name)
-    _is_solver_config_matching_solver(solver_name, solver_config, solver_config_name)
+def _get_solver_name(solver_config: SolverConfig) -> str:
+    config_class = solver_config.__class__
+    return CONFIG_TO_NAME.get(config_class)

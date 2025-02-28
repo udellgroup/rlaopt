@@ -1,19 +1,21 @@
 from rlaopt.solvers.solver import Solver
-from rlaopt.solvers.pcg import PCG
 from rlaopt.solvers.configs import (
-    SAPAccelParams,
+    SAPAccelConfig,
     SolverConfig,
     PCGConfig,
     SAPConfig,
-    _is_solver_name_and_solver_config_valid,
+    _is_solver_config,
+    _get_solver_name,
 )
+from rlaopt.solvers.solver_factory import _get_solver
 
 __all__ = [
     "Solver",
-    "PCG",
-    "SAPAccelParams",
+    "SAPAccelConfig",
     "SolverConfig",
     "PCGConfig",
     "SAPConfig",
-    "_is_solver_name_and_solver_config_valid",
+    "_is_solver_config",
+    "_get_solver_name",
+    "_get_solver",
 ]

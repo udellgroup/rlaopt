@@ -4,7 +4,7 @@ import numpy as np
 import torch
 
 from rlaopt.solvers.solver import Solver
-from rlaopt.solvers.configs import SAPAccelParams
+from rlaopt.solvers.configs import SAPAccelConfig
 from rlaopt.preconditioners import Preconditioner, PreconditionerConfig
 from rlaopt.preconditioners import _get_precond as _pf_get_precond
 
@@ -21,17 +21,16 @@ class SAP(Solver):
         device: torch.device,
         blk_sz: int,
         accel: bool,
-        accel_params: Optional[SAPAccelParams],
+        accel_config: Optional[SAPAccelConfig],
         power_iters: int,
     ):
         self.system = system
         self.precond_config = precond_config
         self._w = w_init.clone()
         self.device = device
-        self.P = self._get_precond()
         self.blk_sz = blk_sz
         self.accel = accel
-        self.accel_params = accel_params
+        self.accel_config = accel_config
         self.power_iters = power_iters
 
         self.probs = torch.ones(self.system.A.shape[0]) / self.system.A.shape[0]
@@ -39,9 +38,9 @@ class SAP(Solver):
 
         # Setup acceleration parameters
         if self.accel:
-            self.beta = 1 - (self.accel_params.mu / self.accel_params.nu) ** 0.5
-            self.gamma = 1 / (self.accel_params.mu * self.accel_params.nu) ** 0.5
-            self.alpha = 1 / (1 + self.gamma * self.accel_params.nu)
+            self.beta = 1 - (self.accel_config.mu / self.accel_config.nu) ** 0.5
+            self.gamma = 1 / (self.accel_config.mu * self.accel_config.nu) ** 0.5
+            self.alpha = 1 / (1 + self.gamma * self.accel_config.nu)
 
             self.v = self._w.clone()
             self.y = self._w.clone()
@@ -88,7 +87,7 @@ class SAP(Solver):
         # Compute the block gradient
         blk_grad = (
             self.system.A_row_oracle(blk) @ w
-            + self.system.reg @ w[blk]
+            + self.system.reg * w[blk]
             - self.system.b[blk]
         )
 

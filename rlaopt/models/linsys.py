@@ -3,7 +3,7 @@ from typing import Callable, Union, Optional
 import torch
 
 from rlaopt.models.model import Model
-from rlaopt.solvers import PCG, _is_solver_name_and_solver_config_valid
+from rlaopt.solvers import _is_solver_config, _get_solver_name, _get_solver
 from rlaopt.utils import (
     _is_linop_or_torch_tensor,
     _is_torch_tensor,
@@ -65,7 +65,7 @@ class LinSys(Model):
         if A_blk_oracle is not None and not callable(A_blk_oracle):
             raise ValueError("A_blk_oracle must be a callable function")
 
-        # If one of the oracles is provided, the other must also be provided
+        # If one of the oracles is provided, the other one must also be provided
         if A_row_oracle is not None and A_blk_oracle is None:
             raise ValueError(
                 "A_blk_oracle must be provided if A_row_oracle is provided"
@@ -112,7 +112,6 @@ class LinSys(Model):
 
     def solve(
         self,
-        solver_name,
         solver_config,
         w_init,
         callback_fn: Optional[Callable] = None,
@@ -122,9 +121,7 @@ class LinSys(Model):
         log_in_wandb: Optional[bool] = False,
         wandb_init_kwargs: Optional[dict] = None,
     ):
-        _is_solver_name_and_solver_config_valid(
-            solver_name, solver_config, "solver_config"
-        )
+        _is_solver_config(solver_config, "solver_config")
         _is_torch_tensor(w_init, "w_init")
         if log_in_wandb and wandb_init_kwargs is None:
             raise ValueError(
@@ -142,7 +139,7 @@ class LinSys(Model):
         wandb_kwargs = self._get_wandb_kwargs(
             log_in_wandb=log_in_wandb,
             wandb_init_kwargs=wandb_init_kwargs,
-            solver_name=solver_name,
+            solver_name=_get_solver_name(solver_config),
             solver_config=solver_config,
             callback_freq=callback_freq,
         )
@@ -153,13 +150,7 @@ class LinSys(Model):
         )
 
         # Get solver
-        if solver_name == "pcg":
-            solver = PCG(
-                self,
-                w_init=w_init,
-                device=solver_config.device,
-                precond_config=solver_config.precond_config,
-            )
+        solver = _get_solver(model=self, w_init=w_init, solver_config=solver_config)
 
         # Run solver
         solution, log = self._train(
