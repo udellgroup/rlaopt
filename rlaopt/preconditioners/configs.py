@@ -2,7 +2,7 @@ from abc import ABC
 from dataclasses import dataclass, asdict
 from typing import Any
 
-from rlaopt.utils import _is_str, _is_nonneg_float, _is_pos_int
+from rlaopt.utils import _is_str, _is_nonneg_float, _is_pos_int, _is_sketch
 
 
 @dataclass(kw_only=True, frozen=False)
@@ -34,6 +34,20 @@ class NystromConfig(PreconditionerConfig):
         _is_pos_int(self.rank, "rank")
         _is_nonneg_float(self.rho, "rho")
         _is_str(self.sketch, "sketch")
+        _is_sketch(self.sketch)
+
+
+@dataclass(kw_only=True, frozen=False)
+class SkPreConfig(PreconditionerConfig):
+    sketch_size: int
+    rho: float
+    sketch: str = "sparse"
+
+    def __post_init__(self):
+        _is_pos_int(self.sketch_size, "sketch_size")
+        _is_nonneg_float(self.rho, "rho")
+        _is_str(self.sketch, "sketch")
+        _is_sketch(self.sketch)
 
 
 def _is_precond_config(param: Any, param_name: str):

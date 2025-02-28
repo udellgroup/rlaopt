@@ -1,18 +1,21 @@
 from rlaopt.preconditioners.identity import Identity
 from rlaopt.preconditioners.newton import Newton
 from rlaopt.preconditioners.nystrom import Nystrom
+from rlaopt.preconditioners.skpre import SkPre
 
 from rlaopt.preconditioners.configs import (
     PreconditionerConfig,
     IdentityConfig,
     NewtonConfig,
     NystromConfig,
+    SkPreConfig,
 )
 
 CONFIG_TO_PRECONDITIONER = {
     IdentityConfig: Identity,
     NewtonConfig: Newton,
     NystromConfig: Nystrom,
+    SkPreConfig: SkPre,
 }
 
 

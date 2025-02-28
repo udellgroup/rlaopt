@@ -15,13 +15,13 @@ class Sparse(Sketch):
 
         # Generate random +1/-1 values for zeta entries in each column
         b = torch.bernoulli(
-            0.5 * torch.ones((zeta, self.n), device=self.device)
+            0.5 * torch.ones((zeta, self.d), device=self.device)
         )  # Bernoulli(0.5)
         z = 2 * b - 1  # Convert to +1/-1
 
         # Generate random row indices for each non-zero entry in each column
         row_indices = torch.randint(
-            self.s, (zeta, self.n), device=self.device
+            self.s, (zeta, self.d), device=self.device
         )  # Random row indices
 
         # Scatter update: place z values in S at the appropriate row indices
