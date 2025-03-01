@@ -1,5 +1,10 @@
 # rlaopt
 
+<!-- .. image:: https://img.shields.io/badge/%20formatter-docformatter-fedcba.svg
+    :target: https://github.com/PyCQA/docformatter
+.. image:: https://img.shields.io/badge/%20style-google-3666d6.svg
+    :target: https://google.github.io/styleguide/pyguide.html#s3.8-comments-and-docstrings -->
+
 A package containing implementations of randomized linear algebra-based optimization algorithms for scientific computing and optimization.
 
 ## Citation
