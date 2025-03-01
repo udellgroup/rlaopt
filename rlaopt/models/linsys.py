@@ -12,8 +12,12 @@ from rlaopt.utils import (
     LinOp,
 )
 
+# TODO: do we need to do things like Optional[float] or Union[float, Optional]?
+
 
 class LinSys(Model):
+    """Model for solving positive-definite linear systems (A + reg * I)w = b."""
+
     def __init__(
         self,
         A: Union[LinOp, torch.Tensor],
@@ -22,6 +26,17 @@ class LinSys(Model):
         A_row_oracle: Optional[Callable] = None,
         A_blk_oracle: Optional[Callable] = None,
     ):
+        """Initialize LinSys model.
+
+        Args:
+            A (Union[LinOp, torch.Tensor]): Linear operator or matrix A.
+            b (torch.Tensor): Right-hand side b.
+            reg (Optional[float], optional): Regularization parameter. Defaults to 0.0.
+            A_row_oracle (Optional[Callable], optional): Oracle for row-wise operations.
+              Defaults to None.
+            A_blk_oracle (Optional[Callable], optional): Oracle for block-wise
+            operations. Defaults to None.
+        """
         self._check_inputs(A, b, reg, A_row_oracle, A_blk_oracle)
         self._A = A
         self._b = b
