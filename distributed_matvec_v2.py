@@ -16,57 +16,23 @@ def get_rbf_linop(Ab_lazy, A_chunk, blk_sz, sigma=1.0):
     return LinOp(shape=(blk_sz, A_chunk.shape[0]), matvec=matvec)
 
 
-# def distributed_matvec(K_chunks, x_chunks, streams, results, final_result):
-#     for (K_chunk, x_chunk, stream, result) in zip(K_chunks, x_chunks,
-#       streams, results):
-#         with torch.cuda.stream(stream):
-#             result.copy_(K_chunk @ x_chunk)
-
-#     # Using preallocated final_result
-#     final_result.zero_()  # Reset the final result tensor to zero
-
-#     final_device = final_result.device
-#     with torch.cuda.stream(streams[0]):
-#         for result in results:
-#             final_result.add_(result.to(final_device))
-
-#     # Synchronize all streams
-#     torch.cuda.synchronize()
-
-#     return final_result
-
-
 def distributed_matvec(K_chunks, x_chunks, streams, results, final_result):
-    events = []
-
-    # Launch matrix multiplications in separate streams
     for (K_chunk, x_chunk, stream, result) in zip(K_chunks, x_chunks, streams, results):
         with torch.cuda.stream(stream):
             result.copy_(K_chunk @ x_chunk)
-            event = torch.cuda.Event(enable_timing=False)
-            event.record(stream)
-            events.append(event)
 
     # Using preallocated final_result
     final_result.zero_()  # Reset the final result tensor to zero
 
     final_device = final_result.device
-    main_stream = torch.cuda.current_stream()
-
-    # Wait for all chunk computations to complete before summing
-    for event in events:
-        event.wait(main_stream)
-
-    # Sum the results in the main stream
-    with torch.cuda.stream(main_stream):
+    with torch.cuda.stream(streams[0]):
         for result in results:
             final_result.add_(result.to(final_device))
 
-    # Create and record a final event
-    final_event = torch.cuda.Event(enable_timing=False)
-    final_event.record(main_stream)
+    # Synchronize all streams
+    torch.cuda.synchronize()
 
-    return final_result, final_event
+    return final_result
 
 
 torch.set_default_dtype(torch.float32)
@@ -122,10 +88,9 @@ final_result = torch.zeros(blk_sz, device=A_chunks[0].device, dtype=A_chunks[0].
 
 # Perform the distributed matrix-vector multiplication
 ts = time.time()
-result, final_event = distributed_matvec(
+result = distributed_matvec(
     K_chunks, x_chunks, streams, preallocated_results, final_result
 )
-final_event.synchronize()
 print(f"Elapsed time for distributed matvec = {time.time() - ts}")
 
 # Verify the result with the non-distributed version
