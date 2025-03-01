@@ -16,3 +16,21 @@ repos:
         args:
           - --max-line-length=88
           - --ignore=E203,W503
+# -   repo: https://github.com/PyCQA/docformatter
+#     rev: v1.7.5  # Use the latest version
+#     hooks:
+#     -   id: docformatter
+#         args: ["--in-place", "--style=google", "--wrap-summaries=88", "--wrap-descriptions=88"]
+# HACK: replace with an actual docformatter version when InvalidManifestError is fixed
+-   repo: https://github.com/PyCQA/docformatter
+    rev: 06907d0
+    hooks:
+    -   id: docformatter
+        additional_dependencies: [tomli]
+        args: ["--in-place", "--style=google", "--wrap-summaries=88", "--wrap-descriptions=88"]
+-   repo: https://github.com/PyCQA/pydocstyle
+    rev: 6.3.0
+    hooks:
+    -   id: pydocstyle
+        args: ["--convention=google"]
+        additional_dependencies: [toml]

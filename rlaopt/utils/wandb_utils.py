@@ -1,13 +1,12 @@
-import wandb
+"""This module provides utility functions for working with Weights and Biases."""
+
+import os
 
 
-def set_wandb_api_key(wandb_api_key: str):
-    """
-    Set the wandb API key for logging. This function handles logging in
-    wandb with the specified API key.
+def set_wandb_api_key(api_key: str):
+    """Set the API key for Weights and Biases.
 
     Args:
-        wandb_api_key (str): The wandb API key to log in with.
+        api_key (str): The API key provided by Weights and Biases.
     """
-    if wandb_api_key:
-        wandb.login(key=wandb_api_key)
+    os.environ["WANDB_API_KEY"] = api_key
