@@ -57,7 +57,7 @@ def main():
     print(f"CUDA Device Count: {device_count}")
 
     # Initialize large matrix A and vector x
-    n, d, blk_sz = 500000, 500, 10000  # block size
+    n, d, blk_sz = 500000, 500, 50000  # block size
     matrix_size, vector_size = (n, d), (n,)
 
     A = torch.randn(matrix_size).cuda()
