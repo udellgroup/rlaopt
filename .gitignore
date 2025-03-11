@@ -1,2 +1,4 @@
 __pycache__/
-*.nsys-rep
+build/
+rlaopt.egg-info/
+*.so
