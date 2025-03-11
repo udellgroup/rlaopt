@@ -1,25 +1,24 @@
-#include <Python.h>
 #include <ATen/Operators.h>
+#include <Python.h>
 #include <torch/all.h>
 #include <torch/library.h>
 
 extern "C" {
-  /* Creates a dummy empty _C module that can be imported from Python.
-     The import from Python will load the .so consisting of this file
-     in this extension, so that the TORCH_LIBRARY static initializers
-     below are run. */
-  PyObject* PyInit__C(void)
-  {
-      static struct PyModuleDef module_def = {
-          PyModuleDef_HEAD_INIT,
-          "_C",   /* name of module */
-          NULL,   /* module documentation, may be NULL */
-          -1,     /* size of per-interpreter state of the module,
-                     or -1 if the module keeps state in global variables. */
-          NULL,   /* methods */
-      };
-      return PyModule_Create(&module_def);
-  }
+/* Creates a dummy empty _C module that can be imported from Python.
+   The import from Python will load the .so consisting of this file
+   in this extension, so that the TORCH_LIBRARY static initializers
+   below are run. */
+PyObject* PyInit__C(void) {
+    static struct PyModuleDef module_def = {
+        PyModuleDef_HEAD_INIT,
+        "_C", /* name of module */
+        NULL, /* module documentation, may be NULL */
+        -1,   /* size of per-interpreter state of the module,
+                 or -1 if the module keeps state in global variables. */
+        NULL, /* methods */
+    };
+    return PyModule_Create(&module_def);
+}
 }
 
 namespace rlaopt {
@@ -28,7 +27,8 @@ at::Tensor get_row_slice_cpu(const at::Tensor& sparse_tensor, const at::Tensor& 
     TORCH_CHECK(sparse_tensor.layout() == at::kSparseCsr, "Input tensor must be in CSR format");
     TORCH_CHECK(row_indices.is_contiguous(), "row_indices must be contiguous");
     TORCH_CHECK(row_indices.dim() == 1, "row_indices must be 1-dimensional");
-    TORCH_CHECK(sparse_tensor.device().type() == at::DeviceType::CPU, "Input tensor must be on CPU");
+    TORCH_CHECK(sparse_tensor.device().type() == at::DeviceType::CPU,
+                "Input tensor must be on CPU");
     TORCH_CHECK(row_indices.device().type() == at::DeviceType::CPU, "row_indices must be on CPU");
 
     auto values = sparse_tensor.values();
@@ -58,8 +58,10 @@ at::Tensor get_row_slice_cpu(const at::Tensor& sparse_tensor, const at::Tensor& 
         auto end = crow_indices.index({row + 1}).item<int64_t>();
         auto row_nnz = end - start;
 
-        new_values.index_copy_(0, at::arange(current_nnz, current_nnz + row_nnz), values.slice(0, start, end));
-        new_col_indices.index_copy_(0, at::arange(current_nnz, current_nnz + row_nnz), col_indices.slice(0, start, end));
+        new_values.index_copy_(0, at::arange(current_nnz, current_nnz + row_nnz),
+                               values.slice(0, start, end));
+        new_col_indices.index_copy_(0, at::arange(current_nnz, current_nnz + row_nnz),
+                                    col_indices.slice(0, start, end));
 
         current_nnz += row_nnz;
         new_crow_indices.index_put_({i + 1}, current_nnz);
@@ -80,8 +82,6 @@ TORCH_LIBRARY_FRAGMENT(rlaopt, m) {
 }
 
 // Registers SparseCsrCUDA backend for get_row_slice
-TORCH_LIBRARY_IMPL(rlaopt, SparseCsrCPU, m) {
-    m.impl("get_row_slice", &get_row_slice_cpu);
-}
+TORCH_LIBRARY_IMPL(rlaopt, SparseCsrCPU, m) { m.impl("get_row_slice", &get_row_slice_cpu); }
 
-}
+}  // namespace rlaopt
