@@ -1,13 +1,11 @@
-#include <torch/extension.h>
-
 #include <cuda.h>
 #include <cuda_runtime.h>
+#include <torch/extension.h>
 
 namespace rlaopt {
 
 __global__ void compute_row_nnz_kernel(const int64_t num_requested_rows,
-                                       const int64_t* crow_indices,
-                                       const int64_t* row_indices,
+                                       const int64_t* crow_indices, const int64_t* row_indices,
                                        int64_t* new_crow_indices) {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
     if (idx < num_requested_rows) {
@@ -17,9 +15,11 @@ __global__ void compute_row_nnz_kernel(const int64_t num_requested_rows,
 }
 
 template <typename scalar_t>
-__global__ void copy_values_and_indices_kernel(const int64_t num_requested_rows, const int64_t* crow_indices,
+__global__ void copy_values_and_indices_kernel(const int64_t num_requested_rows,
+                                               const int64_t* crow_indices,
                                                const int64_t* col_indices, const scalar_t* values,
-                                               const int64_t* row_indices, const int64_t* new_crow_indices,
+                                               const int64_t* row_indices,
+                                               const int64_t* new_crow_indices,
                                                int64_t* new_col_indices, scalar_t* new_values) {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
     if (idx < num_requested_rows) {
@@ -61,9 +61,7 @@ at::Tensor get_row_slice_cuda(const at::Tensor& sparse_tensor, const at::Tensor&
     int blocks = (num_requested_rows + threads - 1) / threads;
 
     compute_row_nnz_kernel<<<blocks, threads>>>(
-        num_requested_rows,
-        crow_indices.data_ptr<int64_t>(),
-        row_indices.data_ptr<int64_t>(),
+        num_requested_rows, crow_indices.data_ptr<int64_t>(), row_indices.data_ptr<int64_t>(),
         new_crow_indices.data_ptr<int64_t>() + 1  // +1 because we start filling from index 1
     );
 
@@ -78,31 +76,21 @@ at::Tensor get_row_slice_cuda(const at::Tensor& sparse_tensor, const at::Tensor&
     auto new_col_indices = at::empty(new_nnz, col_indices.options());
 
     // Copy values and indices
-    AT_DISPATCH_FLOATING_TYPES(sparse_tensor.scalar_type(), "get_row_slice_cuda", ([&] {
-        copy_values_and_indices_kernel<scalar_t><<<blocks, threads>>>(
-            num_requested_rows,
-            crow_indices.data_ptr<int64_t>(),
-            col_indices.data_ptr<int64_t>(),
-            values.data_ptr<scalar_t>(),
-            row_indices.data_ptr<int64_t>(),
-            new_crow_indices.data_ptr<int64_t>(),
-            new_col_indices.data_ptr<int64_t>(),
-            new_values.data_ptr<scalar_t>()
-        );
-    }));
+    AT_DISPATCH_FLOATING_TYPES(
+        sparse_tensor.scalar_type(), "get_row_slice_cuda", ([&] {
+            copy_values_and_indices_kernel<scalar_t><<<blocks, threads>>>(
+                num_requested_rows, crow_indices.data_ptr<int64_t>(),
+                col_indices.data_ptr<int64_t>(), values.data_ptr<scalar_t>(),
+                row_indices.data_ptr<int64_t>(), new_crow_indices.data_ptr<int64_t>(),
+                new_col_indices.data_ptr<int64_t>(), new_values.data_ptr<scalar_t>());
+        }));
 
-    return at::sparse_csr_tensor(
-        new_crow_indices,
-        new_col_indices,
-        new_values,
-        {num_requested_rows, sparse_tensor.size(1)},
-        sparse_tensor.options()
-    );
+    return at::sparse_csr_tensor(new_crow_indices, new_col_indices, new_values,
+                                 {num_requested_rows, sparse_tensor.size(1)},
+                                 sparse_tensor.options());
 }
 
 // Registers SparseCsrCUDA backend for get_row_slice
-TORCH_LIBRARY_IMPL(rlaopt, SparseCsrCUDA, m) {
-    m.impl("get_row_slice", &get_row_slice_cuda);
-}
+TORCH_LIBRARY_IMPL(rlaopt, SparseCsrCUDA, m) { m.impl("get_row_slice", &get_row_slice_cuda); }
 
-}
+}  // namespace rlaopt
