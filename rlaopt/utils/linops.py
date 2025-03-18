@@ -1,7 +1,8 @@
 from abc import ABC
-from typing import Callable, Optional
+from typing import Callable, Optional, Union, Tuple, List
 
 import torch
+import torch.multiprocessing as mp
 from torch import vmap
 
 
@@ -22,7 +23,7 @@ def _check_callable(func: Callable, name: str):
 class LinOp(ABC):
     def __init__(
         self,
-        shape: tuple[int, int],
+        shape: Tuple[int, int],
         matvec: Callable,
         matmat: Optional[Callable] = None,
     ):
@@ -55,7 +56,7 @@ class LinOp(ABC):
 class TwoSidedLinOp(LinOp):
     def __init__(
         self,
-        shape: tuple[int, int],
+        shape: Tuple[int, int],
         matvec: Callable,
         rmatvec: Callable,
         matmat: Optional[Callable] = None,
@@ -98,7 +99,7 @@ class TwoSidedLinOp(LinOp):
 class SymmetricLinOp(TwoSidedLinOp):
     def __init__(
         self,
-        shape: tuple[int, int],
+        shape: Tuple[int, int],
         matvec: Callable,
         matmat: Optional[Callable] = None,
     ):
@@ -108,3 +109,57 @@ class SymmetricLinOp(TwoSidedLinOp):
                     The received shape is {shape}."
             )
         super().__init__(shape, matvec, matvec, matmat, matmat)
+
+
+# Distributed lin op over rows
+class DistributedLinOp(LinOp):
+    def __init__(
+        self,
+        device_ids: List[Union[int, torch.device]],
+        A: List[LinOp],
+    ):
+        if not isinstance(device_ids, list):
+            raise ValueError("device_ids must be a list of device IDs.")
+        if not all(
+            isinstance(device_id, (int, torch.device)) for device_id in device_ids
+        ):
+            raise ValueError("device_ids must contain integers or torch devices.")
+        if not isinstance(A, list):
+            raise ValueError("A must be a list of linear operators.")
+        if not all(isinstance(A_i, LinOp) for A_i in A):
+            raise ValueError("All elements of A must be linear operators.")
+        if len(device_ids) != len(A):
+            raise ValueError("device_ids and A must have the same length.")
+
+        self._A = A
+        self._device_ids = self._init_device_ids(device_ids)
+
+        # initialize workers
+        self._pool = mp.Pool(processes=len(device_ids))
+
+        shape = (sum(A_i.shape[0] for A_i in A), A[0].shape[1])
+        super().__init__(shape=shape, matvec=self._matvec)
+
+    def _init_device_ids(self, device_ids: List[Union[int, torch.device]]):
+        device_ids_corrected = []
+        for device_id in device_ids:
+            if isinstance(device_id, int):
+                device_ids_corrected.append(torch.device(f"cuda:{device_id}"))
+            elif isinstance(device_id, torch.device):
+                device_ids_corrected.append(device_id)
+
+        return device_ids_corrected
+
+    def _worker(self, task):
+        A_chunk, w_copy = task
+        return (A_chunk @ w_copy).cpu()
+
+    def _matvec(self, w: torch.Tensor):
+        # Send w to each device
+        w_copies = [w.to(device_id) for device_id in self._device_ids]
+
+        # Compute matvecs in parallel
+        tasks = list(zip(self._A, w_copies))
+        matvecs = self._pool.map(self._worker, tasks)
+        result = torch.cat(matvecs, dim=0)
+        return result.to(w.device)

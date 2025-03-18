@@ -30,7 +30,7 @@ class PCG(Solver):
         return self._w
 
     def _init_pcg(self):
-        r = self.system.b - (self.system.A @ self._w + self.system.reg * self._w)
+        r = self.system.b - (self.system.A @ self.w + self.system.reg * self.w)
         z = self.P._inv @ r
         p = z.clone()
         rz = torch.dot(r, z)
