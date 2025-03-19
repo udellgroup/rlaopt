@@ -38,8 +38,8 @@ def main():
     device = torch.device("cuda:0")
     reg = 1e-6
     n = 30000
-    n_chunks = 1
-    n_devices = 1
+    n_chunks = 3
+    n_devices = 3
 
     # start workers
     try:
@@ -72,7 +72,7 @@ def main():
         lin_ops.append(
             TwoSidedLinOp(
                 chunk_device,
-                (A_chunk.shape[0], A_chunk.shape[1]),
+                A_chunk.shape,
                 partial(matvec, matrix=A_chunk),
                 partial(rmatvec, matrix=A_chunk),
                 partial(matvec, matrix=A_chunk),
@@ -80,7 +80,7 @@ def main():
             )
         )
     dist_lin_op = DistributedSymmetricLinOp(
-        shape=(A.shape[0], A.shape[1]),
+        shape=A.shape,
         A=lin_ops,
         pool=pool,
     )

@@ -47,8 +47,8 @@ def create_twosided_linop_chunks(matrices: List[torch.Tensor]) -> List[TwoSidedL
             matrix.device,
             matrix.shape,
             partial(matvec, matrix=matrix),
-            partial(matvec, matrix=matrix),
             partial(rmatvec, matrix=matrix),
+            partial(matvec, matrix=matrix),
             partial(rmatvec, matrix=matrix),
         )
         for matrix in matrices
@@ -71,12 +71,14 @@ def main():
         initargs=(list(range(num_workers))[0], n_devices),
     )
 
+    sizes = torch.arange(1, num_workers + 1) * 1000
+
     # Example matrices for chunks
     matrices = [
-        torch.rand(10000, 10000).to(
+        torch.rand(sz, 10000).to(
             f"cuda:{i % n_devices}" if torch.cuda.is_available() else "cpu"
         )
-        for i in range(num_workers)
+        for i, sz in zip(range(num_workers), sizes)
     ]
 
     # Copy the matrices and put them on the same device
@@ -86,7 +88,7 @@ def main():
     linop_chunks = create_linop_chunks(matrices)
 
     # Initialize the distributed linear operator
-    shape = (sum(mat.shape[0] for mat in matrices), matrices[0].shape[1])
+    shape = torch.Size((sum(mat.shape[0] for mat in matrices), matrices[0].shape[1]))
     # dist_lin_op = DistributedLinOp(shape=shape, A=linop_chunks)
     dist_lin_op = DistributedLinOp(shape=shape, A=linop_chunks, pool=pool)
 
@@ -108,7 +110,7 @@ def main():
     twosided_linop_chunks = create_twosided_linop_chunks(matrices)
 
     # Initialize the distributed two-sided linear operator
-    shape = (sum(mat.shape[0] for mat in matrices), matrices[0].shape[1])
+    shape = torch.Size((sum(mat.shape[0] for mat in matrices), matrices[0].shape[1]))
     dist_twosided_lin_op = DistributedTwoSidedLinOp(
         shape=shape, A=twosided_linop_chunks, pool=pool
     )

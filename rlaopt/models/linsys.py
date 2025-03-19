@@ -5,6 +5,7 @@ import torch
 from rlaopt.models.model import Model
 from rlaopt.solvers import _is_solver_config, _get_solver_name, _get_solver
 from rlaopt.utils import (
+    _is_callable,
     _is_linop_or_torch_tensor,
     _is_torch_tensor,
     _is_nonneg_float,
@@ -74,10 +75,10 @@ class LinSys(Model):
         _is_linop_or_torch_tensor(A, "A")
         _is_torch_tensor(b, "b")
         _is_nonneg_float(reg, "reg")
-        if A_row_oracle is not None and not callable(A_row_oracle):
-            raise ValueError("A_row_oracle must be a callable function")
-        if A_blk_oracle is not None and not callable(A_blk_oracle):
-            raise ValueError("A_blk_oracle must be a callable function")
+        if A_row_oracle is not None:
+            _is_callable(A_row_oracle, "A_row_oracle")
+        if A_blk_oracle is not None:
+            _is_callable(A_blk_oracle, "A_blk_oracle")
 
         # If one of the oracles is provided, the other one must also be provided
         if A_row_oracle is not None and A_blk_oracle is None:

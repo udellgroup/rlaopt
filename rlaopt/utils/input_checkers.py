@@ -2,13 +2,19 @@ from typing import Any
 
 import torch
 
-from rlaopt.utils.linops import LinOp, DistributedLinOp
-
 
 def _is_bool(param: Any, param_name: str):
     if not isinstance(param, bool):
         raise TypeError(
             f"{param_name} is of type {type(param).__name__}, but expected type bool"
+        )
+
+
+def _is_callable(param: Any, param_name: str):
+    if not callable(param):
+        raise TypeError(
+            f"{param_name} is of type {type(param).__name__}, "
+            "but expected type callable"
         )
 
 
@@ -26,11 +32,10 @@ def _is_int(param: Any, param_name: str):
         )
 
 
-def _is_linop_or_torch_tensor(param: Any, param_name: str):
-    if not isinstance(param, (LinOp, DistributedLinOp, torch.Tensor)):
+def _is_list(param: Any, param_name: str):
+    if not isinstance(param, list):
         raise TypeError(
-            f"{param_name} is of type {type(param).__name__}, "
-            "but expected type LinOp, DistributedLinOp, or torch.Tensor"
+            f"{param_name} is of type {type(param).__name__}, but expected type list"
         )
 
 
@@ -46,6 +51,14 @@ def _is_torch_device(param: Any, param_name: str):
         raise TypeError(
             f"{param_name} is of type {type(param).__name__}, "
             "but expected type torch.device"
+        )
+
+
+def _is_torch_size(param: Any, param_name: str):
+    if not isinstance(param, torch.Size):
+        raise TypeError(
+            f"{param_name} is of type {type(param).__name__}, "
+            "but expected type torch.Size"
         )
 
 
