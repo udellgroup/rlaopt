@@ -2,14 +2,13 @@ from functools import partial
 
 import torch
 from torch.multiprocessing import Pool, set_start_method
-from typing import List, Callable
+from typing import List
 
 from rlaopt.utils.linops import (
     LinOp,
     TwoSidedLinOp,
     DistributedLinOp,
     DistributedTwoSidedLinOp,
-    DistributedSymmetricLinOp,
 )
 
 
@@ -28,13 +27,6 @@ def initialize_worker(device_id: int, n_devices: int):
         torch.cuda.set_device(device)
     else:
         print(f"Worker {device_id} using CPU")
-
-
-def create_matvec(matrix: torch.Tensor) -> Callable:
-    def matvec(x: torch.Tensor):
-        return matrix @ x
-
-    return matvec
 
 
 def create_linop_chunks(matrices: List[torch.Tensor]) -> List[LinOp]:
