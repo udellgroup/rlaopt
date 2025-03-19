@@ -10,9 +10,8 @@ from rlaopt.utils import (
     _is_nonneg_float,
     Logger,
     LinOp,
+    DistributedLinOp,
 )
-
-# TODO: do we need to do things like Optional[float] or Union[float, Optional]?
 
 
 class LinSys(Model):
@@ -20,7 +19,7 @@ class LinSys(Model):
 
     def __init__(
         self,
-        A: Union[LinOp, torch.Tensor],
+        A: Union[LinOp, DistributedLinOp, torch.Tensor],
         b: torch.Tensor,
         reg: Optional[float] = 0.0,
         A_row_oracle: Optional[Callable] = None,
@@ -66,7 +65,7 @@ class LinSys(Model):
 
     def _check_inputs(
         self,
-        A: Union[LinOp, torch.Tensor],
+        A: Union[LinOp, DistributedLinOp, torch.Tensor],
         b: torch.Tensor,
         reg: float,
         A_row_oracle: Optional[Callable],

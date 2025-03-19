@@ -9,9 +9,16 @@ from rlaopt.utils.input_checkers import (
     _is_pos_int,
     _is_sketch,
 )
-from rlaopt.utils.linops import LinOp, TwoSidedLinOp, SymmetricLinOp
+from rlaopt.utils.linops import (
+    LinOp,
+    TwoSidedLinOp,
+    SymmetricLinOp,
+    DistributedLinOp,
+    DistributedTwoSidedLinOp,
+    DistributedSymmetricLinOp,
+)
 from rlaopt.utils.logger import Logger
-from rlaopt.utils.wandb_utils import set_wandb_api_key
+from rlaopt.utils.wandb_ import set_wandb_api_key
 
 __all__ = [
     "_is_bool",
@@ -26,6 +33,9 @@ __all__ = [
     "LinOp",
     "TwoSidedLinOp",
     "SymmetricLinOp",
+    "DistributedLinOp",
+    "DistributedTwoSidedLinOp",
+    "DistributedSymmetricLinOp",
     "Logger",
     "set_wandb_api_key",
 ]

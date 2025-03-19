@@ -2,7 +2,7 @@ from typing import Any
 
 import torch
 
-from rlaopt.utils.linops import LinOp
+from rlaopt.utils.linops import LinOp, DistributedLinOp
 
 
 def _is_bool(param: Any, param_name: str):
@@ -27,10 +27,10 @@ def _is_int(param: Any, param_name: str):
 
 
 def _is_linop_or_torch_tensor(param: Any, param_name: str):
-    if not isinstance(param, (LinOp, torch.Tensor)):
+    if not isinstance(param, (LinOp, DistributedLinOp, torch.Tensor)):
         raise TypeError(
             f"{param_name} is of type {type(param).__name__}, "
-            "but expected type LinOp or torch.Tensor"
+            "but expected type LinOp, DistributedLinOp, or torch.Tensor"
         )
 
 
