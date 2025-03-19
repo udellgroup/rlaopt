@@ -95,18 +95,21 @@ class TwoSidedLinOp(LinOp):
 
     def __rmatmul__(self, x: torch.Tensor):
         if x.ndim == 1:
-            x = x.unsqueeze(1)
+            x = x.unsqueeze(0)
             result = self._rmatvec(x.T).T
-            return result.squeeze(1)
+            return result.squeeze(0)
         elif x.ndim == 2:
             return self._rmatmat(x.T).T
 
     @property
     def T(self):
         return TwoSidedLinOp(
+            device=self.device,
             shape=(self.shape[1], self.shape[0]),
             matvec=self._rmatvec,
             rmatvec=self._matvec,
+            matmat=self._rmatmat,
+            rmatmat=self._matmat,
         )
 
 
@@ -190,6 +193,7 @@ class DistributedTwoSidedLinOp(DistributedLinOp):
         A_chunk, w_chunk = task
         return (A_chunk.T @ w_chunk).cpu()
 
+    # TODO(pratik): Fix _chunk_vector to handle dimensions correctly
     def _chunk_vector(self, w: torch.Tensor):
         w_chunks = []
         start_idx = 0
@@ -213,9 +217,9 @@ class DistributedTwoSidedLinOp(DistributedLinOp):
 
     def __rmatmul__(self, x: torch.Tensor):
         if x.ndim == 1:
-            x = x.unsqueeze(1)
+            x = x.unsqueeze(0)
             result = self._rmatvec(x.T).T
-            return result.squeeze(1)
+            return result.squeeze(0)
         elif x.ndim == 2:
             return self._rmatmat(x.T).T
 
