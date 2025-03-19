@@ -74,11 +74,13 @@ def main():
 
     # Initialize the distributed linear operator
     shape = (sum(mat.shape[0] for mat in matrices), matrices[0].shape[1])
-    dist_lin_op = DistributedLinOp(shape=shape, A=linop_chunks)
+    # dist_lin_op = DistributedLinOp(shape=shape, A=linop_chunks)
+    dist_lin_op = DistributedLinOp(shape=shape, A=linop_chunks, pool=pool)
 
     # Test with a vector
     vector = torch.rand(shape[1]).to("cuda:0" if torch.cuda.is_available() else "cpu")
-    result = dist_lin_op @ (pool, vector)
+    # result = dist_lin_op @ (pool, vector)
+    result = dist_lin_op @ vector
     result_true = torch.cat(
         [
             (linop_chunks[i] @ vector.to(linop_chunks[i].device)).to(vector.device)
@@ -92,7 +94,8 @@ def main():
     matrix = torch.rand(shape[1], 2).to(
         "cuda:0" if torch.cuda.is_available() else "cpu"
     )
-    result = dist_lin_op @ (pool, matrix)
+    # result = dist_lin_op @ (pool, matrix)
+    result = dist_lin_op @ matrix
     result_true = torch.cat(
         [
             (linop_chunks[i] @ matrix.to(linop_chunks[i].device)).to(matrix.device)
