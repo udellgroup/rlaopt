@@ -5,16 +5,18 @@ import torch
 
 from rlaopt.utils import _is_torch_size
 
+__all__ = ["_is_linop_or_torch_tensor", "BaseLinOp"]
+
 
 def _is_linop_or_torch_tensor(param: Any, param_name: str):
-    if not isinstance(param, (_BaseLinOp, torch.Tensor)):
+    if not isinstance(param, (BaseLinOp, torch.Tensor)):
         raise TypeError(
             f"{param_name} is of type {type(param).__name__}, "
             "but expected type _BaseLinOp or torch.Tensor"
         )
 
 
-class _BaseLinOp(ABC):
+class BaseLinOp(ABC):
     """Base class for all linear operators."""
 
     def __init__(self, shape: torch.Size):

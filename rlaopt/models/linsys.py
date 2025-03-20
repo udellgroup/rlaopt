@@ -1,18 +1,11 @@
-from typing import Callable, Union, Optional
+from typing import Any, Callable, Union, Optional
 
 import torch
 
 from rlaopt.models.model import Model
 from rlaopt.solvers import _is_solver_config, _get_solver_name, _get_solver
-from rlaopt.utils import (
-    _is_callable,
-    _is_linop_or_torch_tensor,
-    _is_torch_tensor,
-    _is_nonneg_float,
-    Logger,
-    LinOp,
-    DistributedLinOp,
-)
+from rlaopt.utils import _is_callable, _is_torch_tensor, _is_nonneg_float, Logger
+from rlaopt.linops import BaseLinOp, _is_linop_or_torch_tensor
 
 
 class LinSys(Model):
@@ -20,7 +13,7 @@ class LinSys(Model):
 
     def __init__(
         self,
-        A: Union[LinOp, DistributedLinOp, torch.Tensor],
+        A: Union[BaseLinOp, torch.Tensor],
         b: torch.Tensor,
         reg: Optional[float] = 0.0,
         A_row_oracle: Optional[Callable] = None,
@@ -29,7 +22,7 @@ class LinSys(Model):
         """Initialize LinSys model.
 
         Args:
-            A (Union[LinOp, torch.Tensor]): Linear operator or matrix A.
+            A (Union[BaseLinOp, torch.Tensor]): Linear operator or matrix A.
             b (torch.Tensor): Right-hand side b.
             reg (Optional[float], optional): Regularization parameter. Defaults to 0.0.
             A_row_oracle (Optional[Callable], optional): Oracle for row-wise operations.
@@ -66,11 +59,11 @@ class LinSys(Model):
 
     def _check_inputs(
         self,
-        A: Union[LinOp, DistributedLinOp, torch.Tensor],
-        b: torch.Tensor,
-        reg: float,
-        A_row_oracle: Optional[Callable],
-        A_blk_oracle: Optional[Callable],
+        A: Any,
+        b: Any,
+        reg: Any,
+        A_row_oracle: Optional[Any],
+        A_blk_oracle: Optional[Any],
     ):
         _is_linop_or_torch_tensor(A, "A")
         _is_torch_tensor(b, "b")

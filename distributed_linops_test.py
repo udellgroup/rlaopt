@@ -4,7 +4,7 @@ import torch
 from torch.multiprocessing import Pool, set_start_method
 from typing import List
 
-from rlaopt.utils.linops import (
+from rlaopt.linops import (
     LinOp,
     TwoSidedLinOp,
     DistributedLinOp,

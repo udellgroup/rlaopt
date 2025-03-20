@@ -84,8 +84,8 @@ def main():
     n = 100000
     d = 10
     sigma = 1.0
-    n_chunks = 1
-    n_devices = 1
+    n_chunks = 3
+    n_devices = 3
 
     # start workers
     try:
@@ -118,7 +118,7 @@ def main():
 
     # setup linear system and solver
     system = LinSys(A=dist_lin_op, b=b, reg=reg)
-    nystrom_config = NystromConfig(rank=500, rho=reg)
+    nystrom_config = NystromConfig(rank=100, rho=reg)
     solver_config = PCGConfig(
         precond_config=nystrom_config,
         max_iters=60,

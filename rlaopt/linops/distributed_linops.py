@@ -4,11 +4,13 @@ import torch
 from torch.multiprocessing import Pool
 
 from rlaopt.utils import _is_list
-from rlaopt.linops.base_linop import _BaseLinOp
+from rlaopt.linops.base_linop import BaseLinOp
 from rlaopt.linops.linops import LinOp, TwoSidedLinOp
 
+__all__ = ["DistributedLinOp", "DistributedTwoSidedLinOp", "DistributedSymmetricLinOp"]
 
-class DistributedLinOp(_BaseLinOp):
+
+class DistributedLinOp(BaseLinOp):
     def __init__(
         self,
         shape: torch.Size,

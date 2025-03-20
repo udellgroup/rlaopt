@@ -4,7 +4,7 @@ import torch
 from torch.multiprocessing import Pool, set_start_method
 
 from rlaopt.models import LinSys
-from rlaopt.utils import TwoSidedLinOp, DistributedSymmetricLinOp
+from rlaopt.linops import TwoSidedLinOp, DistributedSymmetricLinOp
 from rlaopt.preconditioners import NystromConfig
 from rlaopt.solvers import PCGConfig
 
@@ -37,7 +37,7 @@ def main():
 
     device = torch.device("cuda:0")
     reg = 1e-6
-    n = 30000
+    n = 10000
     n_chunks = 3
     n_devices = 3
 

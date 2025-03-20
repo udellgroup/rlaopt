@@ -7,10 +7,12 @@ from rlaopt.utils.input_checkers import (
     _is_callable,
     _is_torch_device,
 )
-from rlaopt.linops.base_linop import _BaseLinOp
+from rlaopt.linops.base_linop import BaseLinOp
+
+__all__ = ["LinOp", "TwoSidedLinOp", "SymmetricLinOp"]
 
 
-class LinOp(_BaseLinOp):
+class LinOp(BaseLinOp):
     def __init__(
         self,
         device: torch.device,

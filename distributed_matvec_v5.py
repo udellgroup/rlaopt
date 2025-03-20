@@ -81,7 +81,7 @@ def worker(rank, world_size, A, x, blk_indices_list):
 
 
 def main():
-    dtype = torch.float64
+    dtype = torch.float32
     torch.set_default_dtype(dtype)
 
     if not torch.cuda.is_available():

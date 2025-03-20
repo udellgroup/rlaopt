@@ -1,17 +1,15 @@
-from rlaopt.linops.base_linop import _is_linop_or_torch_tensor
-from rlaopt.linops.linops import LinOp, TwoSidedLinOp, SymmetricLinOp
-from rlaopt.linops.distributed_linops import (
-    DistributedLinOp,
-    DistributedTwoSidedLinOp,
-    DistributedSymmetricLinOp,
-)
+import importlib
 
-__all__ = [
-    "_is_linop_or_torch_tensor",
-    "LinOp",
-    "TwoSidedLinOp",
-    "SymmetricLinOp",
-    "DistributedLinOp",
-    "DistributedTwoSidedLinOp",
-    "DistributedSymmetricLinOp",
+modules_to_import = [
+    "rlaopt.linops.base_linop",
+    "rlaopt.linops.linops",
+    "rlaopt.linops.distributed_linops",
 ]
+
+__all__ = []
+for module in modules_to_import:
+    mod = importlib.import_module(module)
+    components = getattr(mod, "__all__", [])
+    for component in components:
+        globals()[component] = getattr(mod, component)
+        __all__.append(component)
