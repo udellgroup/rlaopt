@@ -2,21 +2,12 @@ from functools import partial
 
 from pykeops.torch import LazyTensor
 import torch
-from torch.multiprocessing import Pool, set_start_method
+from torch.multiprocessing import set_start_method
 
 from rlaopt.models import LinSys
 from rlaopt.linops import TwoSidedLinOp, DistributedSymmetricLinOp
 from rlaopt.preconditioners import NystromConfig
 from rlaopt.solvers import PCGConfig
-
-
-# helper function to initialize worker devices
-def initialize_worker(device_id: int, n_devices: int):
-    if torch.cuda.is_available():
-        device = device_id % n_devices
-        torch.cuda.set_device(device)
-    else:
-        print(f"Worker {device_id} using CPU")
 
 
 def callback_fn(w, linsys):
@@ -85,20 +76,12 @@ def main():
     d = 10
     sigma = 1.0
     n_chunks = 3
-    n_devices = 3
 
     # start workers
     try:
         set_start_method("spawn", force=True)
     except RuntimeError:
         pass
-
-    # create the pool with device initializers
-    pool = Pool(
-        processes=n_chunks,
-        initializer=initialize_worker,
-        initargs=(list(range(n_chunks))[0], n_devices),
-    )
 
     # generate synthetic data
     A = torch.randn(n, d, device=device) / (n**0.5)
@@ -113,7 +96,6 @@ def main():
     dist_lin_op = DistributedSymmetricLinOp(
         shape=torch.Size((A.shape[0], A.shape[0])),
         A=lin_ops,
-        pool=pool,
     )
 
     # setup linear system and solver
@@ -136,6 +118,8 @@ def main():
         log_in_wandb=True,
         wandb_init_kwargs={"project": "test_distributed_krr_linsys_solve"},
     )
+
+    dist_lin_op.shutdown()
 
     # now do it without distribution
     lin_op = RBFLinearOperator(

@@ -1,21 +1,12 @@
 from functools import partial
 
 import torch
-from torch.multiprocessing import Pool, set_start_method
+from torch.multiprocessing import set_start_method
 
 from rlaopt.models import LinSys
 from rlaopt.linops import TwoSidedLinOp, DistributedSymmetricLinOp
 from rlaopt.preconditioners import NystromConfig
 from rlaopt.solvers import PCGConfig
-
-
-# helper function to initialize worker devices
-def initialize_worker(device_id: int, n_devices: int):
-    if torch.cuda.is_available():
-        device = device_id % n_devices
-        torch.cuda.set_device(device)
-    else:
-        print(f"Worker {device_id} using CPU")
 
 
 def callback_fn(w, linsys):
@@ -39,20 +30,12 @@ def main():
     reg = 1e-6
     n = 10000
     n_chunks = 3
-    n_devices = 3
 
     # start workers
     try:
         set_start_method("spawn", force=True)
     except RuntimeError:
         pass
-
-    # create the pool with device initializers
-    pool = Pool(
-        processes=n_chunks,
-        initializer=initialize_worker,
-        initargs=(list(range(n_chunks))[0], n_devices),
-    )
 
     # create a symmetric psd matrix A
     eigvals = torch.arange(1, n + 1, device=device) ** -2.0
@@ -82,7 +65,6 @@ def main():
     dist_lin_op = DistributedSymmetricLinOp(
         shape=A.shape,
         A=lin_ops,
-        pool=pool,
     )
 
     # setup linear system and solver
@@ -106,9 +88,7 @@ def main():
         wandb_init_kwargs={"project": "test_distributed_linsys_solve"},
     )
 
-    # shutdown the pool
-    # pool.join()
-    # pool.close()
+    dist_lin_op.shutdown()
 
 
 if __name__ == "__main__":
