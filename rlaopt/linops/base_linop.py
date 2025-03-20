@@ -1,4 +1,4 @@
-from abc import ABC
+from abc import ABC, abstractmethod
 from typing import Any
 
 import torch
@@ -31,3 +31,8 @@ class _BaseLinOp(ABC):
     @property
     def shape(self):
         return self._shape
+
+    @abstractmethod
+    def __matmul__(self, x: torch.Tensor):
+        """Matrix-vector multiplication."""
+        pass

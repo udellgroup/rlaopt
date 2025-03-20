@@ -1,8 +1,6 @@
 from rlaopt.linops.base_linop import _is_linop_or_torch_tensor
-from rlaopt.linops.linops import (
-    LinOp,
-    TwoSidedLinOp,
-    SymmetricLinOp,
+from rlaopt.linops.linops import LinOp, TwoSidedLinOp, SymmetricLinOp
+from rlaopt.linops.distributed_linops import (
     DistributedLinOp,
     DistributedTwoSidedLinOp,
     DistributedSymmetricLinOp,
