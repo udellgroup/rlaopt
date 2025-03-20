@@ -5,7 +5,7 @@ import torch
 from torch.multiprocessing import Pool, set_start_method
 
 from rlaopt.models import LinSys
-from rlaopt.utils import TwoSidedLinOp, DistributedSymmetricLinOp
+from rlaopt.linops import TwoSidedLinOp, DistributedSymmetricLinOp
 from rlaopt.preconditioners import NystromConfig
 from rlaopt.solvers import PCGConfig
 

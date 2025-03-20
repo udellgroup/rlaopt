@@ -2,7 +2,7 @@ import os
 import torch
 import torch.distributed as dist
 import torch.multiprocessing as mp
-from rlaopt.utils import LinOp
+from rlaopt.linops import LinOp
 from pykeops.torch import LazyTensor
 
 

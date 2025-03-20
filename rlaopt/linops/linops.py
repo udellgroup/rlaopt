@@ -1,5 +1,4 @@
-from abc import ABC
-from typing import Any, Callable, Optional, List
+from typing import Callable, Optional, List
 
 import torch
 from torch.multiprocessing import Pool
@@ -9,27 +8,11 @@ from rlaopt.utils.input_checkers import (
     _is_callable,
     _is_list,
     _is_torch_device,
-    _is_torch_size,
 )
+from rlaopt.linops.base_linop import _BaseLinOp
 
 
-def _is_linop_or_torch_tensor(param: Any, param_name: str):
-    if not isinstance(param, (LinOp, DistributedLinOp, torch.Tensor)):
-        raise TypeError(
-            f"{param_name} is of type {type(param).__name__}, "
-            "but expected type LinOp, DistributedLinOp, or torch.Tensor"
-        )
-
-
-def _check_shape(shape: Any):
-    _is_torch_size(shape, "shape")
-    if len(shape) != 2:
-        raise ValueError(f"shape must have two elements. Received {len(shape)}")
-    if not all(isinstance(i, int) and i > 0 for i in shape):
-        raise ValueError(f"shape must contain positive integers. Received {shape}")
-
-
-class LinOp(ABC):
+class LinOp(_BaseLinOp):
     def __init__(
         self,
         device: torch.device,
@@ -37,8 +20,8 @@ class LinOp(ABC):
         matvec: Callable,
         matmat: Optional[Callable] = None,
     ):
+        super().__init__(shape=shape)
         _is_torch_device(device, "device")
-        _check_shape(shape)
         _is_callable(matvec, "matvec")
         if matmat is not None:
             _is_callable(matmat, "matmat")
@@ -55,10 +38,6 @@ class LinOp(ABC):
     @property
     def device(self):
         return self._device
-
-    @property
-    def shape(self):
-        return self._shape
 
     def __matmul__(self, x: torch.Tensor):
         if x.ndim == 1:
@@ -79,11 +58,11 @@ class TwoSidedLinOp(LinOp):
         matmat: Optional[Callable] = None,
         rmatmat: Optional[Callable] = None,
     ):
+        super().__init__(device, shape, matvec, matmat)
+
         _is_callable(rmatvec, "rmatvec")
         if rmatmat is not None:
             _is_callable(rmatmat, "rmatmat")
-
-        super().__init__(device, shape, matvec, matmat)
 
         self._rmatvec = rmatvec
         if rmatmat is None:
@@ -119,34 +98,30 @@ class SymmetricLinOp(TwoSidedLinOp):
         matvec: Callable,
         matmat: Optional[Callable] = None,
     ):
+        super().__init__(device, shape, matvec, matvec, matmat, matmat)
+
         if shape[0] != shape[1]:
             raise ValueError(
                 f"SymmetricLinOp requires the shape to be square. \
                     The received shape is {shape}."
             )
-        super().__init__(device, shape, matvec, matvec, matmat, matmat)
 
 
 # Distributed lin op over rows
-class DistributedLinOp:
+class DistributedLinOp(_BaseLinOp):
     def __init__(
         self,
         shape: torch.Size,
         A: List[LinOp],
         pool: Pool,
     ):
-        _is_torch_size(shape, "shape")
+        super().__init__(shape=shape)
+
         _is_list(A, "A")
         if not all(isinstance(A_i, LinOp) for A_i in A):
             raise ValueError("All elements of A must be linear operators.")
-
-        self._shape = shape
         self._A = A
         self._pool = pool
-
-    @property
-    def shape(self):
-        return self._shape
 
     @staticmethod
     def _worker_matvec(task):
@@ -179,12 +154,10 @@ class DistributedTwoSidedLinOp(DistributedLinOp):
         A: List[TwoSidedLinOp],
         pool: Pool,
     ):
-        _is_torch_size(shape, "shape")
-        _is_list(A, "A")
+        super().__init__(shape=shape, A=A, pool=pool)
+
         if not all(isinstance(A_i, TwoSidedLinOp) for A_i in A):
             raise ValueError("All elements of A must be two-sided linear operators.")
-
-        super().__init__(shape=shape, A=A, pool=pool)
 
     @staticmethod
     def _worker_rmatvec(task):
@@ -231,13 +204,13 @@ class DistributedTwoSidedLinOp(DistributedLinOp):
 
 class DistributedSymmetricLinOp(DistributedTwoSidedLinOp):
     def __init__(self, shape: torch.Size, A: List[TwoSidedLinOp], pool: Pool):
+        super().__init__(shape=shape, A=A, pool=pool)
+
         if shape[0] != shape[1]:
             raise ValueError(
                 f"DistributedSymmetricLinOp requires the shape to be square. \
                     The received shape is {shape}."
             )
-
-        super().__init__(shape=shape, A=A, pool=pool)
 
     # Override the _rmatvec and _rmatmat methods since the operator is symmetric
     def _rmatvec(self, w: torch.Tensor):
