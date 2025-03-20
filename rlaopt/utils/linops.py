@@ -191,7 +191,6 @@ class DistributedTwoSidedLinOp(DistributedLinOp):
         A_chunk, w_chunk = task
         return (A_chunk.T @ w_chunk).cpu()
 
-    # TODO(pratik): Fix _chunk_vector to handle dimensions correctly
     def _chunk_vector(self, w: torch.Tensor):
         w_chunks = []
         start_idx = 0
