@@ -1,10 +1,7 @@
-from functools import partial
-
-from pykeops.torch import LazyTensor
 import torch
 
 from rlaopt.models import LinSys
-from rlaopt.linops import TwoSidedLinOp, DistributedSymmetricLinOp
+from rlaopt.kernels import RBFLinOp, DistributedRBFLinOpV1
 from rlaopt.preconditioners import NystromConfig
 from rlaopt.solvers import PCGConfig
 
@@ -12,57 +9,6 @@ from rlaopt.solvers import PCGConfig
 def callback_fn(w, linsys):
     res = torch.linalg.norm(linsys.b - (linsys.A @ w + linsys.reg * w))
     return {"res": res.item()}
-
-
-def matvec(x: torch.Tensor, A, chunk_idx, sigma):
-    # Compute the kernel matrix
-    Ab_lazy = LazyTensor(A[chunk_idx][:, None, :])
-    A_lazy = LazyTensor(A[None, :, :])
-    D = ((Ab_lazy - A_lazy) ** 2).sum(dim=2)
-    Kb = (-D / (2 * sigma**2)).exp()
-    return Kb @ x
-
-
-def rmatvec(x: torch.Tensor, A, chunk_idx, sigma):
-    # Compute the kernel matrix
-    Ab_lazy = LazyTensor(A[chunk_idx][None, :, :])
-    A_lazy = LazyTensor(A[:, None, :])
-    D = ((A_lazy - Ab_lazy) ** 2).sum(dim=2)
-    KbT = (-D / (2 * sigma**2)).exp()
-    return KbT @ x
-
-
-# NOTE(pratik): this class does not work because the LazyTensor has to be made within
-# the worker. The easiest way to do this is to make the LazyTensor in the matvec and
-# rmatvec functions, which are used by the worker in the distributed linear operators.
-# class RBFLinearOperator(TwoSidedLinOp):
-#     def __init__(self, A, Ab, sigma):
-#         # Compute the kernel matrix
-#         Ab_lazy = LazyTensor(Ab[:, None, :])
-#         A_lazy = LazyTensor(A[None, :, :])
-#         D = ((Ab_lazy - A_lazy) ** 2).sum(dim=2)
-#         Kb = (-D / (2 * sigma ** 2)).exp()
-
-#         super().__init__(
-#             device=A.device,
-#             shape=torch.Size(Kb.shape),
-#             matvec=partial(matvec, matrix=Kb),
-#             rmatvec=partial(rmatvec, matrix=Kb),
-#             matmat=partial(matvec, matrix=Kb),
-#             rmatmat=partial(rmatvec, matrix=Kb),
-#         )
-
-
-class RBFLinearOperator(TwoSidedLinOp):
-    def __init__(self, A, chunk_idx, sigma):
-        super().__init__(
-            device=A.device,
-            shape=torch.Size((chunk_idx.shape[0], A.shape[0])),
-            matvec=partial(matvec, A=A, chunk_idx=chunk_idx, sigma=sigma),
-            rmatvec=partial(rmatvec, A=A, chunk_idx=chunk_idx, sigma=sigma),
-            matmat=partial(matvec, A=A, chunk_idx=chunk_idx, sigma=sigma),
-            rmatmat=partial(rmatvec, A=A, chunk_idx=chunk_idx, sigma=sigma),
-        )
 
 
 def main():
@@ -80,15 +26,12 @@ def main():
     A = torch.randn(n, d, device=device) / (n**0.5)
     b = torch.randn(n, device=device)
 
-    # get DistributedSymmetricLinOp for kernel matrix
-    A_chunk_idx = torch.arange(A.shape[0]).chunk(n_chunks)
+    devices = set([torch.device(f"cuda:{i}") for i in range(n_chunks)])
 
-    lin_ops = []
-    for i, chunk_idx in enumerate(A_chunk_idx):
-        lin_ops.append(RBFLinearOperator(A.to(f"cuda:{i}"), chunk_idx, sigma))
-    dist_lin_op = DistributedSymmetricLinOp(
-        shape=torch.Size((A.shape[0], A.shape[0])),
-        A=lin_ops,
+    dist_lin_op = DistributedRBFLinOpV1(
+        A=A,
+        sigma=sigma,
+        devices=devices,
     )
 
     # setup linear system and solver
@@ -115,9 +58,8 @@ def main():
     dist_lin_op.shutdown()
 
     # now do it without distribution
-    lin_op = RBFLinearOperator(
+    lin_op = RBFLinOp(
         A=A,
-        chunk_idx=torch.arange(A.shape[0]),
         sigma=sigma,
     )
     system = LinSys(A=lin_op, b=b, reg=reg)
