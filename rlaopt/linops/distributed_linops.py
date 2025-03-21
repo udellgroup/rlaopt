@@ -173,11 +173,7 @@ class _BaseDistributedTwoSidedLinOp(_BaseDistributedLinOp):
             raise ValueError("All elements of A must be two-sided linear operators.")
 
     def _chunk_vector(self, w: torch.Tensor, by_dimension=0):
-        """Split vector according to specified dimension of operators.
-
-        Args:
-            w: Vector to chunk
-        """
+        """Split vector according to specified dimension of operators."""
         w_chunks = []
         start_idx = 0
         for i in range(len(self._A)):
@@ -186,85 +182,59 @@ class _BaseDistributedTwoSidedLinOp(_BaseDistributedLinOp):
             start_idx = end_idx
         return w_chunks
 
+    def _distribute_tasks(
+        self, w: torch.Tensor, operation, chunk: bool, by_dimension: int
+    ):
+        # Decide whether to chunk or send full vector
+        if chunk:
+            chunks = self._chunk_vector(w, by_dimension)
+            # Dispatch chunked tasks
+            for i, (linop, w_chunk) in enumerate(zip(self._A, chunks)):
+                self._task_queues[linop.device].put((i, linop, w_chunk, operation))
+        else:
+            # Send full vector to all workers
+            for i, linop in enumerate(self._A):
+                self._task_queues[linop.device].put((i, linop, w.cpu(), operation))
+
+        # Collect results
+        results = [None] * len(self._A)
+        for _ in range(len(self._A)):
+            task_id, result = self._result_queue.get()
+
+            if isinstance(result, Exception):
+                raise RuntimeError(f"Error in worker process: {result}")
+
+            results[task_id] = result
+
+        return results
+
+    def _combine_results(self, results, w, concatenate=True):
+        if concatenate:
+            combined = torch.cat(results, dim=0)
+        else:
+            combined = sum(results)
+
+        return combined.to(w.device)
+
     def _matvec(self, w: torch.Tensor):
         if not self._is_transposed:
-            # Normal row-distributed operator: send full vector to all chunks
-            for i, linop in enumerate(self._A):
-                self._task_queues[linop.device].put((i, linop, w.cpu(), "matvec"))
-
-            # Collect results
-            results = [None] * len(self._A)
-            for _ in range(len(self._A)):
-                task_id, result = self._result_queue.get()
-
-                if isinstance(result, Exception):
-                    raise RuntimeError(f"Error in worker process: {result}")
-
-                results[task_id] = result
-
-            # For row-distributed, we concatenate the results
-            combined = torch.cat(results, dim=0)
-            return combined.to(w.device)
+            # Normal row-distributed operator: send full vector, concatenate results
+            results = self._distribute_tasks(w, "matvec", chunk=False)
+            return self._combine_results(results, w, concatenate=True)
         else:
-            w_chunks = self._chunk_vector(w, by_dimension=1)
-
-            # Dispatch tasks
-            for i, (linop, w_chunk) in enumerate(zip(self._A, w_chunks)):
-                self._task_queues[linop.device].put((i, linop, w_chunk, "matvec"))
-
-            # Collect results
-            results = [None] * len(self._A)
-            for _ in range(len(self._A)):
-                task_id, result = self._result_queue.get()
-
-                if isinstance(result, Exception):
-                    raise RuntimeError(f"Error in worker process: {result}")
-
-                results[task_id] = result
-
-            # For column-distributed, we sum the results
-            result = sum(results)
-            return result.to(w.device)
+            # Transposed operator: chunk by columns, sum results
+            results = self._distribute_tasks(w, "matvec", chunk=True, by_dimension=1)
+            return self._combine_results(results, w, concatenate=False)
 
     def _rmatvec(self, w: torch.Tensor):
         if not self._is_transposed:
-            w_chunks = self._chunk_vector(w, by_dimension=0)
-
-            # Dispatch tasks
-            for i, (linop, w_chunk) in enumerate(zip(self._A, w_chunks)):
-                self._task_queues[linop.device].put((i, linop, w_chunk, "rmatvec"))
-
-            # Collect results
-            results = [None] * len(self._A)
-            for _ in range(len(self._A)):
-                task_id, result = self._result_queue.get()
-
-                if isinstance(result, Exception):
-                    raise RuntimeError(f"Error in worker process: {result}")
-
-                results[task_id] = result
-
-            # For transpose of row-distributed, we sum the results
-            result = sum(results)
-            return result.to(w.device)
+            # Normal operator: chunk by columns, sum results
+            results = self._distribute_tasks(w, "rmatvec", chunk=True, by_dimension=0)
+            return self._combine_results(results, w, concatenate=False)
         else:
-            # Transposed (column-distributed) operator: send full vector to all
-            for i, linop in enumerate(self._A):
-                self._task_queues[linop.device].put((i, linop, w.cpu(), "rmatvec"))
-
-            # Collect results
-            results = [None] * len(self._A)
-            for _ in range(len(self._A)):
-                task_id, result = self._result_queue.get()
-
-                if isinstance(result, Exception):
-                    raise RuntimeError(f"Error in worker process: {result}")
-
-                results[task_id] = result
-
-            # For transpose of column-distributed, we concatenate the results
-            combined = torch.cat(results, dim=0)
-            return combined.to(w.device)
+            # Transposed operator: send full vector, concatenate results
+            results = self._distribute_tasks(w, "rmatvec", chunk=False)
+            return self._combine_results(results, w, concatenate=True)
 
     def _rmatmat(self, w: torch.Tensor):
         return self._rmatvec(w)
