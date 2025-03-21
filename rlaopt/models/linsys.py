@@ -5,7 +5,7 @@ import torch
 from rlaopt.models.model import Model
 from rlaopt.solvers import _is_solver_config, _get_solver_name, _get_solver
 from rlaopt.utils import _is_callable, _is_torch_tensor, _is_nonneg_float, Logger
-from rlaopt.linops import BaseLinOp, _is_linop_or_torch_tensor
+from rlaopt.linops import LinOpType, _is_linop_or_torch_tensor
 
 
 class LinSys(Model):
@@ -13,7 +13,7 @@ class LinSys(Model):
 
     def __init__(
         self,
-        A: Union[BaseLinOp, torch.Tensor],
+        A: Union[LinOpType, torch.Tensor],
         b: torch.Tensor,
         reg: Optional[float] = 0.0,
         A_row_oracle: Optional[Callable] = None,
@@ -22,7 +22,7 @@ class LinSys(Model):
         """Initialize LinSys model.
 
         Args:
-            A (Union[BaseLinOp, torch.Tensor]): Linear operator or matrix A.
+            A (Union[LinOpType, torch.Tensor]): Linear operator or matrix A.
             b (torch.Tensor): Right-hand side b.
             reg (Optional[float], optional): Regularization parameter. Defaults to 0.0.
             A_row_oracle (Optional[Callable], optional): Oracle for row-wise operations.

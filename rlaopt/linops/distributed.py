@@ -5,8 +5,8 @@ import torch
 from torch.multiprocessing import Manager, Process, Queue
 
 from rlaopt.utils import _is_list
-from rlaopt.linops.base_linop import BaseLinOp
-from rlaopt.linops.linops import LinOp, TwoSidedLinOp
+from rlaopt.linops.base import _BaseLinOp
+from rlaopt.linops.simple import LinOp, TwoSidedLinOp
 
 
 __all__ = [
@@ -27,7 +27,7 @@ class DistributionMode(Enum):
     COLUMN = auto()  # Matrix is distributed across columns
 
 
-class _BaseDistributedLinOp(BaseLinOp):
+class _BaseDistributedLinOp(_BaseLinOp):
     """Base class with implementation details for distributed linear operators."""
 
     def __init__(

@@ -1,9 +1,9 @@
 import importlib
 
 modules_to_import = [
-    "rlaopt.linops.base_linop",
-    "rlaopt.linops.linops",
-    "rlaopt.linops.distributed_linops",
+    "rlaopt.linops.distributed",
+    "rlaopt.linops.simple",
+    "rlaopt.linops.types",
 ]
 
 __all__ = []

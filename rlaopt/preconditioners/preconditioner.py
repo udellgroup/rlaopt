@@ -3,7 +3,7 @@ from typing import Union
 
 import torch
 
-from rlaopt.linops import BaseLinOp
+from rlaopt.linops import LinOpType
 from rlaopt.preconditioners.configs import PreconditionerConfig
 
 
@@ -14,7 +14,7 @@ class Preconditioner(ABC):
     @abstractmethod
     def _update(
         self,
-        A: Union[torch.Tensor, BaseLinOp],
+        A: Union[torch.Tensor, LinOpType],
         device: torch.device,
         *args: list,
         **kwargs: dict
