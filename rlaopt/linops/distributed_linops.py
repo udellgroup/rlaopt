@@ -9,12 +9,22 @@ from rlaopt.linops.base_linop import BaseLinOp
 from rlaopt.linops.linops import LinOp, TwoSidedLinOp
 
 
-__all__ = ["DistributedLinOp", "DistributedTwoSidedLinOp", "DistributedSymmetricLinOp"]
+__all__ = [
+    "DistributionMode",
+    "DistributedLinOp",
+    "DistributedTwoSidedLinOp",
+    "DistributedSymmetricLinOp",
+]
 
 
-class Operation(Enum):
+class _Operation(Enum):
     MATVEC = auto()
     RMATVEC = auto()
+
+
+class DistributionMode(Enum):
+    ROW = auto()  # Matrix is distributed across rows
+    COLUMN = auto()  # Matrix is distributed across columns
 
 
 class _BaseDistributedLinOp(BaseLinOp):
@@ -29,9 +39,11 @@ class _BaseDistributedLinOp(BaseLinOp):
         task_queues=None,
         workers=None,
         is_new=True,
+        distribution_mode=DistributionMode.ROW,
     ):
         super().__init__(shape=shape)
         self._is_new = is_new
+        self._distribution_mode = distribution_mode
 
         # Validate input
         if self._is_new:
@@ -83,9 +95,9 @@ class _BaseDistributedLinOp(BaseLinOp):
             x = x.to(device)
 
             try:
-                if operation == Operation.MATVEC:
+                if operation == _Operation.MATVEC:
                     result = linop @ x
-                elif operation == Operation.RMATVEC:
+                elif operation == _Operation.RMATVEC:
                     # Check if this linear operator supports transpose operations
                     if hasattr(linop, "T"):
                         result = linop.T @ x
@@ -101,25 +113,63 @@ class _BaseDistributedLinOp(BaseLinOp):
                 # Send back the error so the main process can handle it
                 result_queue.put((task_id, e))
 
-    def _matvec(self, w: torch.Tensor):
-        # Create a task for each linop and send to the appropriate device queue
-        for i, linop in enumerate(self._A):
-            self._task_queues[linop.device].put((i, linop, w.cpu(), Operation.MATVEC))
+    def _chunk_vector(self, w: torch.Tensor, by_dimension=0):
+        """Split vector according to specified dimension of operators."""
+        w_chunks = []
+        start_idx = 0
+        for i in range(len(self._A)):
+            end_idx = start_idx + self._A[i].shape[by_dimension]
+            w_chunks.append(w[start_idx:end_idx].cpu())
+            start_idx = end_idx
+        return w_chunks
+
+    def _distribute_tasks(
+        self, w: torch.Tensor, operation: _Operation, chunk: bool, by_dimension: int = 0
+    ):
+        """Common code for distributing tasks to workers."""
+        # Decide whether to chunk or send full vector
+        if chunk:
+            chunks = self._chunk_vector(w, by_dimension)
+            # Dispatch chunked tasks
+            for i, (linop, w_chunk) in enumerate(zip(self._A, chunks)):
+                self._task_queues[linop.device].put((i, linop, w_chunk, operation))
+        else:
+            # Send full vector to all workers
+            for i, linop in enumerate(self._A):
+                self._task_queues[linop.device].put((i, linop, w.cpu(), operation))
 
         # Collect results
         results = [None] * len(self._A)
         for _ in range(len(self._A)):
             task_id, result = self._result_queue.get()
 
-            # Check if the result is an exception
             if isinstance(result, Exception):
                 raise RuntimeError(f"Error in worker process: {result}")
 
             results[task_id] = result
 
-        # Combine and return
-        combined = torch.cat(results, dim=0)
+        return results
+
+    def _combine_results(self, results, w, concatenate=True):
+        """Combine results either by concatenation or summation."""
+        if concatenate:
+            combined = torch.cat(results, dim=0)
+        else:
+            combined = sum(results)
+
         return combined.to(w.device)
+
+    def _matvec(self, w: torch.Tensor):
+        if self._distribution_mode == DistributionMode.ROW:
+            # Row-distributed operator: send full vector, concatenate results
+            results = self._distribute_tasks(w, _Operation.MATVEC, chunk=False)
+            return self._combine_results(results, w, concatenate=True)
+        else:  # COLUMN mode
+            # Column-distributed operator: chunk by columns, sum results
+            results = self._distribute_tasks(
+                w, _Operation.MATVEC, chunk=True, by_dimension=1
+            )
+            return self._combine_results(results, w, concatenate=False)
 
     def _matmat(self, w: torch.Tensor):
         return self._matvec(w)
@@ -162,7 +212,7 @@ class _BaseDistributedTwoSidedLinOp(_BaseDistributedLinOp):
         task_queues=None,
         workers=None,
         is_new=True,
-        is_transposed=False,  # Flag to indicate if this is a transposed view
+        distribution_mode=DistributionMode.ROW,
     ):
         super().__init__(
             shape=shape,
@@ -172,79 +222,22 @@ class _BaseDistributedTwoSidedLinOp(_BaseDistributedLinOp):
             task_queues=task_queues,
             workers=workers,
             is_new=is_new,
+            distribution_mode=distribution_mode,
         )
-
-        self._is_transposed = is_transposed
 
         if self._is_new and not all(isinstance(A_i, TwoSidedLinOp) for A_i in A):
             raise ValueError("All elements of A must be two-sided linear operators.")
 
-    def _chunk_vector(self, w: torch.Tensor, by_dimension=0):
-        """Split vector according to specified dimension of operators."""
-        w_chunks = []
-        start_idx = 0
-        for i in range(len(self._A)):
-            end_idx = start_idx + self._A[i].shape[by_dimension]
-            w_chunks.append(w[start_idx:end_idx].cpu())
-            start_idx = end_idx
-        return w_chunks
-
-    def _distribute_tasks(
-        self, w: torch.Tensor, operation: Operation, chunk: bool, by_dimension: int
-    ):
-        # Decide whether to chunk or send full vector
-        if chunk:
-            chunks = self._chunk_vector(w, by_dimension)
-            # Dispatch chunked tasks
-            for i, (linop, w_chunk) in enumerate(zip(self._A, chunks)):
-                self._task_queues[linop.device].put((i, linop, w_chunk, operation))
-        else:
-            # Send full vector to all workers
-            for i, linop in enumerate(self._A):
-                self._task_queues[linop.device].put((i, linop, w.cpu(), operation))
-
-        # Collect results
-        results = [None] * len(self._A)
-        for _ in range(len(self._A)):
-            task_id, result = self._result_queue.get()
-
-            if isinstance(result, Exception):
-                raise RuntimeError(f"Error in worker process: {result}")
-
-            results[task_id] = result
-
-        return results
-
-    def _combine_results(self, results, w, concatenate=True):
-        if concatenate:
-            combined = torch.cat(results, dim=0)
-        else:
-            combined = sum(results)
-
-        return combined.to(w.device)
-
-    def _matvec(self, w: torch.Tensor):
-        if not self._is_transposed:
-            # Normal row-distributed operator: send full vector, concatenate results
-            results = self._distribute_tasks(w, Operation.MATVEC, chunk=False)
-            return self._combine_results(results, w, concatenate=True)
-        else:
-            # Transposed operator: chunk by columns, sum results
-            results = self._distribute_tasks(
-                w, Operation.MATVEC, chunk=True, by_dimension=1
-            )
-            return self._combine_results(results, w, concatenate=False)
-
     def _rmatvec(self, w: torch.Tensor):
-        if not self._is_transposed:
-            # Normal operator: chunk by columns, sum results
+        if self._distribution_mode == DistributionMode.ROW:
+            # Row-distributed operator: chunk by columns, sum results
             results = self._distribute_tasks(
-                w, Operation.RMATVEC, chunk=True, by_dimension=0
+                w, _Operation.RMATVEC, chunk=True, by_dimension=0
             )
             return self._combine_results(results, w, concatenate=False)
-        else:
-            # Transposed operator: send full vector, concatenate results
-            results = self._distribute_tasks(w, Operation.RMATVEC, chunk=False)
+        else:  # COLUMN mode
+            # Column-distributed operator: send full vector, concatenate results
+            results = self._distribute_tasks(w, _Operation.RMATVEC, chunk=False)
             return self._combine_results(results, w, concatenate=True)
 
     def _rmatmat(self, w: torch.Tensor):
@@ -261,6 +254,13 @@ class _BaseDistributedTwoSidedLinOp(_BaseDistributedLinOp):
     @property
     def T(self):
         # Create a transposed view with shared worker processes
+        # When we transpose, we flip the distribution mode
+        transposed_mode = (
+            DistributionMode.COLUMN
+            if self._distribution_mode == DistributionMode.ROW
+            else DistributionMode.ROW
+        )
+
         return _BaseDistributedTwoSidedLinOp(
             shape=torch.Size((self.shape[1], self.shape[0])),
             A=[A.T for A in self._A],
@@ -269,7 +269,7 @@ class _BaseDistributedTwoSidedLinOp(_BaseDistributedLinOp):
             task_queues=self._task_queues,
             workers=self._workers,
             is_new=False,
-            is_transposed=not self._is_transposed,  # Toggle the transposed flag
+            distribution_mode=transposed_mode,
         )
 
 
@@ -286,6 +286,7 @@ class _BaseDistributedSymmetricLinOp(_BaseDistributedTwoSidedLinOp):
         task_queues=None,
         workers=None,
         is_new=True,
+        distribution_mode=DistributionMode.ROW,
     ):
         super().__init__(
             shape=shape,
@@ -295,6 +296,7 @@ class _BaseDistributedSymmetricLinOp(_BaseDistributedTwoSidedLinOp):
             task_queues=task_queues,
             workers=workers,
             is_new=is_new,
+            distribution_mode=distribution_mode,
         )
 
         if self._is_new and shape[0] != shape[1]:
@@ -320,21 +322,39 @@ class _BaseDistributedSymmetricLinOp(_BaseDistributedTwoSidedLinOp):
 class DistributedLinOp(_BaseDistributedLinOp):
     """Distributed linear operator that performs operations across multiple devices."""
 
-    def __init__(self, shape: torch.Size, A: List[LinOp]):
-        super().__init__(shape=shape, A=A, is_new=True)
+    def __init__(
+        self, shape: torch.Size, A: List[LinOp], distribution_mode=DistributionMode.ROW
+    ):
+        super().__init__(
+            shape=shape, A=A, is_new=True, distribution_mode=distribution_mode
+        )
 
 
 class DistributedTwoSidedLinOp(_BaseDistributedTwoSidedLinOp):
     """Distributed two-sided linear operator that performs operations across multiple
     devices."""
 
-    def __init__(self, shape: torch.Size, A: List[TwoSidedLinOp]):
-        super().__init__(shape=shape, A=A, is_new=True)
+    def __init__(
+        self,
+        shape: torch.Size,
+        A: List[TwoSidedLinOp],
+        distribution_mode=DistributionMode.ROW,
+    ):
+        super().__init__(
+            shape=shape, A=A, is_new=True, distribution_mode=distribution_mode
+        )
 
 
 class DistributedSymmetricLinOp(_BaseDistributedSymmetricLinOp):
     """Distributed symmetric linear operator that performs operations across multiple
     devices."""
 
-    def __init__(self, shape: torch.Size, A: List[TwoSidedLinOp]):
-        super().__init__(shape=shape, A=A, is_new=True)
+    def __init__(
+        self,
+        shape: torch.Size,
+        A: List[TwoSidedLinOp],
+        distribution_mode=DistributionMode.ROW,
+    ):
+        super().__init__(
+            shape=shape, A=A, is_new=True, distribution_mode=distribution_mode
+        )
