@@ -1,8 +1,7 @@
 from functools import partial
+from typing import List
 
 import torch
-from torch.multiprocessing import set_start_method
-from typing import List
 
 from rlaopt.linops import (
     LinOp,
@@ -50,11 +49,6 @@ def create_twosided_linop_chunks(matrices: List[torch.Tensor]) -> List[TwoSidedL
 def main():
     n_devices = torch.cuda.device_count() if torch.cuda.is_available() else 1
     num_workers = 4  # Modify based on the number of chunks and available devices
-
-    try:
-        set_start_method("spawn", force=True)
-    except RuntimeError:
-        pass
 
     # ---- Test Row-Distributed Case ----
     print("\n==== Testing Row-Distributed Case ====")

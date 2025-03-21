@@ -1,7 +1,6 @@
 from functools import partial
 
 import torch
-from torch.multiprocessing import set_start_method
 
 from rlaopt.models import LinSys
 from rlaopt.linops import TwoSidedLinOp, DistributedSymmetricLinOp
@@ -30,12 +29,6 @@ def main():
     reg = 1e-6
     n = 10000
     n_chunks = 3
-
-    # start workers
-    try:
-        set_start_method("spawn", force=True)
-    except RuntimeError:
-        pass
 
     # create a symmetric psd matrix A
     eigvals = torch.arange(1, n + 1, device=device) ** -2.0

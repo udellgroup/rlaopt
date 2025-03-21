@@ -2,7 +2,7 @@ from enum import Enum, auto
 from typing import List
 
 import torch
-from torch.multiprocessing import Manager, Process, Queue
+from torch.multiprocessing import Manager, Process, Queue, set_start_method
 
 from rlaopt.utils import _is_list
 from rlaopt.linops.base import _BaseLinOp
@@ -54,6 +54,9 @@ class _BaseDistributedLinOp(_BaseLinOp):
         self._A = A
 
         if self._is_new:
+            # Set the start method for multiprocessing
+            set_start_method("spawn", force=True)
+
             # Create device-specific worker processes
             self._manager = Manager()
             self._result_queue = self._manager.Queue()

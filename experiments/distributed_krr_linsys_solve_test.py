@@ -2,7 +2,6 @@ from functools import partial
 
 from pykeops.torch import LazyTensor
 import torch
-from torch.multiprocessing import set_start_method
 
 from rlaopt.models import LinSys
 from rlaopt.linops import TwoSidedLinOp, DistributedSymmetricLinOp
@@ -73,15 +72,9 @@ def main():
     device = torch.device("cuda:0")
     reg = 1e-8
     n = 100000
-    d = 10
+    d = 100
     sigma = 1.0
-    n_chunks = 3
-
-    # start workers
-    try:
-        set_start_method("spawn", force=True)
-    except RuntimeError:
-        pass
+    n_chunks = 5
 
     # generate synthetic data
     A = torch.randn(n, d, device=device) / (n**0.5)
