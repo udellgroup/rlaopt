@@ -10,37 +10,55 @@ from rlaopt.linops.linops import LinOp, TwoSidedLinOp
 __all__ = ["DistributedLinOp", "DistributedTwoSidedLinOp", "DistributedSymmetricLinOp"]
 
 
-class DistributedLinOp(BaseLinOp):
+class _BaseDistributedLinOp(BaseLinOp):
+    """Base class with implementation details for distributed linear operators."""
+
     def __init__(
         self,
         shape: torch.Size,
         A: List[LinOp],
+        manager=None,
+        result_queue=None,
+        task_queues=None,
+        workers=None,
+        is_new=True,
     ):
         super().__init__(shape=shape)
+        self._is_new = is_new
 
-        _is_list(A, "A")
-        if not all(isinstance(A_i, LinOp) for A_i in A):
-            raise ValueError("All elements of A must be linear operators.")
+        # Validate input
+        if self._is_new:
+            _is_list(A, "A")
+            if not all(isinstance(A_i, LinOp) for A_i in A):
+                raise ValueError("All elements of A must be linear operators.")
+
         self._A = A
 
-        # Create device-specific worker processes
-        self._manager = Manager()
-        self._result_queue = self._manager.Queue()
-        self._tasks_queues = {}
-        self._workers = {}
+        if self._is_new:
+            # Create device-specific worker processes
+            self._manager = Manager()
+            self._result_queue = self._manager.Queue()
+            self._task_queues = {}
+            self._workers = {}
 
-        # Start a dedicated worker for each device
-        for i, linop in enumerate(A):
-            device = linop.device
-            if device not in self._tasks_queues:
-                self._tasks_queues[device] = Queue()
-                worker = Process(
-                    target=self._device_worker,
-                    args=(device, self._tasks_queues[device], self._result_queue),
-                )
-                worker.daemon = True
-                worker.start()
-                self._workers[device] = worker
+            # Start a dedicated worker for each device
+            for linop in A:
+                device = linop.device
+                if device not in self._task_queues:
+                    self._task_queues[device] = Queue()
+                    worker = Process(
+                        target=self._device_worker,
+                        args=(device, self._task_queues[device], self._result_queue),
+                    )
+                    worker.daemon = True
+                    worker.start()
+                    self._workers[device] = worker
+        else:
+            # Use shared resources
+            self._manager = manager
+            self._result_queue = result_queue
+            self._task_queues = task_queues
+            self._workers = workers
 
     @staticmethod
     def _device_worker(device, task_queue, result_queue):
@@ -57,24 +75,39 @@ class DistributedLinOp(BaseLinOp):
             task_id, linop, x, operation = task
             x = x.to(device)
 
-            if operation == "matvec":
-                result = linop @ x
-            elif operation == "rmatvec":
-                result = linop.T @ x
-            else:
-                raise ValueError(f"Unknown operation: {operation}")
+            try:
+                if operation == "matvec":
+                    result = linop @ x
+                elif operation == "rmatvec":
+                    # Check if this linear operator supports transpose operations
+                    if hasattr(linop, "T"):
+                        result = linop.T @ x
+                    else:
+                        raise AttributeError(
+                            "Linear operator does not support transpose operations."
+                        )
+                else:
+                    raise ValueError(f"Unknown operation: {operation}")
 
-            result_queue.put((task_id, result.cpu()))
+                result_queue.put((task_id, result.cpu()))
+            except Exception as e:
+                # Send back the error so the main process can handle it
+                result_queue.put((task_id, e))
 
     def _matvec(self, w: torch.Tensor):
         # Create a task for each linop and send to the appropriate device queue
         for i, linop in enumerate(self._A):
-            self._tasks_queues[linop.device].put((i, linop, w.cpu(), "matvec"))
+            self._task_queues[linop.device].put((i, linop, w.cpu(), "matvec"))
 
         # Collect results
         results = [None] * len(self._A)
         for _ in range(len(self._A)):
             task_id, result = self._result_queue.get()
+
+            # Check if the result is an exception
+            if isinstance(result, Exception):
+                raise RuntimeError(f"Error in worker process: {result}")
+
             results[task_id] = result
 
         # Combine and return
@@ -98,53 +131,140 @@ class DistributedLinOp(BaseLinOp):
 
     def shutdown(self):
         """Shut down worker processes."""
-        for device, queue in self._tasks_queues.items():
-            queue.put(None)  # Signal worker to exit
+        # Only shut down if we own the processes
+        if self._is_new:
+            for device, queue in self._task_queues.items():
+                queue.put(None)  # Signal worker to exit
 
-        for device, worker in self._workers.items():
-            worker.join(timeout=5)
-            if worker.is_alive():
-                worker.terminate()
+            for device, worker in self._workers.items():
+                worker.join(timeout=5)
+                if worker.is_alive():
+                    worker.terminate()
 
 
-class DistributedTwoSidedLinOp(DistributedLinOp):
+class _BaseDistributedTwoSidedLinOp(_BaseDistributedLinOp):
+    """Base class with implementation details for distributed two-sided linear
+    operators."""
+
     def __init__(
         self,
         shape: torch.Size,
         A: List[TwoSidedLinOp],
+        manager=None,
+        result_queue=None,
+        task_queues=None,
+        workers=None,
+        is_new=True,
+        is_transposed=False,  # Flag to indicate if this is a transposed view
     ):
-        super().__init__(shape=shape, A=A)
+        super().__init__(
+            shape=shape,
+            A=A,
+            manager=manager,
+            result_queue=result_queue,
+            task_queues=task_queues,
+            workers=workers,
+            is_new=is_new,
+        )
 
-        if not all(isinstance(A_i, TwoSidedLinOp) for A_i in A):
+        self._is_transposed = is_transposed
+
+        if self._is_new and not all(isinstance(A_i, TwoSidedLinOp) for A_i in A):
             raise ValueError("All elements of A must be two-sided linear operators.")
 
-    def _chunk_vector(self, w: torch.Tensor):
+    def _chunk_vector(self, w: torch.Tensor, by_dimension=0):
+        """Split vector according to specified dimension of operators.
+
+        Args:
+            w: Vector to chunk
+        """
         w_chunks = []
         start_idx = 0
         for i in range(len(self._A)):
-            end_idx = start_idx + self._A[i].shape[0]
-            w_chunks.append(
-                w[start_idx:end_idx].cpu()
-            )  # No need to move to device here
+            end_idx = start_idx + self._A[i].shape[by_dimension]
+            w_chunks.append(w[start_idx:end_idx].cpu())
             start_idx = end_idx
         return w_chunks
 
+    def _matvec(self, w: torch.Tensor):
+        if not self._is_transposed:
+            # Normal row-distributed operator: send full vector to all chunks
+            for i, linop in enumerate(self._A):
+                self._task_queues[linop.device].put((i, linop, w.cpu(), "matvec"))
+
+            # Collect results
+            results = [None] * len(self._A)
+            for _ in range(len(self._A)):
+                task_id, result = self._result_queue.get()
+
+                if isinstance(result, Exception):
+                    raise RuntimeError(f"Error in worker process: {result}")
+
+                results[task_id] = result
+
+            # For row-distributed, we concatenate the results
+            combined = torch.cat(results, dim=0)
+            return combined.to(w.device)
+        else:
+            w_chunks = self._chunk_vector(w, by_dimension=1)
+
+            # Dispatch tasks
+            for i, (linop, w_chunk) in enumerate(zip(self._A, w_chunks)):
+                self._task_queues[linop.device].put((i, linop, w_chunk, "matvec"))
+
+            # Collect results
+            results = [None] * len(self._A)
+            for _ in range(len(self._A)):
+                task_id, result = self._result_queue.get()
+
+                if isinstance(result, Exception):
+                    raise RuntimeError(f"Error in worker process: {result}")
+
+                results[task_id] = result
+
+            # For column-distributed, we sum the results
+            result = sum(results)
+            return result.to(w.device)
+
     def _rmatvec(self, w: torch.Tensor):
-        w_chunks = self._chunk_vector(w)
+        if not self._is_transposed:
+            w_chunks = self._chunk_vector(w, by_dimension=0)
 
-        # Dispatch tasks
-        for i, (linop, w_chunk) in enumerate(zip(self._A, w_chunks)):
-            self._tasks_queues[linop.device].put((i, linop, w_chunk, "rmatvec"))
+            # Dispatch tasks
+            for i, (linop, w_chunk) in enumerate(zip(self._A, w_chunks)):
+                self._task_queues[linop.device].put((i, linop, w_chunk, "rmatvec"))
 
-        # Collect results
-        results = [None] * len(self._A)
-        for _ in range(len(self._A)):
-            task_id, result = self._result_queue.get()
-            results[task_id] = result
+            # Collect results
+            results = [None] * len(self._A)
+            for _ in range(len(self._A)):
+                task_id, result = self._result_queue.get()
 
-        # Sum results and return
-        result = sum(results)
-        return result.to(w.device)
+                if isinstance(result, Exception):
+                    raise RuntimeError(f"Error in worker process: {result}")
+
+                results[task_id] = result
+
+            # For transpose of row-distributed, we sum the results
+            result = sum(results)
+            return result.to(w.device)
+        else:
+            # Transposed (column-distributed) operator: send full vector to all
+            for i, linop in enumerate(self._A):
+                self._task_queues[linop.device].put((i, linop, w.cpu(), "rmatvec"))
+
+            # Collect results
+            results = [None] * len(self._A)
+            for _ in range(len(self._A)):
+                task_id, result = self._result_queue.get()
+
+                if isinstance(result, Exception):
+                    raise RuntimeError(f"Error in worker process: {result}")
+
+                results[task_id] = result
+
+            # For transpose of column-distributed, we concatenate the results
+            combined = torch.cat(results, dim=0)
+            return combined.to(w.device)
 
     def _rmatmat(self, w: torch.Tensor):
         return self._rmatvec(w)
@@ -159,17 +279,44 @@ class DistributedTwoSidedLinOp(DistributedLinOp):
 
     @property
     def T(self):
-        return DistributedTwoSidedLinOp(
+        # Create a transposed view with shared worker processes
+        return _BaseDistributedTwoSidedLinOp(
             shape=torch.Size((self.shape[1], self.shape[0])),
             A=[A.T for A in self._A],
+            manager=self._manager,
+            result_queue=self._result_queue,
+            task_queues=self._task_queues,
+            workers=self._workers,
+            is_new=False,
+            is_transposed=not self._is_transposed,  # Toggle the transposed flag
         )
 
 
-class DistributedSymmetricLinOp(DistributedTwoSidedLinOp):
-    def __init__(self, shape: torch.Size, A: List[TwoSidedLinOp]):
-        super().__init__(shape=shape, A=A)
+class _BaseDistributedSymmetricLinOp(_BaseDistributedTwoSidedLinOp):
+    """Base class with implementation details for distributed symmetric linear
+    operators."""
 
-        if shape[0] != shape[1]:
+    def __init__(
+        self,
+        shape: torch.Size,
+        A: List[TwoSidedLinOp],
+        manager=None,
+        result_queue=None,
+        task_queues=None,
+        workers=None,
+        is_new=True,
+    ):
+        super().__init__(
+            shape=shape,
+            A=A,
+            manager=manager,
+            result_queue=result_queue,
+            task_queues=task_queues,
+            workers=workers,
+            is_new=is_new,
+        )
+
+        if self._is_new and shape[0] != shape[1]:
             raise ValueError(
                 f"DistributedSymmetricLinOp requires the shape to be square. \
                     The received shape is {shape}."
@@ -181,3 +328,32 @@ class DistributedSymmetricLinOp(DistributedTwoSidedLinOp):
 
     def _rmatmat(self, w: torch.Tensor):
         return self._matmat(w)
+
+    @property
+    def T(self):
+        # For symmetric operators, transpose returns self
+        return self
+
+
+# Public classes with simple interfaces
+class DistributedLinOp(_BaseDistributedLinOp):
+    """Distributed linear operator that performs operations across multiple devices."""
+
+    def __init__(self, shape: torch.Size, A: List[LinOp]):
+        super().__init__(shape=shape, A=A, is_new=True)
+
+
+class DistributedTwoSidedLinOp(_BaseDistributedTwoSidedLinOp):
+    """Distributed two-sided linear operator that performs operations across multiple
+    devices."""
+
+    def __init__(self, shape: torch.Size, A: List[TwoSidedLinOp]):
+        super().__init__(shape=shape, A=A, is_new=True)
+
+
+class DistributedSymmetricLinOp(_BaseDistributedSymmetricLinOp):
+    """Distributed symmetric linear operator that performs operations across multiple
+    devices."""
+
+    def __init__(self, shape: torch.Size, A: List[TwoSidedLinOp]):
+        super().__init__(shape=shape, A=A, is_new=True)

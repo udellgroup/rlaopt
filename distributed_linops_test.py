@@ -20,15 +20,6 @@ def rmatvec(x: torch.Tensor, matrix: torch.Tensor) -> torch.Tensor:
     return matrix.T @ x
 
 
-# Helper function to initialize worker devices
-# def initialize_worker(device_id: int, n_devices: int):
-#     if torch.cuda.is_available():
-#         device = device_id % n_devices
-#         torch.cuda.set_device(device)
-#     else:
-#         print(f"Worker {device_id} using CPU")
-
-
 def create_linop_chunks(matrices: List[torch.Tensor]) -> List[LinOp]:
     return [
         LinOp(
@@ -64,13 +55,6 @@ def main():
     except RuntimeError:
         pass
 
-    # Create the pool with device initializers
-    # pool = Pool(
-    #     processes=num_workers,
-    #     initializer=initialize_worker,
-    #     initargs=(list(range(num_workers))[0], n_devices),
-    # )
-
     sizes = torch.arange(1, num_workers + 1) * 1000
 
     # Example matrices for chunks
@@ -90,7 +74,6 @@ def main():
     # Initialize the distributed linear operator
     shape = torch.Size((sum(mat.shape[0] for mat in matrices), matrices[0].shape[1]))
     dist_lin_op = DistributedLinOp(shape=shape, A=linop_chunks)
-    # dist_lin_op = DistributedLinOp(shape=shape, A=linop_chunks, pool=pool)
 
     # Test with a vector
     vector = torch.rand(shape[1]).to("cuda:0" if torch.cuda.is_available() else "cpu")
@@ -116,9 +99,6 @@ def main():
     dist_twosided_lin_op = DistributedTwoSidedLinOp(
         shape=shape, A=twosided_linop_chunks
     )
-    # dist_twosided_lin_op = DistributedTwoSidedLinOp(
-    #     shape=shape, A=twosided_linop_chunks, pool=pool
-    # )
 
     # Test with a vector
     vector = torch.rand(shape[0]).to("cuda:0" if torch.cuda.is_available() else "cpu")
@@ -134,6 +114,20 @@ def main():
     )
     result = matrix @ dist_twosided_lin_op
     result_true = matrix @ torch.cat(matrices_same_device, dim=0)
+    print("Are results equal?", torch.allclose(result, result_true))
+
+    # Test transpose with a vector
+    vector = torch.rand(shape[0]).to("cuda:0" if torch.cuda.is_available() else "cpu")
+    result = dist_twosided_lin_op.T @ vector
+    result_true = torch.cat(matrices_same_device, dim=0).T @ vector
+    print("Are results equal?", torch.allclose(result, result_true))
+
+    # Test transpose with a matrix
+    matrix = torch.rand(shape[0], 2).to(
+        "cuda:0" if torch.cuda.is_available() else "cpu"
+    )
+    result = dist_twosided_lin_op.T @ matrix
+    result_true = torch.cat(matrices_same_device, dim=0).T @ matrix
     print("Are results equal?", torch.allclose(result, result_true))
 
     del dist_twosided_lin_op

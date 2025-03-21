@@ -105,3 +105,8 @@ class SymmetricLinOp(TwoSidedLinOp):
                 f"SymmetricLinOp requires the shape to be square. \
                     The received shape is {shape}."
             )
+
+    @property
+    def T(self):
+        # For symmetric operators, transpose returns self
+        return self
