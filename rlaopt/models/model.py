@@ -24,9 +24,29 @@ class Model(ABC):
     def _check_termination_criteria(self, *args, **kwargs):
         pass
 
-    @abstractmethod
-    def _get_log_fn(self, *args, **kwargs):
-        pass
+    def _get_log_fn(
+        self,
+        callback_fn: Optional[Callable],
+        callback_args: Optional[list],
+        callback_kwargs: Optional[dict],
+    ):
+        if callback_fn is not None:
+
+            def log_fn(w):
+                callback_log = callback_fn(w, self, *callback_args, **callback_kwargs)
+                internal_metrics_log = self._compute_internal_metrics(w)
+                return {
+                    "callback": callback_log,
+                    "internal_metrics": internal_metrics_log,
+                }
+
+        else:
+
+            def log_fn(w):
+                internal_metrics_log = self._compute_internal_metrics(w)
+                return {"internal_metrics": internal_metrics_log}
+
+        return log_fn
 
     def _get_wandb_kwargs(
         self,

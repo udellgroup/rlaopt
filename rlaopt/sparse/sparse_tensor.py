@@ -1,4 +1,4 @@
-from typing import Optional, Tuple, Union
+from typing import Optional, Union
 
 import scipy.sparse
 import torch
@@ -18,7 +18,7 @@ class _SparseTensor:
         return self._data
 
     @property
-    def shape(self) -> Tuple[int, int]:
+    def shape(self) -> torch.Size:
         return self.data.shape
 
     @property

@@ -1,36 +1,32 @@
-from abc import ABC
 from typing import Callable, Optional
 
 import torch
 from torch import vmap
 
+from rlaopt.utils.input_checkers import (
+    _is_callable,
+    _is_torch_device,
+)
+from rlaopt.linops.base import _BaseLinOp
 
-def _check_shape(shape: tuple[int, int]):
-    if not isinstance(shape, tuple):
-        raise ValueError(f"shape must be a tuple. Received {type(shape)}")
-    if len(shape) != 2:
-        raise ValueError(f"shape must have two elements. Received {len(shape)}")
-    if not all(isinstance(i, int) and i > 0 for i in shape):
-        raise ValueError(f"shape must contain positive integers. Received {shape}")
-
-
-def _check_callable(func: Callable, name: str):
-    if not callable(func):
-        raise ValueError(f"{name} must be a callable. Received {type(func)}")
+__all__ = ["LinOp", "TwoSidedLinOp", "SymmetricLinOp"]
 
 
-class LinOp(ABC):
+class LinOp(_BaseLinOp):
     def __init__(
         self,
-        shape: tuple[int, int],
+        device: torch.device,
+        shape: torch.Size,
         matvec: Callable,
         matmat: Optional[Callable] = None,
     ):
-        _check_shape(shape)
-        _check_callable(matvec, "matvec")
+        super().__init__(shape=shape)
+        _is_torch_device(device, "device")
+        _is_callable(matvec, "matvec")
         if matmat is not None:
-            _check_callable(matmat, "matmat")
+            _is_callable(matmat, "matmat")
 
+        self._device = device
         self._shape = shape
         self._matvec = matvec
 
@@ -40,8 +36,8 @@ class LinOp(ABC):
             self._matmat = matmat
 
     @property
-    def shape(self):
-        return self._shape
+    def device(self):
+        return self._device
 
     def __matmul__(self, x: torch.Tensor):
         if x.ndim == 1:
@@ -55,22 +51,18 @@ class LinOp(ABC):
 class TwoSidedLinOp(LinOp):
     def __init__(
         self,
-        shape: tuple[int, int],
+        device: torch.device,
+        shape: torch.Size,
         matvec: Callable,
         rmatvec: Callable,
         matmat: Optional[Callable] = None,
         rmatmat: Optional[Callable] = None,
     ):
-        # TODO(pratik): eliminate redundancy in the checks
-        _check_shape(shape)
-        _check_callable(matvec, "matvec")
-        _check_callable(rmatvec, "rmatvec")
-        if matmat is not None:
-            _check_callable(matmat, "matmat")
-        if rmatmat is not None:
-            _check_callable(rmatmat, "rmatmat")
+        super().__init__(device, shape, matvec, matmat)
 
-        super().__init__(shape, matvec, matmat)
+        _is_callable(rmatvec, "rmatvec")
+        if rmatmat is not None:
+            _is_callable(rmatmat, "rmatmat")
 
         self._rmatvec = rmatvec
         if rmatmat is None:
@@ -80,31 +72,41 @@ class TwoSidedLinOp(LinOp):
 
     def __rmatmul__(self, x: torch.Tensor):
         if x.ndim == 1:
-            x = x.unsqueeze(1)
+            x = x.unsqueeze(0)
             result = self._rmatvec(x.T).T
-            return result.squeeze(1)
+            return result.squeeze(0)
         elif x.ndim == 2:
             return self._rmatmat(x.T).T
 
     @property
     def T(self):
         return TwoSidedLinOp(
-            shape=(self.shape[1], self.shape[0]),
+            device=self.device,
+            shape=torch.Size((self.shape[1], self.shape[0])),
             matvec=self._rmatvec,
             rmatvec=self._matvec,
+            matmat=self._rmatmat,
+            rmatmat=self._matmat,
         )
 
 
 class SymmetricLinOp(TwoSidedLinOp):
     def __init__(
         self,
-        shape: tuple[int, int],
+        device: torch.device,
+        shape: torch.Size,
         matvec: Callable,
         matmat: Optional[Callable] = None,
     ):
+        super().__init__(device, shape, matvec, matvec, matmat, matmat)
+
         if shape[0] != shape[1]:
             raise ValueError(
                 f"SymmetricLinOp requires the shape to be square. \
                     The received shape is {shape}."
             )
-        super().__init__(shape, matvec, matvec, matmat, matmat)
+
+    @property
+    def T(self):
+        # For symmetric operators, transpose returns self
+        return self
