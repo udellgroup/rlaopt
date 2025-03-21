@@ -1,3 +1,4 @@
+from enum import Enum, auto
 from typing import List
 
 import torch
@@ -7,7 +8,13 @@ from rlaopt.utils import _is_list
 from rlaopt.linops.base_linop import BaseLinOp
 from rlaopt.linops.linops import LinOp, TwoSidedLinOp
 
+
 __all__ = ["DistributedLinOp", "DistributedTwoSidedLinOp", "DistributedSymmetricLinOp"]
+
+
+class Operation(Enum):
+    MATVEC = auto()
+    RMATVEC = auto()
 
 
 class _BaseDistributedLinOp(BaseLinOp):
@@ -76,9 +83,9 @@ class _BaseDistributedLinOp(BaseLinOp):
             x = x.to(device)
 
             try:
-                if operation == "matvec":
+                if operation == Operation.MATVEC:
                     result = linop @ x
-                elif operation == "rmatvec":
+                elif operation == Operation.RMATVEC:
                     # Check if this linear operator supports transpose operations
                     if hasattr(linop, "T"):
                         result = linop.T @ x
@@ -97,7 +104,7 @@ class _BaseDistributedLinOp(BaseLinOp):
     def _matvec(self, w: torch.Tensor):
         # Create a task for each linop and send to the appropriate device queue
         for i, linop in enumerate(self._A):
-            self._task_queues[linop.device].put((i, linop, w.cpu(), "matvec"))
+            self._task_queues[linop.device].put((i, linop, w.cpu(), Operation.MATVEC))
 
         # Collect results
         results = [None] * len(self._A)
@@ -183,7 +190,7 @@ class _BaseDistributedTwoSidedLinOp(_BaseDistributedLinOp):
         return w_chunks
 
     def _distribute_tasks(
-        self, w: torch.Tensor, operation, chunk: bool, by_dimension: int
+        self, w: torch.Tensor, operation: Operation, chunk: bool, by_dimension: int
     ):
         # Decide whether to chunk or send full vector
         if chunk:
@@ -219,21 +226,25 @@ class _BaseDistributedTwoSidedLinOp(_BaseDistributedLinOp):
     def _matvec(self, w: torch.Tensor):
         if not self._is_transposed:
             # Normal row-distributed operator: send full vector, concatenate results
-            results = self._distribute_tasks(w, "matvec", chunk=False)
+            results = self._distribute_tasks(w, Operation.MATVEC, chunk=False)
             return self._combine_results(results, w, concatenate=True)
         else:
             # Transposed operator: chunk by columns, sum results
-            results = self._distribute_tasks(w, "matvec", chunk=True, by_dimension=1)
+            results = self._distribute_tasks(
+                w, Operation.MATVEC, chunk=True, by_dimension=1
+            )
             return self._combine_results(results, w, concatenate=False)
 
     def _rmatvec(self, w: torch.Tensor):
         if not self._is_transposed:
             # Normal operator: chunk by columns, sum results
-            results = self._distribute_tasks(w, "rmatvec", chunk=True, by_dimension=0)
+            results = self._distribute_tasks(
+                w, Operation.RMATVEC, chunk=True, by_dimension=0
+            )
             return self._combine_results(results, w, concatenate=False)
         else:
             # Transposed operator: send full vector, concatenate results
-            results = self._distribute_tasks(w, "rmatvec", chunk=False)
+            results = self._distribute_tasks(w, Operation.RMATVEC, chunk=False)
             return self._combine_results(results, w, concatenate=True)
 
     def _rmatmat(self, w: torch.Tensor):
