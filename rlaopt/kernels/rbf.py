@@ -1,10 +1,6 @@
-from functools import partial
-
 from pykeops.torch import LazyTensor
 import torch
 
-from rlaopt.linops import LinOp, DistributionMode
-from rlaopt.linops.distributed import _DistributedLinOp
 from rlaopt.kernels.base import (
     KernelLinOp,
     _CacheableKernelLinOp,
@@ -106,43 +102,8 @@ class DistributedRBFLinOp(DistributedKernelLinOp):
             )
         return ops
 
-    def row_oracle(self, blk):
-        # Create operators for each device
-        row_ops = []
-        for i, device in enumerate(self.devices):
-            A_chunk = self.A_chunks[i]
-            kernel_params = self.kernel_params
-            A_mat = self.A_mat  # Capture these variables explicitly
-
-            matvec_fn = partial(
-                _rbf_row_oracle_matvec,
-                A_mat=A_mat,
-                row_idx=blk,
-                A_chunk=A_chunk,
-                kernel_params=kernel_params,
-            )
-
-            # Create a LinOp with the matvec function
-            row_ops.append(
-                LinOp(
-                    device=device,
-                    shape=torch.Size((blk.shape[0], A_chunk.shape[0])),
-                    matvec=matvec_fn,
-                    matmat=matvec_fn,
-                )
-            )
-
-        # Create a distributed operator that reuses our workers
-        return _DistributedLinOp(
-            shape=torch.Size((blk.shape[0], self.A_mat.shape[0])),
-            A=row_ops,
-            distribution_mode=DistributionMode.COLUMN,
-            manager=self._manager,
-            result_queue=self._result_queue,
-            task_queues=self._task_queues,
-            workers=self._workers,
-            is_new=False,  # Important: reuse existing workers
-        )
+    def _get_row_oracle_matvec_fn(self):
+        return _rbf_row_oracle_matvec
 
     def _blk_oracle_matvec(
         self, x: torch.Tensor, blk_idx: torch.Tensor
