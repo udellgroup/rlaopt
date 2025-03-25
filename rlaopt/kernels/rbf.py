@@ -14,6 +14,7 @@ from rlaopt.linops import (
     DistributedSymmetricLinOp,
 )
 from rlaopt.linops.distributed import _DistributedLinOp
+from rlaopt.kernels.base import _KernelLinOp
 
 __all__ = ["RBFLinOp", "DistributedRBFLinOp"]
 
@@ -23,68 +24,20 @@ _KERNEL_CACHE: Dict[str, LazyTensor] = {}
 _LAZY_TENSOR_CACHE: Dict[str, LazyTensor] = {}
 
 
-def _matvec(x: torch.Tensor, K: LazyTensor):
-    return K @ x
+class RBFLinOp(_KernelLinOp):
+    def __init__(self, A, kernel_params):
+        super().__init__(A=A, kernel_params=kernel_params)
 
+    def _check_kernel_params(self, kernel_params):
+        if "sigma" not in kernel_params:
+            raise ValueError("Kernel parameters must include 'sigma'.")
+        if not isinstance(kernel_params["sigma"], float):
+            raise ValueError("Kernel parameter 'sigma' must be a float.")
 
-class RBFLinOp(SymmetricLinOp):
-    def __init__(self, A: torch.Tensor, sigma: float):
-        """Initialize the RBF kernel.
-
-        Args:
-            A (torch.Tensor): The input data.
-            sigma (float): The bandwidth parameter for the RBF kernel.
-        """
-        self.A = A
-        self.sigma = sigma
-        K = self._get_K()
-        super().__init__(
-            device=A.device,
-            shape=torch.Size((A.shape[0], A.shape[0])),
-            matvec=partial(_matvec, K=K),
-            matmat=partial(_matvec, K=K),
-        )
-
-    def _get_K(
-        self,
-        idx1: torch.Tensor = None,
-        idx2: torch.Tensor = None,
-    ):
-        if idx1 is None:
-            Ai_lazy = LazyTensor(self.A[:, None, :])
-        else:
-            Ai_lazy = LazyTensor(self.A[idx1][:, None, :])
-
-        if idx2 is None:
-            Aj_lazy = LazyTensor(self.A[None, :, :])
-        else:
-            Aj_lazy = LazyTensor(self.A[idx2][None, :, :])
-
+    def _kernel_formula(self, Ai_lazy, Aj_lazy):
         D = ((Ai_lazy - Aj_lazy) ** 2).sum(dim=2)
-        K = (-D / (2 * self.sigma**2)).exp()
-        return K
-
-    def _get_K_linop(
-        self,
-        idx1: torch.Tensor = None,
-        idx2: torch.Tensor = None,
-        symmetric: bool = False,
-    ):
-        K = self._get_K(idx1=idx1, idx2=idx2)
-        linop_class = SymmetricLinOp if symmetric else LinOp
-        K_linop = linop_class(
-            device=self.A.device,
-            shape=torch.Size(K.shape),
-            matvec=lambda x: K @ x,
-            matmat=lambda x: K @ x,
-        )
-        return K_linop
-
-    def row_oracle(self, blk: torch.Tensor):
-        return self._get_K_linop(idx1=blk, symmetric=False)
-
-    def blk_oracle(self, blk: torch.Tensor):
-        return self._get_K_linop(idx1=blk, idx2=blk, symmetric=True)
+        K_lazy = (-D / (2 * self.kernel_params["sigma"] ** 2)).exp()
+        return K_lazy
 
 
 class _CacheableRBFLinOp(TwoSidedLinOp):
