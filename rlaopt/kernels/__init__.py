@@ -1,7 +1,7 @@
 import importlib
 
 modules_to_import = [
-    "rlaopt.kernels.rbf",
+    "rlaopt.kernels.standard",
 ]
 
 __all__ = []
