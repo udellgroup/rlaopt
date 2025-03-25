@@ -1,7 +1,9 @@
 from rlaopt.utils.input_checkers import (
     _is_bool,
     _is_callable,
+    _is_dict,
     _is_list,
+    _is_set,
     _is_str,
     _is_torch_device,
     _is_torch_size,
@@ -17,7 +19,9 @@ from rlaopt.utils.wandb_ import set_wandb_api_key
 __all__ = [
     "_is_bool",
     "_is_callable",
+    "_is_dict",
     "_is_list",
+    "_is_set",
     "_is_str",
     "_is_torch_device",
     "_is_torch_size",

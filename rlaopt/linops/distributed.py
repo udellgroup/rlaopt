@@ -64,7 +64,7 @@ class _DistributedLinOp(_BaseLinOp):
             self._workers = {}
 
             # Start a dedicated worker for each device
-            for linop in A:
+            for linop in self._A:
                 device = linop.device
                 if device not in self._task_queues:
                     self._task_queues[device] = Queue()
