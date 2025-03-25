@@ -187,17 +187,28 @@ class _CacheableKernelLinOp(TwoSidedLinOp):
 
 
 def _get_cached_lazy_tensor(A: torch.Tensor) -> LazyTensor:
-    """Get a cached LazyTensor or create a new one."""
+    """Get a cached LazyTensor or create a new one.
+
+    This is used in the row oracle to avoid recomputing the LazyTensor for each call.
+    The input is one of the chunks of the original matrix.
+    """
     global _LAZY_TENSOR_CACHE
 
     pid = os.getpid()
-    cache_key = f"{pid}_lazy_{id(A)}_{A.device}"
+    # Use data_ptr() to ensure unique key for each tensor
+    # A.shape and A.device are also added for safety
+    cache_key = f"{pid}_lazy_{A.data_ptr()}_{A.shape}_{A.device}"
+
+    # print(f"[PID {pid}] Cache key: {cache_key}")
+
+    # if cache_key not in _LAZY_TENSOR_CACHE:
+    #     _LAZY_TENSOR_CACHE[cache_key] = LazyTensor(A[None, :, :])
+    #     print(f"[PID {pid}] Created new LazyTensor for device {A.device}")
+    # else:
+    #     print(f"[PID {pid}] Using cached LazyTensor for device {A.device}")
 
     if cache_key not in _LAZY_TENSOR_CACHE:
         _LAZY_TENSOR_CACHE[cache_key] = LazyTensor(A[None, :, :])
-        print(f"[PID {pid}] Created new LazyTensor for device {A.device}")
-    else:
-        print(f"[PID {pid}] Using cached LazyTensor for device {A.device}")
 
     return _LAZY_TENSOR_CACHE[cache_key]
 
