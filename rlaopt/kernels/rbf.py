@@ -3,12 +3,14 @@ import torch
 
 from rlaopt.kernels.base import (
     KernelLinOp,
-    _CacheableKernelLinOp,
     DistributedKernelLinOp,
     _get_cached_lazy_tensor,
 )
 
 __all__ = ["RBFLinOp", "DistributedRBFLinOp"]
+
+
+_CACHEABLE_KERNEL_NAME = "rbf"
 
 
 def _check_kernel_params(kernel_params):
@@ -46,29 +48,11 @@ def _row_oracle_matvec(
 
 class RBFLinOp(KernelLinOp):
     def __init__(self, A, kernel_params):
-        super().__init__(A=A, kernel_params=kernel_params)
-
-    def _check_kernel_params(self, kernel_params):
-        _check_kernel_params(kernel_params)
-
-    def _kernel_computation(self, Ai_lazy, Aj_lazy):
-        return _kernel_computation(
-            Ai_lazy=Ai_lazy, Aj_lazy=Aj_lazy, kernel_params=self.kernel_params
-        )
-
-
-class _CacheableRBFLinOp(_CacheableKernelLinOp):
-    def __init__(self, A, kernel_params, chunk_idx, device):
         super().__init__(
-            A=A, kernel_params=kernel_params, chunk_idx=chunk_idx, device=device
-        )
-
-    def _kernel_name(self):
-        return "rbf_kernel"
-
-    def _kernel_computation(self, Ab_lazy, A_lazy):
-        return _kernel_computation(
-            Ai_lazy=Ab_lazy, Aj_lazy=A_lazy, kernel_params=self.kernel_params
+            A=A,
+            kernel_params=kernel_params,
+            _check_kernel_params_fn=_check_kernel_params,
+            _kernel_computation_fn=_kernel_computation,
         )
 
 
@@ -85,22 +69,12 @@ class DistributedRBFLinOp(DistributedKernelLinOp):
     ):
         """Initialize the distributed RBF linear operator."""
         super().__init__(
-            cacheable_kernel_class=_CacheableRBFLinOp,
             A=A,
             kernel_params=kernel_params,
             devices=devices,
             compute_device=compute_device,
+            _check_kernel_params_fn=_check_kernel_params,
+            _kernel_computation_fn=_kernel_computation,
+            _row_oracle_matvec_fn=_row_oracle_matvec,
+            _cacheable_kernel_name=_CACHEABLE_KERNEL_NAME,
         )
-
-    def _check_kernel_params(self, kernel_params):
-        _check_kernel_params(kernel_params)
-
-    def _get_row_oracle_matvec_fn(self):
-        return _row_oracle_matvec
-
-    def _blk_oracle_matvec(self, x, Abi_lazy, Abj_lazy):
-        """Compute RBF kernel matrix-vector product for block oracle."""
-        K_lazy = _kernel_computation(
-            Ai_lazy=Abi_lazy, Aj_lazy=Abj_lazy, kernel_params=self.kernel_params
-        )
-        return K_lazy @ x

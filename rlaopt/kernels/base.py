@@ -1,7 +1,6 @@
-from abc import ABC, abstractmethod
 from functools import partial
 import os
-from typing import Any, Dict, Optional, Set
+from typing import Any, Callable, Dict, Optional, Set
 
 from pykeops.torch import LazyTensor
 import torch
@@ -22,17 +21,25 @@ _KERNEL_CACHE: Dict[str, LazyTensor] = {}
 _LAZY_TENSOR_CACHE: Dict[str, LazyTensor] = {}
 
 
-class KernelLinOp(SymmetricLinOp, ABC):
-    def __init__(self, A: torch.Tensor, kernel_params: Dict[str, Any]):
+class KernelLinOp(SymmetricLinOp):
+    def __init__(
+        self,
+        A: torch.Tensor,
+        kernel_params: Dict[str, Any],
+        _check_kernel_params_fn: Callable,
+        _kernel_computation_fn: Callable,
+    ):
+        self._check_kernel_params = _check_kernel_params_fn
         self._check_inputs(A, kernel_params)
         self._A = A
         self._kernel_params = kernel_params
+        self._kernel_computation = _kernel_computation_fn
         self._K_lazy = self._get_kernel()
         super().__init__(
             device=A.device,
             shape=torch.Size((A.shape[0], A.shape[0])),
-            matvec=lambda x: self.K_lazy @ x,
-            matmat=lambda x: self.K_lazy @ x,
+            matvec=lambda x: self._K_lazy @ x,
+            matmat=lambda x: self._K_lazy @ x,
         )
 
     @property
@@ -43,22 +50,12 @@ class KernelLinOp(SymmetricLinOp, ABC):
     def kernel_params(self) -> Dict[str, Any]:
         return self._kernel_params
 
-    @abstractmethod
-    def _check_kernel_params(self, kernel_params: Any):
-        pass
-
     def _check_inputs(self, A: Any, kernel_params: Any):
         _is_torch_tensor(A, "A")
         if A.ndim != 2:
             raise ValueError(f"A must be a 2D tensor, got {A.ndim}D tensor.")
         _is_dict(kernel_params, "kernel_params")
         self._check_kernel_params(kernel_params)
-
-    @abstractmethod
-    def _kernel_computation(
-        self, Ai_lazy: LazyTensor, Aj_lazy: LazyTensor
-    ) -> LazyTensor:
-        pass
 
     def _get_kernel(
         self, idx1: Optional[torch.Tensor] = None, idx2: Optional[torch.Tensor] = None
@@ -73,7 +70,7 @@ class KernelLinOp(SymmetricLinOp, ABC):
         else:
             Aj_lazy = LazyTensor(self.A[idx2][None, :, :])
 
-        K_lazy = self._kernel_computation(Ai_lazy, Aj_lazy)
+        K_lazy = self._kernel_computation(Ai_lazy, Aj_lazy, self.kernel_params)
         return K_lazy
 
     def _get_kernel_linop(
@@ -98,7 +95,7 @@ class KernelLinOp(SymmetricLinOp, ABC):
         return self._get_kernel_linop(idx1=blk, idx2=blk, symmetric=True)
 
 
-class _CacheableKernelLinOp(TwoSidedLinOp, ABC):
+class _CacheableKernelLinOp(TwoSidedLinOp):
     """Private implementation of Kernel linear operator with caching."""
 
     def __init__(
@@ -107,12 +104,15 @@ class _CacheableKernelLinOp(TwoSidedLinOp, ABC):
         kernel_params: Dict[str, Any],
         chunk_idx: torch.Tensor,
         device: torch.device,
+        _kernel_computation_fn: Callable,
+        _kernel_name: str,
     ):
         self._A = A.to(device)
         self._kernel_params = kernel_params
         self._chunk_idx = chunk_idx
+        self._kernel_computation = _kernel_computation_fn
         self._unique_id = (
-            f"{self._kernel_name()}_{id(self)}_{len(A)}_{kernel_params}_{A.device}"
+            f"{_kernel_name}_{id(self)}_{len(A)}_{kernel_params}_{A.device}"
         )
 
         super().__init__(
@@ -136,20 +136,10 @@ class _CacheableKernelLinOp(TwoSidedLinOp, ABC):
     def chunk_idx(self) -> torch.Tensor:
         return self._chunk_idx
 
-    @abstractmethod
-    def _kernel_name(self) -> str:
-        pass
-
     def _get_lazy_tensors(self):
         Ab_lazy = LazyTensor(self.A[self.chunk_idx][:, None, :])
         A_lazy = LazyTensor(self.A[None, :, :])
         return Ab_lazy, A_lazy
-
-    @abstractmethod
-    def _kernel_computation(
-        self, Ai_lazy: LazyTensor, Aj_lazy: LazyTensor
-    ) -> LazyTensor:
-        pass
 
     def _get_kernel(self):
         """Get the cached kernel or compute it if not present."""
@@ -164,7 +154,9 @@ class _CacheableKernelLinOp(TwoSidedLinOp, ABC):
 
             # Compute kernel and store in the global cache
             Ab_lazy, A_lazy = self._get_lazy_tensors()
-            _KERNEL_CACHE[cache_key] = self._kernel_computation(Ab_lazy, A_lazy)
+            _KERNEL_CACHE[cache_key] = self._kernel_computation(
+                Ab_lazy, A_lazy, self.kernel_params
+            )
 
             print(f"[PID {pid}] Kernel cached. Cache size: {len(_KERNEL_CACHE)}")
         else:
@@ -207,16 +199,19 @@ def _get_cached_lazy_tensor(A: torch.Tensor) -> LazyTensor:
     return _LAZY_TENSOR_CACHE[cache_key]
 
 
-class DistributedKernelLinOp(DistributedSymmetricLinOp, ABC):
+class DistributedKernelLinOp(DistributedSymmetricLinOp):
     """Abstract base class for distributed kernel linear operators."""
 
     def __init__(
         self,
-        cacheable_kernel_class: _CacheableKernelLinOp,
         A: torch.Tensor,
         kernel_params: Dict[str, Any],
         devices: Set[torch.device],
-        compute_device: Optional[torch.device] = None,
+        compute_device: Optional[torch.device],
+        _check_kernel_params_fn: Callable,
+        _kernel_computation_fn: Callable,
+        _row_oracle_matvec_fn: Callable,
+        _cacheable_kernel_name: str,
     ):
         """Initialize the distributed kernel linear operator.
 
@@ -234,8 +229,11 @@ class DistributedKernelLinOp(DistributedSymmetricLinOp, ABC):
         print(f"Initialized with clean caches. PID: {os.getpid()}")
 
         # Save parameters
+        self._check_kernel_params = _check_kernel_params_fn
         self._check_inputs(A, kernel_params, devices, compute_device)
-        self.cacheable_kernel_class = cacheable_kernel_class
+        self._kernel_computation = _kernel_computation_fn
+        self._row_oracle_matvec = _row_oracle_matvec_fn
+        self._cacheable_kernel_name = _cacheable_kernel_name
         self._A_mat = A  # Keep original tensor for oracles
         self._kernel_params = kernel_params
         self.devices = list(devices)
@@ -273,10 +271,6 @@ class DistributedKernelLinOp(DistributedSymmetricLinOp, ABC):
     def kernel_params(self) -> Dict[str, Any]:
         return self._kernel_params
 
-    @abstractmethod
-    def _check_kernel_params(self, kernel_params: Any):
-        pass
-
     def _check_inputs(
         self,
         A: Any,
@@ -308,35 +302,25 @@ class DistributedKernelLinOp(DistributedSymmetricLinOp, ABC):
         ops = []
         for device, chunk_idx in zip(self.devices, self.A_row_chunks):
             ops.append(
-                self.cacheable_kernel_class(
+                _CacheableKernelLinOp(
                     A=self.A_mat,
                     kernel_params=self.kernel_params,
                     chunk_idx=chunk_idx,
                     device=device,
+                    _kernel_computation_fn=self._kernel_computation,
+                    _kernel_name=self._cacheable_kernel_name,
                 )
             )
         return ops
 
-    @abstractmethod
-    def _get_row_oracle_matvec_fn(self) -> callable:
-        """Return the kernel-specific row oracle matvec function.
-
-        This should return a standalone function that implements the kernel-specific
-        matrix-vector product for the row oracle.
-        """
-        pass
-
     def row_oracle(self, blk: torch.Tensor) -> DistributedLinOp:
         """Generic implementation of row oracle for all kernel types."""
-        # Get the kernel-specific matvec function
-        row_oracle_matvec_fn = self._get_row_oracle_matvec_fn()
-
         # Create operators for each device
         row_ops = []
         for device, A_chunk in zip(self.devices, self.A_chunks):
             # Create matvec function with kernel-specific implementation
             matvec_fn = partial(
-                row_oracle_matvec_fn,
+                self._row_oracle_matvec,
                 A_mat=self.A_mat,
                 row_idx=blk,
                 A_chunk=A_chunk,
@@ -378,12 +362,11 @@ class DistributedKernelLinOp(DistributedSymmetricLinOp, ABC):
         Abj_lazy = LazyTensor(A_blk[None, :, :])
         return Abi_lazy, Abj_lazy
 
-    @abstractmethod
-    def _blk_oracle_matvec(
-        self, x: torch.Tensor, Abi_lazy: LazyTensor, Abj_lazy: LazyTensor
-    ) -> torch.Tensor:
+    def _blk_oracle_matvec(self, x: torch.Tensor, blk: torch.Tensor) -> torch.Tensor:
         """Compute kernel matrix-vector product for block oracle."""
-        pass
+        Abi_lazy, Abj_lazy = self._get_blk_lazy_tensors(blk)
+        K_lazy = self._kernel_computation(Abi_lazy, Abj_lazy, self.kernel_params)
+        return K_lazy @ x
 
     def blk_oracle(self, blk: torch.Tensor) -> SymmetricLinOp:
         """Get a symmetric operator for a block.
@@ -395,10 +378,7 @@ class DistributedKernelLinOp(DistributedSymmetricLinOp, ABC):
             A symmetric linear operator for the specified block
         """
         # Get the lazy tensors for the block
-        Abi_lazy, Abj_lazy = self._get_blk_lazy_tensors(blk)
-        blk_matvec = partial(
-            self._blk_oracle_matvec, Abi_lazy=Abi_lazy, Abj_lazy=Abj_lazy
-        )
+        blk_matvec = partial(self._blk_oracle_matvec, blk=blk)
 
         return SymmetricLinOp(
             device=self.compute_device,

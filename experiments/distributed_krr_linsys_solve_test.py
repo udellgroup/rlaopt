@@ -22,6 +22,8 @@ def main():
     sigma = 1.0
     n_chunks = 5
 
+    kernel_params = {"sigma": sigma}
+
     # generate synthetic data
     A = torch.randn(n, d, device=device) / (n**0.5)
     b = torch.randn(n, device=device)
@@ -30,7 +32,7 @@ def main():
 
     dist_lin_op = DistributedRBFLinOp(
         A=A,
-        kernel_params={"sigma": sigma},
+        kernel_params=kernel_params,
         devices=devices,
     )
 
@@ -60,7 +62,7 @@ def main():
     # now do it without distribution
     lin_op = RBFLinOp(
         A=A,
-        sigma=sigma,
+        kernel_params=kernel_params,
     )
     system = LinSys(A=lin_op, b=b, reg=reg)
     system.solve(
