@@ -43,12 +43,14 @@ def _kernel_computation_laplace(Ai_lazy, Aj_lazy, kernel_params):
 
 
 def _kernel_computation_matern12(Ai_lazy, Aj_lazy, kernel_params):
+    """Compute Matern-1/2 kernel matrix."""
     D = _get_D_matern(Ai_lazy, Aj_lazy)
     K_lazy = (-D / kernel_params["sigma"]).exp()
     return K_lazy
 
 
 def _kernel_computation_matern32(Ai_lazy, Aj_lazy, kernel_params):
+    """Compute Matern-3/2 kernel matrix."""
     D = _get_D_matern(Ai_lazy, Aj_lazy)
     D_adj = (3**0.5) * D / kernel_params["sigma"]
     K_lazy = (1 + D_adj) * (-D_adj).exp()
@@ -56,6 +58,7 @@ def _kernel_computation_matern32(Ai_lazy, Aj_lazy, kernel_params):
 
 
 def _kernel_computation_matern52(Ai_lazy, Aj_lazy, kernel_params):
+    """Compute Matern-5/2 kernel matrix."""
     D = _get_D_matern(Ai_lazy, Aj_lazy)
     D_adj = (5**0.5) * D / kernel_params["sigma"]
     K_lazy = (1 + D_adj + 5 * D**2 / (3 * kernel_params["sigma"] ** 2)) * (
