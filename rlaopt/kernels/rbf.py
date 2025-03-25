@@ -7,14 +7,13 @@ import torch
 
 from rlaopt.linops import (
     LinOp,
-    TwoSidedLinOp,
     SymmetricLinOp,
     DistributionMode,
     DistributedLinOp,
     DistributedSymmetricLinOp,
 )
 from rlaopt.linops.distributed import _DistributedLinOp
-from rlaopt.kernels.base import _KernelLinOp
+from rlaopt.kernels.base import KernelLinOp, _CacheableKernelLinOp
 
 __all__ = ["RBFLinOp", "DistributedRBFLinOp"]
 
@@ -24,7 +23,7 @@ _KERNEL_CACHE: Dict[str, LazyTensor] = {}
 _LAZY_TENSOR_CACHE: Dict[str, LazyTensor] = {}
 
 
-class RBFLinOp(_KernelLinOp):
+class RBFLinOp(KernelLinOp):
     def __init__(self, A, kernel_params):
         super().__init__(A=A, kernel_params=kernel_params)
 
@@ -34,86 +33,27 @@ class RBFLinOp(_KernelLinOp):
         if not isinstance(kernel_params["sigma"], float):
             raise ValueError("Kernel parameter 'sigma' must be a float.")
 
-    def _kernel_formula(self, Ai_lazy, Aj_lazy):
+    def _kernel_computation(self, Ai_lazy, Aj_lazy):
         D = ((Ai_lazy - Aj_lazy) ** 2).sum(dim=2)
         K_lazy = (-D / (2 * self.kernel_params["sigma"] ** 2)).exp()
         return K_lazy
 
 
-class _CacheableRBFLinOp(TwoSidedLinOp):
-    """Private implementation of RBF linear operator with caching."""
-
-    def __init__(
-        self,
-        A: torch.Tensor,
-        chunk_idx: torch.Tensor,
-        sigma: float,
-        device: torch.device,
-    ):
-        """Initialize the RBF kernel operator."""
-        # Store the parameters needed to compute kernels
-        self.A = A.to(device)
-        self.chunk_idx = chunk_idx
-        self.sigma = sigma
-
-        # Generate a unique ID for this operator
-        self._unique_id = f"rbf_kernel_{id(self)}_{len(chunk_idx)}_{sigma}_{device}"
-
-        # Initialize the operator
+class _CacheableRBFLinOp(_CacheableKernelLinOp):
+    def __init__(self, A, kernel_params, chunk_idx, device):
         super().__init__(
-            device=device,
-            shape=torch.Size((chunk_idx.shape[0], A.shape[0])),
-            matvec=self._matvec,
-            rmatvec=self._rmatvec,
-            matmat=self._matvec,
-            rmatmat=self._rmatvec,
+            A=A, kernel_params=kernel_params, chunk_idx=chunk_idx, device=device
         )
 
-    def _get_kernel(self):
-        """Get the cached kernel or compute it if not present."""
-        global _KERNEL_CACHE
+    def _kernel_name(self):
+        return "rbf_kernel"
 
-        # Use process ID to ensure cache is per-process
-        pid = os.getpid()
-        cache_key = f"{pid}_{self._unique_id}"
-
-        if cache_key not in _KERNEL_CACHE:
-            print(f"[PID {pid}] Computing kernel for device {self.device}...")
-
-            # Compute the kernel
-            Ab_lazy = LazyTensor(self.A[self.chunk_idx][:, None, :])
-            A_lazy = LazyTensor(self.A[None, :, :])
-            D = ((Ab_lazy - A_lazy) ** 2).sum(dim=2)
-            kernel = (-D / (2 * self.sigma**2)).exp()
-
-            # Store in the global cache
-            _KERNEL_CACHE[cache_key] = kernel
-            print(f"[PID {pid}] Kernel cached. Cache size: {len(_KERNEL_CACHE)}")
-        else:
-            print(f"[PID {pid}] Using cached kernel for device {self.device}")
-
-        return _KERNEL_CACHE[cache_key]
-
-    def _matvec(self, x: torch.Tensor):
-        """Forward matrix-vector product with caching."""
-        kernel = self._get_kernel()
-        return kernel @ x
-
-    def _rmatvec(self, x: torch.Tensor):
-        """Transpose matrix-vector product with caching."""
-        kernel = self._get_kernel()
-        return kernel.T @ x
-
-    def clear_cache(self):
-        """Clear the kernel cache for this operator."""
-        global _KERNEL_CACHE
-
-        pid = os.getpid()
-        cache_key = f"{pid}_{self._unique_id}"
-
-        if cache_key in _KERNEL_CACHE:
-            del _KERNEL_CACHE[cache_key]
-            print(f"[PID {pid}] Cleared kernel cache for device {self.device}")
+    def _kernel_computation(self):
+        Ab_lazy = LazyTensor(self.A[self.chunk_idx][:, None, :])
+        A_lazy = LazyTensor(self.A[None, :, :])
+        D = ((Ab_lazy - A_lazy) ** 2).sum(dim=2)
+        kernel = (-D / (2 * self.kernel_params["sigma"] ** 2)).exp()
+        return kernel
 
 
 def _get_cached_lazy_tensor(A):
@@ -277,7 +217,7 @@ class DistributedRBFLinOp(DistributedSymmetricLinOp):
         """Extend shutdown to clear caches."""
         # Clear kernel caches to free memory
         for op in self.rbf_ops:
-            op.clear_cache()
+            op._clear_cache()
 
         # Clear the global caches
         global _KERNEL_CACHE, _LAZY_TENSOR_CACHE
