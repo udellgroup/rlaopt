@@ -30,7 +30,7 @@ def main():
 
     dist_lin_op = DistributedRBFLinOp(
         A=A,
-        sigma=sigma,
+        kernel_params={"sigma": sigma},
         devices=devices,
     )
 

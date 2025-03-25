@@ -19,37 +19,14 @@ def _check_kernel_params(kernel_params):
         raise ValueError("Kernel parameter 'sigma' must be a float.")
 
 
-class RBFLinOp(KernelLinOp):
-    def __init__(self, A, kernel_params):
-        super().__init__(A=A, kernel_params=kernel_params)
-
-    def _check_kernel_params(self, kernel_params):
-        _check_kernel_params(kernel_params)
-
-    def _kernel_computation(self, Ai_lazy, Aj_lazy):
-        D = ((Ai_lazy - Aj_lazy) ** 2).sum(dim=2)
-        K_lazy = (-D / (2 * self.kernel_params["sigma"] ** 2)).exp()
-        return K_lazy
+def _kernel_computation(Ai_lazy, Aj_lazy, kernel_params):
+    """Compute RBF kernel matrix."""
+    D = ((Ai_lazy - Aj_lazy) ** 2).sum(dim=2)
+    K_lazy = (-D / (2 * kernel_params["sigma"] ** 2)).exp()
+    return K_lazy
 
 
-class _CacheableRBFLinOp(_CacheableKernelLinOp):
-    def __init__(self, A, kernel_params, chunk_idx, device):
-        super().__init__(
-            A=A, kernel_params=kernel_params, chunk_idx=chunk_idx, device=device
-        )
-
-    def _kernel_name(self):
-        return "rbf_kernel"
-
-    def _kernel_computation(self):
-        Ab_lazy = LazyTensor(self.A[self.chunk_idx][:, None, :])
-        A_lazy = LazyTensor(self.A[None, :, :])
-        D = ((Ab_lazy - A_lazy) ** 2).sum(dim=2)
-        kernel = (-D / (2 * self.kernel_params["sigma"] ** 2)).exp()
-        return kernel
-
-
-def _rbf_row_oracle_matvec(
+def _row_oracle_matvec(
     x: torch.Tensor,
     A_mat: torch.Tensor,
     row_idx: torch.Tensor,
@@ -63,9 +40,36 @@ def _rbf_row_oracle_matvec(
     A_chunk_lazy = _get_cached_lazy_tensor(A_chunk)
 
     # Compute kernel and apply
-    D = ((Ab_lazy - A_chunk_lazy) ** 2).sum(dim=2)
-    K = (-D / (2 * kernel_params["sigma"] ** 2)).exp()
-    return K @ x
+    K_lazy = _kernel_computation(Ab_lazy, A_chunk_lazy, kernel_params)
+    return K_lazy @ x
+
+
+class RBFLinOp(KernelLinOp):
+    def __init__(self, A, kernel_params):
+        super().__init__(A=A, kernel_params=kernel_params)
+
+    def _check_kernel_params(self, kernel_params):
+        _check_kernel_params(kernel_params)
+
+    def _kernel_computation(self, Ai_lazy, Aj_lazy):
+        return _kernel_computation(
+            Ai_lazy=Ai_lazy, Aj_lazy=Aj_lazy, kernel_params=self.kernel_params
+        )
+
+
+class _CacheableRBFLinOp(_CacheableKernelLinOp):
+    def __init__(self, A, kernel_params, chunk_idx, device):
+        super().__init__(
+            A=A, kernel_params=kernel_params, chunk_idx=chunk_idx, device=device
+        )
+
+    def _kernel_name(self):
+        return "rbf_kernel"
+
+    def _kernel_computation(self, Ab_lazy, A_lazy):
+        return _kernel_computation(
+            Ai_lazy=Ab_lazy, Aj_lazy=A_lazy, kernel_params=self.kernel_params
+        )
 
 
 class DistributedRBFLinOp(DistributedKernelLinOp):
@@ -92,17 +96,11 @@ class DistributedRBFLinOp(DistributedKernelLinOp):
         _check_kernel_params(kernel_params)
 
     def _get_row_oracle_matvec_fn(self):
-        return _rbf_row_oracle_matvec
+        return _row_oracle_matvec
 
-    def _blk_oracle_matvec(
-        self, x: torch.Tensor, blk_idx: torch.Tensor
-    ) -> torch.Tensor:
+    def _blk_oracle_matvec(self, x, Abi_lazy, Abj_lazy):
         """Compute RBF kernel matrix-vector product for block oracle."""
-        A_blk = self.A_mat[blk_idx].to(self.compute_device)
-
-        # Compute kernel and apply
-        Ab_lazy = LazyTensor(A_blk[:, None, :])
-        A_lazy = LazyTensor(A_blk[None, :, :])
-        D = ((Ab_lazy - A_lazy) ** 2).sum(dim=2)
-        K = (-D / (2 * self.kernel_params["sigma"] ** 2)).exp()
-        return K @ x
+        K_lazy = _kernel_computation(
+            Ai_lazy=Abi_lazy, Aj_lazy=Abj_lazy, kernel_params=self.kernel_params
+        )
+        return K_lazy @ x
