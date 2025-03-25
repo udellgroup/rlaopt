@@ -11,15 +11,20 @@ from rlaopt.kernels.base import (
 __all__ = ["RBFLinOp", "DistributedRBFLinOp"]
 
 
+def _check_kernel_params(kernel_params):
+    """Check kernel parameters for RBF kernel."""
+    if "sigma" not in kernel_params:
+        raise ValueError("Kernel parameters must include 'sigma'.")
+    if not isinstance(kernel_params["sigma"], float):
+        raise ValueError("Kernel parameter 'sigma' must be a float.")
+
+
 class RBFLinOp(KernelLinOp):
     def __init__(self, A, kernel_params):
         super().__init__(A=A, kernel_params=kernel_params)
 
     def _check_kernel_params(self, kernel_params):
-        if "sigma" not in kernel_params:
-            raise ValueError("Kernel parameters must include 'sigma'.")
-        if not isinstance(kernel_params["sigma"], float):
-            raise ValueError("Kernel parameter 'sigma' must be a float.")
+        _check_kernel_params(kernel_params)
 
     def _kernel_computation(self, Ai_lazy, Aj_lazy):
         D = ((Ai_lazy - Aj_lazy) ** 2).sum(dim=2)
@@ -76,6 +81,7 @@ class DistributedRBFLinOp(DistributedKernelLinOp):
     ):
         """Initialize the distributed RBF linear operator."""
         super().__init__(
+            cacheable_kernel_class=_CacheableRBFLinOp,
             A=A,
             kernel_params=kernel_params,
             devices=devices,
@@ -83,24 +89,7 @@ class DistributedRBFLinOp(DistributedKernelLinOp):
         )
 
     def _check_kernel_params(self, kernel_params):
-        if "sigma" not in kernel_params:
-            raise ValueError("Kernel parameters must include 'sigma'.")
-        if not isinstance(kernel_params["sigma"], float):
-            raise ValueError("Kernel parameter 'sigma' must be a float.")
-
-    def _create_kernel_operators(self):
-        """Create RBF kernel operators for each chunk."""
-        ops = []
-        for device, chunk_idx in zip(self.devices, self.A_row_chunks):
-            ops.append(
-                _CacheableRBFLinOp(
-                    A=self.A_mat,
-                    kernel_params=self.kernel_params,
-                    chunk_idx=chunk_idx,
-                    device=device,
-                )
-            )
-        return ops
+        _check_kernel_params(kernel_params)
 
     def _get_row_oracle_matvec_fn(self):
         return _rbf_row_oracle_matvec

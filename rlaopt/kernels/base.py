@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 from functools import partial
 import os
-from typing import Any, Dict, Optional, List, Set
+from typing import Any, Dict, Optional, Set
 
 from pykeops.torch import LazyTensor
 import torch
@@ -206,6 +206,7 @@ class DistributedKernelLinOp(DistributedSymmetricLinOp, ABC):
 
     def __init__(
         self,
+        cacheable_kernel_class: _CacheableKernelLinOp,
         A: torch.Tensor,
         kernel_params: Dict[str, Any],
         devices: Set[torch.device],
@@ -228,6 +229,7 @@ class DistributedKernelLinOp(DistributedSymmetricLinOp, ABC):
 
         # Save parameters
         self._check_inputs(A, kernel_params, devices, compute_device)
+        self.cacheable_kernel_class = cacheable_kernel_class
         self._A_mat = A  # Keep original tensor for oracles
         self._kernel_params = kernel_params
         self.devices = list(devices)
@@ -291,14 +293,23 @@ class DistributedKernelLinOp(DistributedSymmetricLinOp, ABC):
             if compute_device not in devices:
                 raise ValueError("compute_device must be in the set of devices.")
 
-    @abstractmethod
-    def _create_kernel_operators(self) -> List[_CacheableKernelLinOp]:
+    def _create_kernel_operators(self):
         """Create the kernel operators for each chunk.
 
         Returns:
             List of kernel operators, one for each device/chunk
         """
-        pass
+        ops = []
+        for device, chunk_idx in zip(self.devices, self.A_row_chunks):
+            ops.append(
+                self.cacheable_kernel_class(
+                    A=self.A_mat,
+                    kernel_params=self.kernel_params,
+                    chunk_idx=chunk_idx,
+                    device=device,
+                )
+            )
+        return ops
 
     @abstractmethod
     def _get_row_oracle_matvec_fn(self) -> callable:
