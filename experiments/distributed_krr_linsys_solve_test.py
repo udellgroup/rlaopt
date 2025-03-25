@@ -1,7 +1,7 @@
 import torch
 
 from rlaopt.models import LinSys
-from rlaopt.kernels import RBFLinOp, DistributedRBFLinOpV1
+from rlaopt.kernels import RBFLinOp, DistributedRBFLinOp
 from rlaopt.preconditioners import NystromConfig
 from rlaopt.solvers import PCGConfig
 
@@ -28,7 +28,7 @@ def main():
 
     devices = set([torch.device(f"cuda:{i}") for i in range(n_chunks)])
 
-    dist_lin_op = DistributedRBFLinOpV1(
+    dist_lin_op = DistributedRBFLinOp(
         A=A,
         sigma=sigma,
         devices=devices,
