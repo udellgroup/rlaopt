@@ -1,6 +1,10 @@
+from functools import partial
+
 from pykeops.torch import LazyTensor
 import torch
 
+from rlaopt.linops import LinOp, DistributionMode
+from rlaopt.linops.distributed import _DistributedLinOp
 from rlaopt.kernels.base import (
     KernelLinOp,
     _CacheableKernelLinOp,
@@ -44,6 +48,25 @@ class _CacheableRBFLinOp(_CacheableKernelLinOp):
         return kernel
 
 
+def _rbf_row_oracle_matvec(
+    x: torch.Tensor,
+    A_mat: torch.Tensor,
+    row_idx: torch.Tensor,
+    A_chunk: torch.Tensor,
+    kernel_params: dict,
+) -> torch.Tensor:
+    """Compute RBF kernel matrix-vector product for row oracle."""
+    # Get cached tensors
+    Ab = A_mat[row_idx].to(A_chunk.device)
+    Ab_lazy = LazyTensor(Ab[:, None, :])
+    A_chunk_lazy = _get_cached_lazy_tensor(A_chunk)
+
+    # Compute kernel and apply
+    D = ((Ab_lazy - A_chunk_lazy) ** 2).sum(dim=2)
+    K = (-D / (2 * kernel_params["sigma"] ** 2)).exp()
+    return K @ x
+
+
 class DistributedRBFLinOp(DistributedKernelLinOp):
     """Distributed RBF linear operator with row and block oracles that share worker
     processes."""
@@ -83,23 +106,43 @@ class DistributedRBFLinOp(DistributedKernelLinOp):
             )
         return ops
 
-    def _row_oracle_matvec(
-        self,
-        x: torch.Tensor,
-        row_idx: torch.Tensor,
-        chunk: torch.Tensor,
-        device: torch.device,
-    ) -> torch.Tensor:
-        """Compute RBF kernel matrix-vector product for row oracle."""
-        # Get cached tensors
-        Ab = self.A_mat[row_idx].to(device)
-        Ab_lazy = LazyTensor(Ab[:, None, :])
-        A_chunk_lazy = _get_cached_lazy_tensor(chunk)
+    def row_oracle(self, blk):
+        # Create operators for each device
+        row_ops = []
+        for i, device in enumerate(self.devices):
+            A_chunk = self.A_chunks[i]
+            kernel_params = self.kernel_params
+            A_mat = self.A_mat  # Capture these variables explicitly
 
-        # Compute kernel and apply
-        D = ((Ab_lazy - A_chunk_lazy) ** 2).sum(dim=2)
-        K = (-D / (2 * self.kernel_params["sigma"] ** 2)).exp()
-        return K @ x
+            matvec_fn = partial(
+                _rbf_row_oracle_matvec,
+                A_mat=A_mat,
+                row_idx=blk,
+                A_chunk=A_chunk,
+                kernel_params=kernel_params,
+            )
+
+            # Create a LinOp with the matvec function
+            row_ops.append(
+                LinOp(
+                    device=device,
+                    shape=torch.Size((blk.shape[0], A_chunk.shape[0])),
+                    matvec=matvec_fn,
+                    matmat=matvec_fn,
+                )
+            )
+
+        # Create a distributed operator that reuses our workers
+        return _DistributedLinOp(
+            shape=torch.Size((blk.shape[0], self.A_mat.shape[0])),
+            A=row_ops,
+            distribution_mode=DistributionMode.COLUMN,
+            manager=self._manager,
+            result_queue=self._result_queue,
+            task_queues=self._task_queues,
+            workers=self._workers,
+            is_new=False,  # Important: reuse existing workers
+        )
 
     def _blk_oracle_matvec(
         self, x: torch.Tensor, blk_idx: torch.Tensor

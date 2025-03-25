@@ -14,7 +14,6 @@ from rlaopt.linops import (
     DistributedLinOp,
     DistributedSymmetricLinOp,
 )
-from rlaopt.linops.distributed import _DistributedLinOp
 from rlaopt.utils import _is_torch_tensor, _is_torch_device, _is_dict, _is_set
 
 # Global, module-level cache to persist across worker calls
@@ -301,27 +300,6 @@ class DistributedKernelLinOp(DistributedSymmetricLinOp, ABC):
         pass
 
     @abstractmethod
-    def _row_oracle_matvec(
-        self,
-        x: torch.Tensor,
-        row_idx: torch.Tensor,
-        chunk: torch.Tensor,
-        device: torch.device,
-    ) -> torch.Tensor:
-        """Compute matvec product for row oracle.
-
-        Args:
-            x: Input vector
-            row_idx: Indices of rows to extract
-            chunk: Chunk of data for this device
-            device: Device to compute on
-
-        Returns:
-            Result of matrix-vector product
-        """
-        pass
-
-    @abstractmethod
     def _blk_oracle_matvec(
         self, x: torch.Tensor, blk_idx: torch.Tensor
     ) -> torch.Tensor:
@@ -336,6 +314,7 @@ class DistributedKernelLinOp(DistributedSymmetricLinOp, ABC):
         """
         pass
 
+    @abstractmethod
     def row_oracle(self, blk: torch.Tensor) -> DistributedLinOp:
         """Get a distributed operator for specific rows.
 
@@ -345,36 +324,7 @@ class DistributedKernelLinOp(DistributedSymmetricLinOp, ABC):
         Returns:
             A distributed linear operator for the specified rows
         """
-        # Create operators for each device
-        row_ops = []
-        for i, device in enumerate(self.devices):
-            chunk = self.A_chunks[i]
-
-            matvec_fn = partial(
-                self._row_oracle_matvec, row_idx=blk, chunk=chunk, device=device
-            )
-
-            # Create a LinOp with the matvec function
-            row_ops.append(
-                LinOp(
-                    device=device,
-                    shape=torch.Size((blk.shape[0], chunk.shape[0])),
-                    matvec=matvec_fn,
-                    matmat=matvec_fn,
-                )
-            )
-
-        # Create a distributed operator that reuses our workers
-        return _DistributedLinOp(
-            shape=torch.Size((blk.shape[0], self.A_mat.shape[0])),
-            A=row_ops,
-            distribution_mode=DistributionMode.COLUMN,
-            manager=self._manager,
-            result_queue=self._result_queue,
-            task_queues=self._task_queues,
-            workers=self._workers,
-            is_new=False,  # Important: reuse existing workers
-        )
+        pass
 
     def blk_oracle(self, blk: torch.Tensor) -> SymmetricLinOp:
         """Get a symmetric operator for a block.
