@@ -1,24 +1,13 @@
-from pykeops.torch import LazyTensor
-import torch
-
 from rlaopt.kernels.base import (
-    KernelLinOp,
-    DistributedKernelLinOp,
-    _get_cached_lazy_tensor,
+    _KernelLinOp,
+    _DistributedKernelLinOp,
 )
+from rlaopt.kernels.utils import _check_kernel_params, _row_oracle_matvec
 
 __all__ = ["RBFLinOp", "DistributedRBFLinOp"]
 
 
 _CACHEABLE_KERNEL_NAME = "rbf"
-
-
-def _check_kernel_params(kernel_params):
-    """Check kernel parameters for RBF kernel."""
-    if "sigma" not in kernel_params:
-        raise ValueError("Kernel parameters must include 'sigma'.")
-    if not isinstance(kernel_params["sigma"], float):
-        raise ValueError("Kernel parameter 'sigma' must be a float.")
 
 
 def _kernel_computation(Ai_lazy, Aj_lazy, kernel_params):
@@ -28,25 +17,7 @@ def _kernel_computation(Ai_lazy, Aj_lazy, kernel_params):
     return K_lazy
 
 
-def _row_oracle_matvec(
-    x: torch.Tensor,
-    A_mat: torch.Tensor,
-    row_idx: torch.Tensor,
-    A_chunk: torch.Tensor,
-    kernel_params: dict,
-) -> torch.Tensor:
-    """Compute RBF kernel matrix-vector product for row oracle."""
-    # Get cached tensors
-    Ab = A_mat[row_idx].to(A_chunk.device)
-    Ab_lazy = LazyTensor(Ab[:, None, :])
-    A_chunk_lazy = _get_cached_lazy_tensor(A_chunk)
-
-    # Compute kernel and apply
-    K_lazy = _kernel_computation(Ab_lazy, A_chunk_lazy, kernel_params)
-    return K_lazy @ x
-
-
-class RBFLinOp(KernelLinOp):
+class RBFLinOp(_KernelLinOp):
     def __init__(self, A, kernel_params):
         super().__init__(
             A=A,
@@ -56,7 +27,7 @@ class RBFLinOp(KernelLinOp):
         )
 
 
-class DistributedRBFLinOp(DistributedKernelLinOp):
+class DistributedRBFLinOp(_DistributedKernelLinOp):
     """Distributed RBF linear operator with row and block oracles that share worker
     processes."""
 

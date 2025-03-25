@@ -21,7 +21,7 @@ _KERNEL_CACHE: Dict[str, LazyTensor] = {}
 _LAZY_TENSOR_CACHE: Dict[str, LazyTensor] = {}
 
 
-class KernelLinOp(SymmetricLinOp):
+class _KernelLinOp(SymmetricLinOp):
     def __init__(
         self,
         A: torch.Tensor,
@@ -195,11 +195,14 @@ def _get_cached_lazy_tensor(A: torch.Tensor) -> LazyTensor:
 
     if cache_key not in _LAZY_TENSOR_CACHE:
         _LAZY_TENSOR_CACHE[cache_key] = LazyTensor(A[None, :, :])
+        print(f"[PID {pid}] Created new LazyTensor for device {A.device}")
+    else:
+        print(f"[PID {pid}] Using cached LazyTensor for device {A.device}")
 
     return _LAZY_TENSOR_CACHE[cache_key]
 
 
-class DistributedKernelLinOp(DistributedSymmetricLinOp):
+class _DistributedKernelLinOp(DistributedSymmetricLinOp):
     """Abstract base class for distributed kernel linear operators."""
 
     def __init__(
@@ -325,6 +328,7 @@ class DistributedKernelLinOp(DistributedSymmetricLinOp):
                 row_idx=blk,
                 A_chunk=A_chunk,
                 kernel_params=self.kernel_params,
+                kernel_computation=self._kernel_computation,
             )
 
             # Create a LinOp with the matvec function
