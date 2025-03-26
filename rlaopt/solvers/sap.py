@@ -5,12 +5,15 @@ import torch
 
 from rlaopt.solvers.solver import Solver
 from rlaopt.solvers.configs import SAPAccelConfig
-from rlaopt.preconditioners import Preconditioner, PreconditionerConfig
+from rlaopt.linops.simple import SymmetricLinOp
+from rlaopt.preconditioners import Preconditioner, PreconditionerConfig, IdentityConfig, NewtonConfig, NystromConfig
 from rlaopt.preconditioners import _get_precond as _pf_get_precond
+from rlaopt.spectral_estimators.spectral_norm import randomized_powering
 
 if TYPE_CHECKING:
     from rlaopt.models import LinSys  # Import only for type hints
 
+VALID_PRECONDS = [IdentityConfig, NewtonConfig, NystromConfig]
 
 class SAP(Solver):
     def __init__(
@@ -25,7 +28,13 @@ class SAP(Solver):
         power_iters: int,
     ):
         self.system = system
+        
+        # Check if preconditioner is valid
+        if type(precond_config) not in VALID_PRECONDS:
+           raise TypeError(f"Valid preconditioner configs for SAP are {VALID_PRECONDS}, but received"
+                           f"{type(precond_config)}") 
         self.precond_config = precond_config
+        
         self._w = w_init.clone()
         self.device = device
         self.blk_sz = blk_sz
@@ -49,12 +58,12 @@ class SAP(Solver):
     def w(self):
         return self._w
 
-    def _get_precond(self, blk: torch.Tensor):
+    def _get_precond(self, blk: torch.Tensor)->Preconditioner:
         P = _pf_get_precond(self.precond_config)
         P._update(self.system.A_blk_oracle(blk), self.device)
         return P
 
-    def _get_blk(self):
+    def _get_blk(self)->torch.Tensor:
         try:
             blk = torch.multinomial(self.probs, self.blk_sz, replacement=False)
         except RuntimeError as e:
@@ -66,40 +75,33 @@ class SAP(Solver):
             blk = torch.from_numpy(blk)
         return blk
 
-    def _get_stepsize(self, blk: torch.Tensor, blk_precond: Preconditioner):
-        v = torch.randn(blk.shape[0], device=self.device)
-        v /= torch.linalg.norm(v)
-
-        max_eig = None
-
-        # Randomized power iteration to estimate the maximum eigenvalue
-        for _ in range(self.power_iters):
-            v_old = v.clone()
-            v = blk_precond._inv @ v
-            v = self.system.A_blk_oracle(blk) @ v + self.system.reg * v
-            max_eig = torch.dot(v, v_old)
-            v /= torch.linalg.norm(v)
+    def _get_stepsize(self, blk: torch.Tensor, blk_precond: Preconditioner)->float:
+        if isinstance(self.precond_config, NewtonConfig):
+            return 1.0
+        
+        elif isinstance(self.precond_config, IdentityConfig):
+           S = SymmetricLinOp(
+               device=self.device,
+               shape = torch.Size((self.blk_sz, self.blk_sz)),
+               matvec = lambda v: self.system.A_blk_oracle(blk) @ v + self.system.reg * v
+            )
+        else:
+           if self.precond_config.damping_strategy == "adaptive":
+                self._get_damping(blk_precond)
+           L = blk_precond._apply_inverse_sqrt
+           M = lambda v: self.system.A_blk_oracle(blk) @ v + self.system.reg * v
+           S = SymmetricLinOp(
+               device=self.device,
+               shape=torch.Size((self.blk_sz, self.blk_sz)),
+               matvec=lambda v: L(M(L(v)))   
+           )
+        
+        max_eig, _ = randomized_powering(S)
         return max_eig ** (-1.0)
 
-    def _get_damping(self, blk: torch.Tensor, blk_precond: Preconditioner):
-        v = torch.randn(blk.shape[0], device=self.device)
-        v /= torch.linalg.norm(v)
-
-        max_eig = None
-
-        # Randomized power iteration to estimate the maximum eigenvalue
-        for _ in range(self.power_iters):
-            v_old = v.clone()
-            v = (
-                self.system.A_blk_oracle(blk) @ v
-                + self.precond_config.rho * v
-                - blk_precond @ v
-            )
-            max_eig = torch.dot(v, v_old)
-            v /= torch.linalg.norm(v)
-
-        self.precond_config.rho = max_eig
-
+    def _get_damping(self, blk_precond: Preconditioner):
+        self.precond_config.rho = self.system.reg + blk_precond.S[-1]
+        
     def _get_block_update(
         self, w: torch.Tensor, blk: torch.Tensor, blk_precond: Preconditioner
     ):
@@ -120,13 +122,8 @@ class SAP(Solver):
 
         # Compute block preconditioner and learning rate
         blk_precond = self._get_precond(blk)
-        if self.precond_config.damping_strategy == "adaptive":
-            self._get_damping(blk, blk_precond)
-            blk_stepsize = 0.5
-
-        else:
-            blk_stepsize = self._get_stepsize(blk, blk_precond)
-
+        blk_stepsize = self._get_stepsize(blk, blk_precond)
+    
         # Get the update direction
         # Update direction is computed at self.y if accelerated, else at self._w
         eval_loc = self.y if self.accel else self._w

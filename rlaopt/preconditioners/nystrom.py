@@ -108,4 +108,20 @@ class Nystrom(Preconditioner):
         x = 1 / self.config.rho * (x - self.U @ UTx) + self.U @ torch.divide(
             UTx, self.S + self.config.rho
         )
+
+        return x
+
+    def _apply_inverse_sqrt(self, x: torch.Tensor) -> torch.Tensor:
+        """Applies inverse square root of the preconditioner to a tensor.
+
+           Args:
+            x (torch.Tensor): The tensor to multiply with.
+
+        Returns:
+            torch.Tensor: The result of the inverse square root matrix multiplication.
+        """
+        UTx = self.U.T @ x
+        x = 1 / (self.config.rho) ** (0.5) * (x - self.U @ UTx) + self.U @ torch.divide(
+            UTx, (self.S + self.config.rho) ** (0.5)
+        )
         return x

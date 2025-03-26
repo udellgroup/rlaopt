@@ -3,7 +3,7 @@ from typing import TYPE_CHECKING
 import torch
 
 from rlaopt.solvers.solver import Solver
-from rlaopt.preconditioners import PreconditionerConfig
+from rlaopt.preconditioners import PreconditionerConfig, NystromConfig
 from rlaopt.preconditioners import _get_precond as _pf_get_precond
 
 if TYPE_CHECKING:
@@ -39,16 +39,9 @@ class PCG(Solver):
     def _get_precond(self):
         P = _pf_get_precond(self.precond_config)
         P._update(self.system.A, self.device)
-        if self.precond_config.damping_strategy == "adaptive":
-            d = self.system.A.shape[1]
-            omega = torch.randn(d, device=self.device)
-            v = omega / torch.linalg.norm(omega, 2)
-            # Zach TODO: replace with spectral_estimators later
-            for _ in range(10):
-                v_new = self.system.A @ v + self.precond_config.rho * v - P @ v
-                lam = torch.dot(v, v_new)
-                v = v_new / torch.linalg.norm(v_new)
-            self.precond_config.rho = lam
+        if isinstance(self.precond_config, NystromConfig):
+            if self.precond_config.damping_strategy == "adaptive":
+                self.precond_config.rho = self.system.reg + P.S[-1] 
         return P
 
     def _step(self):
