@@ -1,21 +1,15 @@
-from rlaopt.solvers.solver import Solver
-from rlaopt.solvers.configs import (
-    SAPAccelConfig,
-    SolverConfig,
-    PCGConfig,
-    SAPConfig,
-    _is_solver_config,
-    _get_solver_name,
-)
-from rlaopt.solvers.solver_factory import _get_solver
+import importlib
 
-__all__ = [
-    "Solver",
-    "SAPAccelConfig",
-    "SolverConfig",
-    "PCGConfig",
-    "SAPConfig",
-    "_is_solver_config",
-    "_get_solver_name",
-    "_get_solver",
+modules_to_import = [
+    "rlaopt.solvers.configs",
+    "rlaopt.solvers.solver",
+    "rlaopt.solvers.solver_factory",
 ]
+
+__all__ = []
+for module in modules_to_import:
+    mod = importlib.import_module(module)
+    components = getattr(mod, "__all__", [])
+    for component in components:
+        globals()[component] = getattr(mod, component)
+        __all__.append(component)

@@ -18,6 +18,16 @@ from rlaopt.utils import (
 )
 
 
+__all__ = [
+    "SAPAccelConfig",
+    "SolverConfig",
+    "PCGConfig",
+    "SAPConfig",
+    "_is_solver_config",
+    "_get_solver_name",
+]
+
+
 @dataclass(kw_only=True, frozen=False)
 class SAPAccelConfig:
     mu: float
