@@ -1,3 +1,5 @@
+"""Input type checker helper functions."""
+
 from typing import Any
 
 import torch
@@ -92,3 +94,11 @@ def _is_sketch(sketch: str):
     valid_sketches = ["gauss", "ortho", "sparse"]
     if sketch not in ["gauss", "ortho", "sparse"]:
         raise ValueError(f"sketch must be in {valid_sketches}, but received {sketch}")
+
+
+def _is_strategy(damping_strategy: str):
+    valid_strategies = ["adaptive", "non_adaptive"]
+    if damping_strategy not in [valid_strategies]:
+        raise ValueError(
+            f"strategy must be in {valid_strategies}, but received {damping_strategy}"
+        )
