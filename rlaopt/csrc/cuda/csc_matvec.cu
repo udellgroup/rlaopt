@@ -14,6 +14,10 @@ __global__ void csc_matvec_kernel(const scalar_t* __restrict__ values,
     int col = blockIdx.x * blockDim.x + threadIdx.x;
     if (col < num_cols) {
         scalar_t x_j = dense_vector[col];
+
+        // Skip computation if the value is zero
+        if (x_j == 0) return;
+
         for (int64_t k = col_ptrs[col]; k < col_ptrs[col + 1]; ++k) {
             int64_t row = row_indices[k];
             scalar_t value = values[k];
