@@ -18,6 +18,13 @@ def _is_callable(param: Any, param_name: str):
         )
 
 
+def _is_dict(param: Any, param_name: str):
+    if not isinstance(param, dict):
+        raise TypeError(
+            f"{param_name} is of type {type(param).__name__}, but expected type dict"
+        )
+
+
 def _is_float(param: Any, param_name: str):
     if not isinstance(param, float):
         raise TypeError(
@@ -36,6 +43,13 @@ def _is_list(param: Any, param_name: str):
     if not isinstance(param, list):
         raise TypeError(
             f"{param_name} is of type {type(param).__name__}, but expected type list"
+        )
+
+
+def _is_set(param: Any, param_name: str):
+    if not isinstance(param, set):
+        raise TypeError(
+            f"{param_name} is of type {type(param).__name__}, but expected type set"
         )
 
 

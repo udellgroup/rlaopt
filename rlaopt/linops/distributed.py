@@ -27,7 +27,7 @@ class DistributionMode(Enum):
     COLUMN = auto()  # Matrix is distributed across columns
 
 
-class _BaseDistributedLinOp(_BaseLinOp):
+class _DistributedLinOp(_BaseLinOp):
     """Base class with implementation details for distributed linear operators."""
 
     def __init__(
@@ -64,7 +64,7 @@ class _BaseDistributedLinOp(_BaseLinOp):
             self._workers = {}
 
             # Start a dedicated worker for each device
-            for linop in A:
+            for linop in self._A:
                 device = linop.device
                 if device not in self._task_queues:
                     self._task_queues[device] = Queue()
@@ -202,7 +202,7 @@ class _BaseDistributedLinOp(_BaseLinOp):
                     worker.terminate()
 
 
-class _BaseDistributedTwoSidedLinOp(_BaseDistributedLinOp):
+class _DistributedTwoSidedLinOp(_DistributedLinOp):
     """Base class with implementation details for distributed two-sided linear
     operators."""
 
@@ -264,7 +264,7 @@ class _BaseDistributedTwoSidedLinOp(_BaseDistributedLinOp):
             else DistributionMode.ROW
         )
 
-        return _BaseDistributedTwoSidedLinOp(
+        return _DistributedTwoSidedLinOp(
             shape=torch.Size((self.shape[1], self.shape[0])),
             A=[A.T for A in self._A],
             manager=self._manager,
@@ -276,7 +276,7 @@ class _BaseDistributedTwoSidedLinOp(_BaseDistributedLinOp):
         )
 
 
-class _BaseDistributedSymmetricLinOp(_BaseDistributedTwoSidedLinOp):
+class _DistributedSymmetricLinOp(_DistributedTwoSidedLinOp):
     """Base class with implementation details for distributed symmetric linear
     operators."""
 
@@ -322,7 +322,7 @@ class _BaseDistributedSymmetricLinOp(_BaseDistributedTwoSidedLinOp):
 
 
 # Public classes with simple interfaces
-class DistributedLinOp(_BaseDistributedLinOp):
+class DistributedLinOp(_DistributedLinOp):
     """Distributed linear operator that performs operations across multiple devices."""
 
     def __init__(
@@ -333,7 +333,7 @@ class DistributedLinOp(_BaseDistributedLinOp):
         )
 
 
-class DistributedTwoSidedLinOp(_BaseDistributedTwoSidedLinOp):
+class DistributedTwoSidedLinOp(_DistributedTwoSidedLinOp):
     """Distributed two-sided linear operator that performs operations across multiple
     devices."""
 
@@ -348,7 +348,7 @@ class DistributedTwoSidedLinOp(_BaseDistributedTwoSidedLinOp):
         )
 
 
-class DistributedSymmetricLinOp(_BaseDistributedSymmetricLinOp):
+class DistributedSymmetricLinOp(_DistributedSymmetricLinOp):
     """Distributed symmetric linear operator that performs operations across multiple
     devices."""
 
