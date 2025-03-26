@@ -28,14 +28,16 @@ repos:
     -   id: docformatter
         additional_dependencies: [tomli]
         args: ["--in-place", "--style=google", "--wrap-summaries=88", "--wrap-descriptions=88"]
+        files: ^rlaopt/.*\.py$
 -   repo: https://github.com/PyCQA/pydocstyle
     rev: 6.3.0
     hooks:
     -   id: pydocstyle
         args: ["--convention=google"]
         additional_dependencies: [toml]
+        files: ^rlaopt/.*\.py$
 -   repo: https://github.com/pre-commit/mirrors-clang-format
     rev: v20.1.0  # Use the specific version of clang-format you prefer
     hooks:
       - id: clang-format
-        files: '\.(cpp|hpp|cc|h|c|cu|cuh)$'  # Extensions to format
+        files: ^rlaopt/.*\.(cpp|hpp|cc|h|c|cu|cuh)$  # Extensions to format
