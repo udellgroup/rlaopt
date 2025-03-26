@@ -1,8 +1,8 @@
 import importlib
 
 modules_to_import = [
-    "rlaopt.models.model",
     "rlaopt.models.linsys",
+    "rlaopt.models.model",
 ]
 
 __all__ = []

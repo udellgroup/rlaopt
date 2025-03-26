@@ -1,8 +1,8 @@
 import importlib
 
 modules_to_import = [
-    "rlaopt.preconditioners.preconditioner",
     "rlaopt.preconditioners.configs",
+    "rlaopt.preconditioners.preconditioner",
     "rlaopt.preconditioners.preconditioner_factory",
 ]
 
