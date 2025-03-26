@@ -107,7 +107,6 @@ class SkPreConfig(PreconditionerConfig):
     sketch_size: int
     rho: float
     sketch: str = "sparse"
-    damping_strategy: str = "non_adaptive"
 
     def __post_init__(self):
         """Validate the configuration parameters after initialization."""
