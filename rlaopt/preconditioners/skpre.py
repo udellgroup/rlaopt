@@ -1,71 +1,150 @@
+"""This module implements the Sketch and Precondition Preconditioner."""
+
+import gc
 import torch
 
 from rlaopt.preconditioners.preconditioner import Preconditioner
 from rlaopt.preconditioners.configs import SkPreConfig
-from rlaopt.preconditioners.sketches.gauss import Gauss
-from rlaopt.preconditioners.sketches.sparse import Sparse
-from rlaopt.preconditioners.sketches.ortho import Ortho
+from rlaopt.preconditioners.sketches.sketch_factory import get_sketch
 
 
 class SkPre(Preconditioner):
+    """Sketched Preconditioner (SkPre) class.
+
+    This class implements a preconditioner based on matrix sketching techniques,
+    which is useful for preconditioning large-scale optimization problems.
+
+    Attributes:
+        Y (torch.Tensor): The sketched matrix.
+        L (torch.Tensor): The Cholesky factor used in preconditioning.
+
+    Example:
+        >>> import torch
+        >>> from rlaopt.preconditioners.configs import SkPreConfig
+        >>>
+        >>> # Create a sample matrix
+        >>> A = torch.randn(1000, 500)
+        >>>
+        >>> # Configure and initialize the SkPre preconditioner
+        >>> config = SkPreConfig(sketch='gaussian', sketch_size=200, rho=1e-4)
+        >>> preconditioner = SkPre(config)
+        >>>
+        >>> # Update the preconditioner with the matrix
+        >>> preconditioner._update(A, device=torch.device('cpu'))
+        >>>
+        >>> # Use the preconditioner
+        >>> x = torch.randn(500)
+        >>> preconditioned_x = preconditioner @ x
+        >>>
+        >>> # Use the inverse preconditioner
+        >>> inv_preconditioned_x = preconditioner._inv @ x
+    """
+
     def __init__(self, config: SkPreConfig):
+        """Initialize the Sketched Preconditioner.
+
+        Args:
+            config (SkPreConfig): Configuration for the Sketched Preconditioner.
+        """
         super().__init__(config)
         self.Y = None
         self.L = None
 
     def _update(self, A, device):
-        # Get sketching matrix
-        if self.config.sketch == "gauss":
-            Omega = Gauss("left", self.config.sketch_size, A.shape[1], device=device)
-        elif self.config.sketch == "ortho":
-            Omega = Ortho("left", self.config.sketch_size, A.shape[1], device=device)
-        else:
-            Omega = Sparse("left", self.config.sketch_size, A.shape[1], device=device)
+        """Update the Sketched Preconditioner.
 
-        # Compute sketch
-        # Y = Omega @ A
+        This method computes the sketched matrix and constructs the preconditioner.
+
+        Args:
+            A (Union[torch.Tensor, LinOpType]): The matrix or linear operator
+            for which we are constructing a preconditioner.
+            device (torch.device): The device on which to perform the computations.
+        """
+        # Get sketching matrix
+        Omega = get_sketch(
+            self.config.sketch,
+            "left",
+            self.config.sketch_size,
+            A.shape[1],
+            device=device,
+        )
+
+        # Compute sketch: Y = Omega @ A
         self.Y = Omega._apply_left(A)
 
         # Construct preconditioner
         if self.config.rho == 0:
-            # No damping: get L from Cholesky
-            # Delete Y as it won't be needed
+            # No damping
+            # Get L from Cholesky of Y.T @ Y
+
+            # Compute gram matrix
             G = self.Y.T @ self.Y
+            # Delete Y as it won't be needed
+            self._del_Y()
+            # Get lower Cholesky factor of G
             self.L = torch.linalg.cholesky(G, upper=False)
-            self.Y = None
-            s_sps = torch.linalg.svdvals(A @ torch.linalg.inv(self.L.T))
-            print(
-                f"Preconditioned condition number: {s_sps[0].item()/s_sps[-1].item()}"
-            )
+
         else:
-            # Damping: Get L via Cholesky
+            # Damping
             # Two cases based on sketch size
-            # Case 1: sketch_size<= # col(A)
+            # Case 1: sketch_size >= number columns of A
             if self.config.sketch_size >= A.shape[1]:
+                # Get Gram matrix
                 G = self.Y.T @ self.Y
+                # Delete Y as it won't be needed
+                self._del_Y()
+                # Add damping
                 G.diagonal().add_(self.config.rho)
+                # Get lower Cholesky factor of G
                 self.L = torch.linalg.cholesky(G, upper=False)
-                self.Y = None
+
             else:
-                # Case 2: sketch_size<# col(A)
+                # Case 2: sketch_size<= number of columns of A
+                # Get lower Cholesky L of Y @ Y.T
+                # L will then be used with Woodbury matrix identity
+
+                # Get Gram matrix
                 G = self.Y @ self.Y.T
+                # Add damping
                 G.diagonal().add_(self.config.rho)
+                # Get lower Cholesky factor of G
                 self.L = torch.linalg.cholesky(G, upper=False)
 
     def __matmul__(self, x: torch.Tensor) -> torch.Tensor:
+        """Perform matrix multiplication with the preconditioner.
+
+        Args:
+            x (torch.Tensor): The tensor to multiply with.
+
+        Returns:
+            torch.Tensor: The result of the matrix multiplication.
+        """
         if self.Y is None:
             return self.L @ (self.L.T @ x)
         else:
             return self.Y.T @ (self.Y @ x) + self.config.rho * x
 
     def _inverse_matmul(self, x: torch.Tensor) -> torch.Tensor:
+        """Perform matrix multiplication with the inverse of the preconditioner.
+
+        Args:
+            x (torch.Tensor): The tensor to multiply with.
+
+        Returns:
+            torch.Tensor: The result of the inverse matrix multiplication.
+        """
+        # Implementation d
         if self.Y is None:
+            # Computes inv(P) @ x
+            # Computation done by two triangular solves
             L_inv_x = torch.linalg.solve_triangular(
                 self.L.T, x.unsqueeze(-1), upper=True
             )
             P_inv_x = torch.linalg.solve_triangular(self.L, L_inv_x, upper=False)
             return P_inv_x.squeeze()
         else:
+            # inv(P) @ x
+            # Computation uses Woodbury identity
             Yx = self.Y @ x
             L_inv_Yx = torch.linalg.solve_triangular(
                 self.L, Yx.unsqueeze(-1), upper=False
@@ -76,3 +155,15 @@ class SkPre(Preconditioner):
             LT_inv_L_inv_Yx = LT_inv_L_inv_Yx.squeeze()
             P_inv_x = 1 / self.config.rho * (x - self.Y.T @ LT_inv_L_inv_Yx)
             return P_inv_x
+
+    def _del_Y(self):
+        """Delete the sketched matrix Y and free up memory.
+
+        This method is called when Y is no longer needed to save memory, especially
+        important for GPU computations.
+        """
+        device = self.Y.device
+        del self.Y
+        if device.type == "cuda":
+            torch.cuda.empty_cache()
+        gc.collect()
