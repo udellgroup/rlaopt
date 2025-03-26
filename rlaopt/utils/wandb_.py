@@ -3,6 +3,9 @@
 import os
 
 
+__all__ = ["set_wandb_api_key"]
+
+
 def set_wandb_api_key(api_key: str):
     """Set the API key for Weights and Biases.
 

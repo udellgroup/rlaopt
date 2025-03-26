@@ -10,6 +10,9 @@ if TYPE_CHECKING:
     from rlaopt.models import Model, LinSys  # Import only for type hints
 
 
+__all__ = ["_get_solver"]
+
+
 def _get_pcg(model: "LinSys", w_init: torch.Tensor, pcg_config: PCGConfig):
     return PCG(
         system=model,

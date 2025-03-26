@@ -13,6 +13,9 @@ from rlaopt.linops import LinOpType
 from rlaopt.preconditioners.configs import PreconditionerConfig
 
 
+__all__ = ["Preconditioner"]
+
+
 class Preconditioner(ABC):
     """Abstract base class for preconditioners.
 

@@ -1,6 +1,9 @@
 from abc import ABC
 
 
+__all__ = ["Solver"]
+
+
 class Solver(ABC):
     def __init__(self, *args: list, **kwargs: dict):
         pass

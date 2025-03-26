@@ -4,6 +4,9 @@ import time
 import wandb
 
 
+__all__ = ["Logger"]
+
+
 class Logger:
     def __init__(self, log_freq: int, log_fn: Callable, wandb_kwargs: dict):
         self.log_freq = log_freq

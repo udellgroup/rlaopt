@@ -1,21 +1,15 @@
-from rlaopt.preconditioners.preconditioner import Preconditioner
-from rlaopt.preconditioners.configs import (
-    PreconditionerConfig,
-    IdentityConfig,
-    NewtonConfig,
-    NystromConfig,
-    SkPreConfig,
-    _is_precond_config,
-)
-from rlaopt.preconditioners.preconditioner_factory import _get_precond
+import importlib
 
-__all__ = [
-    "Preconditioner",
-    "PreconditionerConfig",
-    "IdentityConfig",
-    "NewtonConfig",
-    "NystromConfig",
-    "SkPreConfig",
-    "_is_precond_config",
-    "_get_precond",
+modules_to_import = [
+    "rlaopt.preconditioners.configs",
+    "rlaopt.preconditioners.preconditioner",
+    "rlaopt.preconditioners.preconditioner_factory",
 ]
+
+__all__ = []
+for module in modules_to_import:
+    mod = importlib.import_module(module)
+    components = getattr(mod, "__all__", [])
+    for component in components:
+        globals()[component] = getattr(mod, component)
+        __all__.append(component)

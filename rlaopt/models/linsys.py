@@ -8,6 +8,9 @@ from rlaopt.utils import _is_callable, _is_torch_tensor, _is_nonneg_float, Logge
 from rlaopt.linops import LinOpType, _is_linop_or_torch_tensor
 
 
+__all__ = ["LinSys"]
+
+
 class LinSys(Model):
     """Model for solving positive-definite linear systems (A + reg * I)w = b."""
 

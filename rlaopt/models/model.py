@@ -8,6 +8,9 @@ from rlaopt.solvers import SolverConfig, Solver
 from rlaopt.utils import Logger
 
 
+__all__ = ["Model"]
+
+
 class Model(ABC):
     def __init__(self, *args, **kwargs):
         pass

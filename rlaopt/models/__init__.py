@@ -1,4 +1,14 @@
-from rlaopt.models.model import Model
-from rlaopt.models.linsys import LinSys
+import importlib
 
-__all__ = ["Model", "LinSys"]
+modules_to_import = [
+    "rlaopt.models.linsys",
+    "rlaopt.models.model",
+]
+
+__all__ = []
+for module in modules_to_import:
+    mod = importlib.import_module(module)
+    components = getattr(mod, "__all__", [])
+    for component in components:
+        globals()[component] = getattr(mod, component)
+        __all__.append(component)

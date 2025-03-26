@@ -66,7 +66,6 @@ class Sketch(ABC):
         """
         pass
 
-    @abstractmethod
     def _apply_left(self, x: Union[torch.Tensor, LinOpType]) -> torch.Tensor:
         """Left multiplies input by the sketching matrix: Omega @ x.
 
@@ -78,7 +77,6 @@ class Sketch(ABC):
         """
         return self.Omega_mat @ x
 
-    @abstractmethod
     def _apply_right(self, x: Union[torch.Tensor, LinOpType]) -> torch.Tensor:
         """Right multiplies input by the sketching matrix: x @ Omega.
 
@@ -90,7 +88,6 @@ class Sketch(ABC):
         """
         return x @ self.Omega_mat
 
-    @abstractmethod
     def _apply_left_trans(self, x: Union[torch.Tensor, LinOpType]) -> torch.Tensor:
         """Left multiplies input by the transposed sketching matrix: Omega.T @ x.
 
@@ -102,7 +99,6 @@ class Sketch(ABC):
         """
         return self.Omega_mat.T @ x
 
-    @abstractmethod
     def _apply_right_trans(self, x: Union[torch.Tensor, LinOpType]) -> torch.Tensor:
         """Right multiplies the input by the transposed sketching matrix: x @ Omega.T.
 

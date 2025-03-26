@@ -1,35 +1,15 @@
-from rlaopt.utils.input_checkers import (
-    _is_bool,
-    _is_callable,
-    _is_dict,
-    _is_list,
-    _is_set,
-    _is_str,
-    _is_torch_device,
-    _is_torch_size,
-    _is_torch_tensor,
-    _is_nonneg_float,
-    _is_pos_float,
-    _is_pos_int,
-    _is_sketch,
-)
-from rlaopt.utils.logger import Logger
-from rlaopt.utils.wandb_ import set_wandb_api_key
+import importlib
 
-__all__ = [
-    "_is_bool",
-    "_is_callable",
-    "_is_dict",
-    "_is_list",
-    "_is_set",
-    "_is_str",
-    "_is_torch_device",
-    "_is_torch_size",
-    "_is_torch_tensor",
-    "_is_nonneg_float",
-    "_is_pos_float",
-    "_is_pos_int",
-    "_is_sketch",
-    "Logger",
-    "set_wandb_api_key",
+modules_to_import = [
+    "rlaopt.utils.input_checkers",
+    "rlaopt.utils.logger",
+    "rlaopt.utils.wandb_",
 ]
+
+__all__ = []
+for module in modules_to_import:
+    mod = importlib.import_module(module)
+    components = getattr(mod, "__all__", [])
+    for component in components:
+        globals()[component] = getattr(mod, component)
+        __all__.append(component)
