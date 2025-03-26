@@ -1,3 +1,11 @@
-from rlaopt.sparse.sparse_tensor import SparseCSRTensor
+import importlib
 
-__all__ = ["SparseCSRTensor"]
+modules_to_import = ["rlaopt.sparse.sparse_tensor"]
+
+__all__ = []
+for module in modules_to_import:
+    mod = importlib.import_module(module)
+    components = getattr(mod, "__all__", [])
+    for component in components:
+        globals()[component] = getattr(mod, component)
+        __all__.append(component)

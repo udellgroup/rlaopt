@@ -6,6 +6,9 @@ import torch
 from rlaopt.sparse.ops import _get_row_slice, _csc_matvec
 
 
+__all__ = ["SparseCSRTensor"]
+
+
 class _SparseTensor:
     def __init__(
         self,
