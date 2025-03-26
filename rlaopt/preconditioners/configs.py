@@ -8,7 +8,13 @@ from abc import ABC
 from dataclasses import dataclass, asdict
 from typing import Any
 
-from rlaopt.utils import _is_str, _is_nonneg_float, _is_pos_int, _is_sketch
+from rlaopt.utils import (
+    _is_str,
+    _is_nonneg_float,
+    _is_pos_int,
+    _is_sketch,
+    _is_strategy,
+)
 
 
 @dataclass(kw_only=True, frozen=False)
@@ -65,13 +71,17 @@ class NystromConfig(PreconditionerConfig):
     rank: int
     rho: float
     sketch: str = "ortho"
+    damping_strategy: str = "adaptive"
 
     def __post_init__(self):
         """Validate the configuration parameters after initialization."""
         _is_pos_int(self.rank, "rank")
         _is_nonneg_float(self.rho, "rho")
+
         _is_str(self.sketch, "sketch")
         _is_sketch(self.sketch)
+        _is_str(self.damping_strategy, "damping_strategy")
+        _is_strategy(self.damping_strategy)
 
 
 @dataclass(kw_only=True, frozen=False)
@@ -87,6 +97,7 @@ class SkPreConfig(PreconditionerConfig):
     sketch_size: int
     rho: float
     sketch: str = "sparse"
+    damping_strategy: str = "non_adaptive"
 
     def __post_init__(self):
         """Validate the configuration parameters after initialization."""
