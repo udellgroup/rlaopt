@@ -11,6 +11,16 @@ from typing import Any
 from rlaopt.utils import _is_str, _is_nonneg_float, _is_pos_int, _is_sketch
 
 
+__all__ = [
+    "PreconditionerConfig",
+    "IdentityConfig",
+    "NewtonConfig",
+    "NystromConfig",
+    "SkPreConfig",
+    "_is_precond_config",
+]
+
+
 @dataclass(kw_only=True, frozen=False)
 class PreconditionerConfig(ABC):
     """Abstract base class for preconditioner configurations.

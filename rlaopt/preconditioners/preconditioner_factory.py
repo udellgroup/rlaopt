@@ -27,6 +27,9 @@ CONFIG_TO_PRECONDITIONER = {
 }
 
 
+__all__ = ["_get_precond"]
+
+
 def _get_precond(precond_config: PreconditionerConfig):
     """Create and return a preconditioner instance based on the given configuration.
 
