@@ -81,6 +81,25 @@ class SAP(Solver):
             v /= torch.linalg.norm(v)
         return max_eig ** (-1.0)
 
+    def _get_damping(self, blk: torch.Tensor, blk_precond: Preconditioner):
+        v = torch.randn(blk.shape[0], device=self.device)
+        v /= torch.linalg.norm(v)
+
+        max_eig = None
+
+        # Randomized power iteration to estimate the maximum eigenvalue
+        for _ in range(self.power_iters):
+            v_old = v.clone()
+            v = (
+                self.system.A_blk_oracle(blk) @ v
+                + self.precond_config.rho * v
+                - blk_precond @ v
+            )
+            max_eig = torch.dot(v, v_old)
+            v /= torch.linalg.norm(v)
+
+        self.precond_config.rho = max_eig
+
     def _get_block_update(
         self, w: torch.Tensor, blk: torch.Tensor, blk_precond: Preconditioner
     ):
@@ -101,7 +120,12 @@ class SAP(Solver):
 
         # Compute block preconditioner and learning rate
         blk_precond = self._get_precond(blk)
-        blk_stepsize = self._get_stepsize(blk, blk_precond)
+        if self.precond_config.damping_strategy == "adaptive":
+            self._get_damping(blk, blk_precond)
+            blk_stepsize = 0.5
+
+        else:
+            blk_stepsize = self._get_stepsize(blk, blk_precond)
 
         # Get the update direction
         # Update direction is computed at self.y if accelerated, else at self._w
