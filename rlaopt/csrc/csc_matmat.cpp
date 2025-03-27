@@ -9,46 +9,33 @@
 namespace rlaopt {
 
 template <typename scalar_t>
-torch::Tensor csc_matmat_cpu_impl(const torch::Tensor& sparse_tensor,
-                                  const torch::Tensor& dense_matrix) {
-    auto values = sparse_tensor.values();
-    auto row_indices = sparse_tensor.row_indices();
-    auto col_ptrs = sparse_tensor.ccol_indices();
-
-    auto num_rows = sparse_tensor.size(0);
-    auto num_cols = sparse_tensor.size(1);
-    auto batch_size = dense_matrix.size(1);  // Number of columns in the dense matrix
-
-    auto result = torch::zeros({num_rows, batch_size}, dense_matrix.options());
-
-    auto values_accessor = values.accessor<scalar_t, 1>();
-    auto row_indices_accessor = row_indices.accessor<int64_t, 1>();
-    auto col_ptrs_accessor = col_ptrs.accessor<int64_t, 1>();
-    auto dense_matrix_accessor = dense_matrix.accessor<scalar_t, 2>();
-    auto result_accessor = result.accessor<scalar_t, 2>();
-
+void csc_matmat_cpu_impl(const scalar_t* values, const int64_t* row_indices,
+                         const int64_t* col_ptrs, const scalar_t* dense_matrix_ptr,
+                         scalar_t* result_ptr, int64_t num_rows, int64_t num_cols,
+                         int64_t batch_size, int64_t dense_col_stride, int64_t dense_batch_stride,
+                         int64_t result_row_stride, int64_t result_batch_stride) {
 // Parallelize the outer loop (each thread processes a different column of the output)
 #pragma omp parallel for
     for (int64_t b = 0; b < batch_size; ++b) {
         // For this column of the dense matrix, compute sparse_matrix * dense_column
         for (int64_t col = 0; col < num_cols; ++col) {
-            scalar_t x_jb = dense_matrix_accessor[col][b];
+            scalar_t x_jb = dense_matrix_ptr[col * dense_col_stride + b * dense_batch_stride];
 
-            for (int64_t k = col_ptrs_accessor[col]; k < col_ptrs_accessor[col + 1]; ++k) {
-                int64_t row = row_indices_accessor[k];
-                scalar_t value = values_accessor[k];
-                result_accessor[row][b] += value * x_jb;
+            // Skip computation if value is zero
+            if (x_jb == 0) continue;
+
+            for (int64_t k = col_ptrs[col]; k < col_ptrs[col + 1]; ++k) {
+                int64_t row = row_indices[k];
+                scalar_t value = values[k];
+                result_ptr[row * result_row_stride + b * result_batch_stride] += value * x_jb;
             }
         }
     }
-
-    return result;
 }
 
 torch::Tensor csc_matmat_cpu(const torch::Tensor& sparse_tensor,
                              const torch::Tensor& dense_matrix) {
     TORCH_CHECK(sparse_tensor.layout() == at::kSparseCsc, "Input tensor must be in CSC format");
-    TORCH_CHECK(dense_matrix.is_contiguous(), "dense_matrix must be contiguous");
     TORCH_CHECK(dense_matrix.dim() == 2, "dense_matrix must be 2-dimensional");
     TORCH_CHECK(sparse_tensor.device().type() == at::DeviceType::CPU,
                 "Input tensor must be on CPU");
@@ -59,22 +46,51 @@ torch::Tensor csc_matmat_cpu(const torch::Tensor& sparse_tensor,
     TORCH_CHECK(sparse_tensor.dtype() == torch::kFloat || sparse_tensor.dtype() == torch::kDouble,
                 "sparse_tensor must be float32 or float64");
 
+    // Get tensor sizes
+    auto num_rows = sparse_tensor.size(0);
     auto num_cols = sparse_tensor.size(1);
+    auto batch_size = dense_matrix.size(1);
+
     TORCH_CHECK(num_cols == dense_matrix.size(0),
                 "Number of columns in sparse tensor must match dense matrix rows");
 
+    // Get strides for efficient memory access
+    auto dense_strides = dense_matrix.strides();
+    int64_t dense_col_stride = dense_strides[0];
+    int64_t dense_batch_stride = dense_strides[1];
+
+    // Create result tensor
+    auto result = torch::zeros({num_rows, batch_size}, dense_matrix.options());
+    auto result_strides = result.strides();
+    int64_t result_row_stride = result_strides[0];
+    int64_t result_batch_stride = result_strides[1];
+
 // Get the number of available threads (for debugging purposes)
-// This is useful to check if OpenMP is being used correctly
 #ifdef _OPENMP
     int num_threads = omp_get_max_threads();
     printf("Running CSC matrix-matrix multiplication with %d OpenMP threads\n", num_threads);
 #endif
 
-    if (sparse_tensor.dtype() == torch::kFloat) {
-        return csc_matmat_cpu_impl<float>(sparse_tensor, dense_matrix);
-    } else {
-        return csc_matmat_cpu_impl<double>(sparse_tensor, dense_matrix);
-    }
+    // Get row indices and column pointers (same for all data types)
+    const int64_t* row_indices = sparse_tensor.row_indices().data_ptr<int64_t>();
+    const int64_t* col_ptrs = sparse_tensor.ccol_indices().data_ptr<int64_t>();
+
+    // Use AT_DISPATCH_FLOATING_TYPES to handle different scalar types
+    AT_DISPATCH_FLOATING_TYPES(
+        sparse_tensor.scalar_type(), "csc_matmat_cpu", ([&] {
+            // Get type-specific pointers
+            const scalar_t* values = sparse_tensor.values().data_ptr<scalar_t>();
+            const scalar_t* dense_matrix_ptr = dense_matrix.data_ptr<scalar_t>();
+            scalar_t* result_ptr = result.data_ptr<scalar_t>();
+
+            // Call implementation with the right type
+            csc_matmat_cpu_impl<scalar_t>(values, row_indices, col_ptrs, dense_matrix_ptr,
+                                          result_ptr, num_rows, num_cols, batch_size,
+                                          dense_col_stride, dense_batch_stride, result_row_stride,
+                                          result_batch_stride);
+        }));
+
+    return result;
 }
 
 TORCH_LIBRARY_FRAGMENT(rlaopt, m) {
