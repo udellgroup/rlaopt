@@ -37,7 +37,7 @@ result_np = torch.tensor(result_np, device=device)
 
 assert torch.allclose(result, result_np)
 
-D = torch.randn(X_torch_T.shape[1], 20, device=device)
+D = torch.randn(X_torch_T.shape[1], 256, device=device)
 ts = time.time()
 result = X_torch_T @ D
 print("Time taken for csc matmat (extension):", time.time() - ts)

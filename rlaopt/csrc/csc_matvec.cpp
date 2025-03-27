@@ -26,9 +26,6 @@ torch::Tensor csc_matvec_cpu_impl(const torch::Tensor& sparse_tensor,
     for (int64_t col = 0; col < num_cols; ++col) {
         scalar_t x_j = dense_vector_accessor[col];
 
-        // Skip if the entry in the dense matrix is zero (optimization)
-        if (x_j == 0) continue;
-
         for (int64_t k = col_ptrs_accessor[col]; k < col_ptrs_accessor[col + 1]; ++k) {
             int64_t row = row_indices_accessor[k];
             scalar_t value = values_accessor[k];

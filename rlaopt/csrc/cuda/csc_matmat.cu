@@ -4,6 +4,78 @@
 
 namespace rlaopt {
 
+// Get properties of the current CUDA device
+cudaDeviceProp get_device_properties() {
+    int device;
+    cudaGetDevice(&device);
+    cudaDeviceProp props;
+    cudaGetDeviceProperties(&props, device);
+    return props;
+}
+
+// Helper struct to store device grid limits
+struct DeviceGridLimits {
+    int max_grid_dim_x;
+    int max_grid_dim_y;
+};
+
+// Helper to get device properties and maximum grid dimensions
+DeviceGridLimits get_device_grid_limits(const cudaDeviceProp& props) {
+    DeviceGridLimits limits;
+    limits.max_grid_dim_x = props.maxGridSize[0];
+    limits.max_grid_dim_y = props.maxGridSize[1];
+
+    return limits;
+}
+
+// Get optimal thread block configuration based on device properties and problem size
+dim3 get_optimal_block_config(int64_t batch_size, const cudaDeviceProp& props) {
+    // Calculate target threads based on device capabilities
+    // Most devices work well with 256 threads per block, but we can be more precise
+    int max_threads_per_block = props.maxThreadsPerBlock;
+    int warp_size = props.warpSize;
+
+    // Best practice: Use a multiple of 32 (warp size) for total thread count
+    // Aim for 25-75% of max threads per block for good occupancy
+    int target_threads = 256;  // Default starting point
+
+    // Adjust based on device capabilities
+    if (max_threads_per_block < 1024) {
+        // For older devices or those with smaller limits
+        target_threads = max_threads_per_block / 2;
+    } else {
+        // For modern devices, use a value that achieves good occupancy
+        // typically 256 or 512 works well
+        target_threads = 256;
+    }
+
+    // Ensure target_threads is a multiple of warp_size
+    target_threads = (target_threads / warp_size) * warp_size;
+
+    // Start with default configuration
+    int threads_x = 16;                   // For columns (just 1 column per thread)
+    int threads_y = target_threads / 16;  // For batches (process many batches per block)
+
+    // If batch_size is too small to fill a block
+    if (batch_size < target_threads / 16) {
+        if (batch_size <= target_threads / 32) {
+            // Very small batch size - distribute threads to process more columns
+            threads_y = batch_size;
+            threads_x = target_threads / threads_y;
+            // Ensure threads_x is a power of 2 for better memory alignment
+            threads_x = 1 << (int)log2(threads_x);
+        } else {
+            // Moderate batch size - just use the batch_size
+            threads_y = batch_size;
+        }
+    }
+
+    printf("Device: %s, Using block size: %d×%d = %d threads (target: %d)\n", props.name, threads_x,
+           threads_y, threads_x * threads_y, target_threads);
+
+    return dim3(threads_x, threads_y);
+}
+
 // CUDA kernel for CSC matrix-matrix product with 2D thread blocks
 template <typename scalar_t>
 __global__ void csc_matmat_kernel_2d(
@@ -18,58 +90,12 @@ __global__ void csc_matmat_kernel_2d(
     if (col < num_cols && b < batch_size) {
         scalar_t x_jb = dense_matrix[col * dense_col_stride + b * dense_batch_stride];
 
-        // Skip computation if the value is zero
-        if (x_jb == 0) return;
-
         for (int64_t k = col_ptrs[col]; k < col_ptrs[col + 1]; ++k) {
             int64_t row = row_indices[k];
             scalar_t value = values[k];
             atomicAdd(&result[row * result_row_stride + b * result_batch_stride], value * x_jb);
         }
     }
-}
-
-// Helper struct to store device grid limits
-struct DeviceGridLimits {
-    int max_grid_dim_x;
-    int max_grid_dim_y;
-};
-
-// Helper to get device properties and maximum grid dimensions
-DeviceGridLimits get_device_grid_limits() {
-    int device;
-    cudaGetDevice(&device);
-    cudaDeviceProp props;
-    cudaGetDeviceProperties(&props, device);
-
-    DeviceGridLimits limits;
-    limits.max_grid_dim_x = props.maxGridSize[0];
-    limits.max_grid_dim_y = props.maxGridSize[1];
-
-    return limits;
-}
-
-// Optimized configuration for when the sparse matrix has more columns than the batch size
-dim3 get_optimal_block_config(int64_t batch_size) {
-    // We aim for ~256 threads per block for good occupancy
-    const int target_threads = 256;
-
-    // Start with default 1x256 configuration - optimized for column-heavy matrices
-    int threads_x = 1;    // For columns now (just 1 column per thread)
-    int threads_y = 256;  // For batches now (process many batches per block)
-
-    // If batch_size is small, adjust dimensions
-    if (batch_size <= 128) {
-        threads_y = batch_size;
-        // Increase threads_x to maintain target thread count
-        threads_x = target_threads / threads_y;
-    } else if (batch_size < 256) {
-        // If batch_size is between 129-255, just use the batch_size
-        threads_y = batch_size;
-        threads_x = 1;
-    }
-
-    return dim3(threads_x, threads_y);
 }
 
 torch::Tensor csc_matmat_cuda(const torch::Tensor& sparse_tensor,
@@ -108,11 +134,14 @@ torch::Tensor csc_matmat_cuda(const torch::Tensor& sparse_tensor,
     int64_t result_row_stride = result_strides[0];
     int64_t result_batch_stride = result_strides[1];
 
+    // Get device properties
+    cudaDeviceProp props = get_device_properties();
+
     // Dynamically determine optimal thread block configuration
-    dim3 threads_per_block = get_optimal_block_config(batch_size);
+    dim3 threads_per_block = get_optimal_block_config(batch_size, props);
 
     // Dynamically get maximum grid dimensions from the current device
-    DeviceGridLimits grid_limits = get_device_grid_limits();
+    DeviceGridLimits grid_limits = get_device_grid_limits(props);
     int64_t MAX_GRID_DIM_X = grid_limits.max_grid_dim_x;
     int64_t MAX_GRID_DIM_Y = grid_limits.max_grid_dim_y;
 
@@ -134,7 +163,7 @@ torch::Tensor csc_matmat_cuda(const torch::Tensor& sparse_tensor,
 
             // Uncomment for debugging
             printf(
-                "Processing columns %lld to %lld, batches %lld to %lld (Grid: %d×%d, Block: "
+                "Processing columns %ld to %ld, batches %ld to %ld (Grid: %d×%d, Block: "
                 "%d×%d)\n",
                 col_start, col_start + cols_in_chunk - 1, batch_start,
                 batch_start + batches_in_chunk - 1, grid_x, grid_y, threads_per_block.x,
