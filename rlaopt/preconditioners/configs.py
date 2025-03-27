@@ -6,14 +6,14 @@ preconditioner types, as well as validation utilities.
 
 from abc import ABC
 from dataclasses import dataclass, asdict
-from typing import Any
+from typing import Any, Union
 
+from .enums import DampingMode
 from rlaopt.utils import (
     _is_str,
     _is_nonneg_float,
     _is_pos_int,
     _is_sketch,
-    _is_strategy,
 )
 
 
@@ -76,12 +76,15 @@ class NystromConfig(PreconditionerConfig):
         rank (int): Rank of the Nyström approximation.
         rho (float): Regularization parameter.
         sketch (str): Type of sketching method to use. Defaults to "ortho".
+        damping_mode (DampingMode or str): Damping mode to use. Can be specified as
+            DampingMode.ADAPTIVE, DampingMode.NON_ADAPTIVE,
+            "adaptive", or "non_adaptive". Defaults to DampingMode.ADAPTIVE.
     """
 
     rank: int
     rho: float
     sketch: str = "ortho"
-    damping_strategy: str = "adaptive"
+    damping_mode: Union[DampingMode, str] = DampingMode.ADAPTIVE
 
     def __post_init__(self):
         """Validate the configuration parameters after initialization."""
@@ -90,8 +93,7 @@ class NystromConfig(PreconditionerConfig):
 
         _is_str(self.sketch, "sketch")
         _is_sketch(self.sketch)
-        _is_str(self.damping_strategy, "damping_strategy")
-        _is_strategy(self.damping_strategy)
+        self.damping_mode = DampingMode._from_str(self.damping_mode, "damping_mode")
 
 
 @dataclass(kw_only=True, frozen=False)

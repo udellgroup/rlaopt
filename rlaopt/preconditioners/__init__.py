@@ -2,8 +2,9 @@ import importlib
 
 modules_to_import = [
     "rlaopt.preconditioners.configs",
+    "rlaopt.preconditioners.enums",
+    "rlaopt.preconditioners.factory",
     "rlaopt.preconditioners.preconditioner",
-    "rlaopt.preconditioners.preconditioner_factory",
 ]
 
 __all__ = []

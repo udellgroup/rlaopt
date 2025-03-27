@@ -2,6 +2,7 @@ import importlib
 
 modules_to_import = [
     "rlaopt.linops.distributed",
+    "rlaopt.linops.enums",
     "rlaopt.linops.simple",
     "rlaopt.linops.types",
 ]

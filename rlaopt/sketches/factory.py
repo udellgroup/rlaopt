@@ -7,12 +7,14 @@ parameters and configurations.
 import torch
 
 from .sketch import Sketch
-
 from .gauss import Gauss
 from .sparse import Sparse
 from .ortho import Ortho
 
 SKETCHES = {"gauss": Gauss, "ortho": Ortho, "sparse": Sparse}
+
+
+__all__ = ["get_sketch"]
 
 
 def get_sketch(

@@ -19,7 +19,6 @@ __all__ = [
     "_is_pos_float",
     "_is_pos_int",
     "_is_sketch",
-    "_is_strategy"
 ]
 
 
@@ -126,11 +125,3 @@ def _is_sketch(sketch: str):
     valid_sketches = ["gauss", "ortho", "sparse"]
     if sketch not in valid_sketches:
         raise ValueError(f"sketch must be in {valid_sketches}, but received {sketch}")
-
-
-def _is_strategy(damping_strategy: str):
-    valid_strategies = ["adaptive", "non_adaptive"]
-    if damping_strategy not in valid_strategies:
-        raise ValueError(
-            f"strategy must be in {valid_strategies}, but received {damping_strategy}"
-        )

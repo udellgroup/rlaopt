@@ -3,11 +3,11 @@ from typing import Callable, Optional
 import torch
 from torch import vmap
 
+from .base import _BaseLinOp
 from rlaopt.utils.input_checkers import (
     _is_callable,
     _is_torch_device,
 )
-from rlaopt.linops.base import _BaseLinOp
 
 __all__ = ["LinOp", "TwoSidedLinOp", "SymmetricLinOp"]
 

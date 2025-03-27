@@ -1,11 +1,7 @@
-"Spectral estimators module __init__.py file."
-
 import importlib
 
 modules_to_import = [
-    "rlaopt.spectral_estimators.frobenius_norm",
-    "rlaopt.spectral_estimators.spectral_norm",
-    "rlaopt.spectral_estimators.trace",
+    "rlaopt.sketches.factory",
 ]
 
 __all__ = []

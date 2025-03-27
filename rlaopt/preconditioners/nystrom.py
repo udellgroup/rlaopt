@@ -2,9 +2,9 @@
 
 import torch
 
-from rlaopt.preconditioners.preconditioner import Preconditioner
-from rlaopt.preconditioners.configs import NystromConfig
-from rlaopt.preconditioners.sketches.sketch_factory import get_sketch
+from .preconditioner import Preconditioner
+from .configs import NystromConfig
+from rlaopt.sketches import get_sketch
 
 
 class Nystrom(Preconditioner):

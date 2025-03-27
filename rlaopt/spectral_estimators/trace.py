@@ -5,7 +5,10 @@ from typing import Tuple, Union
 import torch
 
 from rlaopt.linops import SymmetricLinOp
-from rlaopt.preconditioners.sketches.sketch_factory import get_sketch
+from rlaopt.sketches import get_sketch
+
+
+__all__ = ["hutchinson", "hutch_plus_plus"]
 
 
 def hutchinson(A: SymmetricLinOp, k: int, sketch: str) -> Tuple[float, float]:
