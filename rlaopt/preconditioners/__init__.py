@@ -3,7 +3,7 @@ import importlib
 modules_to_import = [
     "rlaopt.preconditioners.configs",
     "rlaopt.preconditioners.preconditioner",
-    "rlaopt.preconditioners.preconditioner_factory",
+    "rlaopt.preconditioners.factory",
 ]
 
 __all__ = []

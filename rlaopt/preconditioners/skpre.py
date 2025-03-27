@@ -5,7 +5,7 @@ import torch
 
 from rlaopt.preconditioners.preconditioner import Preconditioner
 from rlaopt.preconditioners.configs import SkPreConfig
-from rlaopt.preconditioners.sketches.sketch_factory import get_sketch
+from rlaopt.preconditioners.sketches.factory import get_sketch
 
 
 class SkPre(Preconditioner):
