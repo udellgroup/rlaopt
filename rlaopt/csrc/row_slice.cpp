@@ -23,65 +23,98 @@ PyObject* PyInit__C(void) {
 
 namespace rlaopt {
 
+namespace {
+template <typename scalar_t>
+void get_row_slice_cpu_impl(const scalar_t* values_ptr, const int64_t* crow_indices_ptr,
+                            const int64_t* col_indices_ptr, const int64_t* row_indices_ptr,
+                            scalar_t* new_values_ptr, int64_t* new_col_indices_ptr,
+                            int64_t* new_crow_indices_ptr, int64_t num_requested_rows,
+                            int64_t num_cols) {
+    int64_t current_nnz = 0;
+    new_crow_indices_ptr[0] = 0;
+
+    for (int64_t i = 0; i < num_requested_rows; i++) {
+        int64_t row = row_indices_ptr[i];
+        int64_t start = crow_indices_ptr[row];
+        int64_t end = crow_indices_ptr[row + 1];
+        int64_t row_nnz = end - start;
+
+        // Copy values and column indices for this row
+        for (int64_t j = 0; j < row_nnz; j++) {
+            new_values_ptr[current_nnz + j] = values_ptr[start + j];
+            new_col_indices_ptr[current_nnz + j] = col_indices_ptr[start + j];
+        }
+
+        current_nnz += row_nnz;
+        new_crow_indices_ptr[i + 1] = current_nnz;
+    }
+}
+}  // namespace
+
 at::Tensor get_row_slice_cpu(const at::Tensor& sparse_tensor, const at::Tensor& row_indices) {
     TORCH_CHECK(sparse_tensor.layout() == at::kSparseCsr, "Input tensor must be in CSR format");
     TORCH_CHECK(row_indices.is_contiguous(), "row_indices must be contiguous");
     TORCH_CHECK(row_indices.dim() == 1, "row_indices must be 1-dimensional");
+    TORCH_CHECK(sparse_tensor.dtype() == at::kFloat || sparse_tensor.dtype() == at::kDouble,
+                "Input tensor must be float32 or float64");
+    TORCH_CHECK(row_indices.dtype() == at::kLong, "Row indices must be long");
     TORCH_CHECK(sparse_tensor.device().type() == at::DeviceType::CPU,
                 "Input tensor must be on CPU");
     TORCH_CHECK(row_indices.device().type() == at::DeviceType::CPU, "row_indices must be on CPU");
 
+    // Get sizes and pointers
+    auto num_requested_rows = row_indices.size(0);
+    auto num_cols = sparse_tensor.size(1);
+    auto row_indices_ptr = row_indices.data_ptr<int64_t>();
+
+    // Get CSR components
     auto values = sparse_tensor.values();
     auto crow_indices = sparse_tensor.crow_indices();
     auto col_indices = sparse_tensor.col_indices();
 
-    auto num_requested_rows = row_indices.size(0);
+    // Get pointers for CSR components
+    auto crow_indices_ptr = crow_indices.data_ptr<int64_t>();
+    auto col_indices_ptr = col_indices.data_ptr<int64_t>();
 
     // Calculate the total number of non-zero elements in the selected rows
-    auto new_nnz = at::zeros({1}, crow_indices.options());
+    int64_t new_nnz = 0;
     for (int64_t i = 0; i < num_requested_rows; i++) {
-        auto row = row_indices.index({i}).item<int64_t>();
-        new_nnz += crow_indices.index({row + 1}) - crow_indices.index({row});
+        int64_t row = row_indices_ptr[i];
+        new_nnz += crow_indices_ptr[row + 1] - crow_indices_ptr[row];
     }
 
     // Create new tensors for the result
-    auto new_values = at::empty(new_nnz.item<int64_t>(), values.options());
-    auto new_col_indices = at::empty(new_nnz.item<int64_t>(), col_indices.options());
-    auto new_crow_indices = at::empty(num_requested_rows + 1, crow_indices.options());
+    auto new_crow_indices = torch::empty({num_requested_rows + 1}, crow_indices.options());
+    auto new_col_indices = torch::empty({new_nnz}, col_indices.options());
+    auto new_values = torch::empty({new_nnz}, values.options());
 
-    int64_t current_nnz = 0;
-    new_crow_indices.index_put_({0}, 0);
+    // Get pointers for new tensors
+    auto new_crow_indices_ptr = new_crow_indices.data_ptr<int64_t>();
+    auto new_col_indices_ptr = new_col_indices.data_ptr<int64_t>();
 
-    for (int64_t i = 0; i < num_requested_rows; i++) {
-        auto row = row_indices.index({i}).item<int64_t>();
-        auto start = crow_indices.index({row}).item<int64_t>();
-        auto end = crow_indices.index({row + 1}).item<int64_t>();
-        auto row_nnz = end - start;
+    // Use type dispatch to handle float and double
+    AT_DISPATCH_FLOATING_TYPES(sparse_tensor.scalar_type(), "get_row_slice_cpu", ([&] {
+                                   // Get type-specific pointers
+                                   const scalar_t* values_ptr = values.data_ptr<scalar_t>();
+                                   scalar_t* new_values_ptr = new_values.data_ptr<scalar_t>();
 
-        new_values.index_copy_(0, at::arange(current_nnz, current_nnz + row_nnz),
-                               values.slice(0, start, end));
-        new_col_indices.index_copy_(0, at::arange(current_nnz, current_nnz + row_nnz),
-                                    col_indices.slice(0, start, end));
+                                   // Call implementation
+                                   get_row_slice_cpu_impl<scalar_t>(
+                                       values_ptr, crow_indices_ptr, col_indices_ptr,
+                                       row_indices_ptr, new_values_ptr, new_col_indices_ptr,
+                                       new_crow_indices_ptr, num_requested_rows, num_cols);
+                               }));
 
-        current_nnz += row_nnz;
-        new_crow_indices.index_put_({i + 1}, current_nnz);
-    }
-
-    // Create const references to the tensors
-    const at::Tensor& const_new_crow_indices = new_crow_indices;
-    const at::Tensor& const_new_col_indices = new_col_indices;
-    const at::Tensor& const_new_values = new_values;
-
-    return at::sparse_csr_tensor(const_new_crow_indices, const_new_col_indices, const_new_values,
-                                 {num_requested_rows, sparse_tensor.size(1)},
-                                 sparse_tensor.options());
+    // Create the result sparse tensor
+    return at::sparse_csr_tensor(new_crow_indices, new_col_indices, new_values,
+                                 {num_requested_rows, num_cols}, sparse_tensor.options());
 }
 
 TORCH_LIBRARY_FRAGMENT(rlaopt, m) {
     m.def("get_row_slice(Tensor sparse_csr_tensor, Tensor row_indices) -> Tensor");
 }
 
-// Registers SparseCsrCUDA backend for get_row_slice
+// Registers SparseCsrCPU backend for get_row_slice
 TORCH_LIBRARY_IMPL(rlaopt, SparseCsrCPU, m) { m.impl("get_row_slice", &get_row_slice_cpu); }
 
 }  // namespace rlaopt

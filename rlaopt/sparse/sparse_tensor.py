@@ -3,7 +3,7 @@ from typing import Optional, Union
 import scipy.sparse
 import torch
 
-from rlaopt.sparse.ops import _get_row_slice, _csc_matvec
+from rlaopt.sparse.ops import _get_row_slice, _csc_matmul
 
 
 __all__ = ["SparseCSRTensor"]
@@ -41,7 +41,7 @@ class _SparseTensor:
         if self.data.layout == torch.sparse_csr:
             return self.data @ v
         elif self.data.layout == torch.sparse_csc:
-            return _csc_matvec(self.data, v)
+            return _csc_matmul(self.data, v)
 
     @property
     def T(self) -> "_SparseTensor":

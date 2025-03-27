@@ -5,35 +5,22 @@
 
 namespace rlaopt {
 
+namespace {
 template <typename scalar_t>
-torch::Tensor csc_matvec_cpu_impl(const torch::Tensor& sparse_tensor,
-                                  const torch::Tensor& dense_vector) {
-    auto values = sparse_tensor.values();
-    auto row_indices = sparse_tensor.row_indices();
-    auto col_ptrs = sparse_tensor.ccol_indices();
-
-    auto num_rows = sparse_tensor.size(0);
-    auto num_cols = sparse_tensor.size(1);
-
-    auto result = torch::zeros({num_rows}, dense_vector.options());
-
-    auto values_accessor = values.accessor<scalar_t, 1>();
-    auto row_indices_accessor = row_indices.accessor<int64_t, 1>();
-    auto col_ptrs_accessor = col_ptrs.accessor<int64_t, 1>();
-    auto dense_vector_accessor = dense_vector.accessor<scalar_t, 1>();
-    auto result_accessor = result.accessor<scalar_t, 1>();
-
+void csc_matvec_cpu_impl(const scalar_t* values, const int64_t* row_indices,
+                         const int64_t* col_ptrs, const scalar_t* dense_vector_ptr,
+                         scalar_t* result_ptr, int64_t num_rows, int64_t num_cols) {
     for (int64_t col = 0; col < num_cols; ++col) {
-        scalar_t x_j = dense_vector_accessor[col];
-        for (int64_t k = col_ptrs_accessor[col]; k < col_ptrs_accessor[col + 1]; ++k) {
-            int64_t row = row_indices_accessor[k];
-            scalar_t value = values_accessor[k];
-            result_accessor[row] += value * x_j;
+        scalar_t x_j = dense_vector_ptr[col];
+
+        for (int64_t k = col_ptrs[col]; k < col_ptrs[col + 1]; ++k) {
+            int64_t row = row_indices[k];
+            scalar_t value = values[k];
+            result_ptr[row] += value * x_j;
         }
     }
-
-    return result;
 }
+}  // namespace
 
 torch::Tensor csc_matvec_cpu(const torch::Tensor& sparse_tensor,
                              const torch::Tensor& dense_vector) {
@@ -49,15 +36,34 @@ torch::Tensor csc_matvec_cpu(const torch::Tensor& sparse_tensor,
     TORCH_CHECK(sparse_tensor.dtype() == torch::kFloat || sparse_tensor.dtype() == torch::kDouble,
                 "sparse_tensor must be float32 or float64");
 
+    // Get tensor sizes
+    auto num_rows = sparse_tensor.size(0);
     auto num_cols = sparse_tensor.size(1);
+
     TORCH_CHECK(num_cols == dense_vector.size(0),
                 "Number of columns in sparse tensor must match dense vector size");
 
-    if (sparse_tensor.dtype() == torch::kFloat) {
-        return csc_matvec_cpu_impl<float>(sparse_tensor, dense_vector);
-    } else {
-        return csc_matvec_cpu_impl<double>(sparse_tensor, dense_vector);
-    }
+    // Create result tensor
+    auto result = torch::zeros({num_rows}, dense_vector.options());
+
+    // Get row indices and column pointers (same for all data types)
+    const int64_t* row_indices = sparse_tensor.row_indices().data_ptr<int64_t>();
+    const int64_t* col_ptrs = sparse_tensor.ccol_indices().data_ptr<int64_t>();
+
+    // Use AT_DISPATCH_FLOATING_TYPES to handle different scalar types
+    AT_DISPATCH_FLOATING_TYPES(
+        sparse_tensor.scalar_type(), "csc_matvec_cpu", ([&] {
+            // Get type-specific pointers
+            const scalar_t* values = sparse_tensor.values().data_ptr<scalar_t>();
+            const scalar_t* dense_vector_ptr = dense_vector.data_ptr<scalar_t>();
+            scalar_t* result_ptr = result.data_ptr<scalar_t>();
+
+            // Call implementation with the right type
+            csc_matvec_cpu_impl<scalar_t>(values, row_indices, col_ptrs, dense_vector_ptr,
+                                          result_ptr, num_rows, num_cols);
+        }));
+
+    return result;
 }
 
 TORCH_LIBRARY_FRAGMENT(rlaopt, m) {

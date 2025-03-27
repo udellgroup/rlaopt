@@ -4,6 +4,7 @@
 
 namespace rlaopt {
 
+namespace {
 __global__ void compute_row_nnz_kernel(const int64_t num_requested_rows,
                                        const int64_t* crow_indices, const int64_t* row_indices,
                                        int64_t* new_crow_indices) {
@@ -35,9 +36,12 @@ __global__ void copy_values_and_indices_kernel(const int64_t num_requested_rows,
         }
     }
 }
+}  // namespace
 
 at::Tensor get_row_slice_cuda(const at::Tensor& sparse_tensor, const at::Tensor& row_indices) {
     TORCH_CHECK(sparse_tensor.layout() == at::kSparseCsr, "Input tensor must be in CSR format");
+    TORCH_CHECK(row_indices.is_contiguous(), "row_indices must be contiguous");
+    TORCH_CHECK(row_indices.dim() == 1, "row_indices must be 1-dimensional");
     TORCH_CHECK(sparse_tensor.dtype() == at::kFloat || sparse_tensor.dtype() == at::kDouble,
                 "Input tensor must be float32 or float64");
     TORCH_CHECK(row_indices.dtype() == at::kLong, "Row indices must be long");
