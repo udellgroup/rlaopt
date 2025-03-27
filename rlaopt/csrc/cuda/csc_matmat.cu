@@ -11,9 +11,9 @@ __global__ void csc_matmat_kernel_2d(
     const int64_t* __restrict__ col_ptrs, const scalar_t* __restrict__ dense_matrix,
     scalar_t* __restrict__ result, int64_t num_cols, int64_t batch_size, int64_t dense_col_stride,
     int64_t dense_batch_stride, int64_t result_row_stride, int64_t result_batch_stride) {
-    // Use 2D thread blocks and 2D grid for maximum parallelism
-    int b = blockIdx.x * blockDim.x + threadIdx.x;
-    int col = blockIdx.y * blockDim.y + threadIdx.y;
+    // x dimension is for columns and y dimension is for batches
+    int col = blockIdx.x * blockDim.x + threadIdx.x;
+    int b = blockIdx.y * blockDim.y + threadIdx.y;
 
     if (col < num_cols && b < batch_size) {
         scalar_t x_jb = dense_matrix[col * dense_col_stride + b * dense_batch_stride];
@@ -49,24 +49,24 @@ DeviceGridLimits get_device_grid_limits() {
     return limits;
 }
 
-// Helper to determine optimal thread block configuration
+// Optimized configuration for when the sparse matrix has more columns than the batch size
 dim3 get_optimal_block_config(int64_t batch_size) {
     // We aim for ~256 threads per block for good occupancy
     const int target_threads = 256;
 
-    // Start with default 16x16 configuration
-    int threads_x = 16;
-    int threads_y = 16;
+    // Start with default 1x256 configuration - optimized for column-heavy matrices
+    int threads_x = 1;    // For columns now (just 1 column per thread)
+    int threads_y = 256;  // For batches now (process many batches per block)
 
-    // If batch_size is small, adjust dimensions to process more columns
-    if (batch_size < 16) {
-        threads_x = batch_size;
-        // Increase threads_y to get closer to target_threads while keeping it a multiple of warp
-        // size (32)
-        int target_threads_y = target_threads / threads_x;
-        threads_y = target_threads_y - (target_threads_y % 8);  // Make it a multiple of 8
-        if (threads_y < 16) threads_y = 16;                     // Minimum 16 for y dimension
-        if (threads_y > 32) threads_y = 32;                     // Maximum 32 for most hardware
+    // If batch_size is small, adjust dimensions
+    if (batch_size <= 128) {
+        threads_y = batch_size;
+        // Increase threads_x to maintain target thread count
+        threads_x = target_threads / threads_y;
+    } else if (batch_size < 256) {
+        // If batch_size is between 129-255, just use the batch_size
+        threads_y = batch_size;
+        threads_x = 1;
     }
 
     return dim3(threads_x, threads_y);
@@ -116,19 +116,19 @@ torch::Tensor csc_matmat_cuda(const torch::Tensor& sparse_tensor,
     int64_t MAX_GRID_DIM_X = grid_limits.max_grid_dim_x;
     int64_t MAX_GRID_DIM_Y = grid_limits.max_grid_dim_y;
 
-    // Process the matrix in column chunks based on y-dimension limits
+    // Process the matrix in column chunks based on X-dimension limits (often larger)
     for (int64_t col_start = 0; col_start < num_cols;
-         col_start += MAX_GRID_DIM_Y * threads_per_block.y) {
+         col_start += MAX_GRID_DIM_X * threads_per_block.x) {
         int64_t cols_in_chunk =
-            std::min(MAX_GRID_DIM_Y * threads_per_block.y, num_cols - col_start);
-        int grid_y = (cols_in_chunk + threads_per_block.y - 1) / threads_per_block.y;
+            std::min(MAX_GRID_DIM_X * threads_per_block.x, num_cols - col_start);
+        int grid_x = (cols_in_chunk + threads_per_block.x - 1) / threads_per_block.x;
 
-        // Process batches in chunks based on x-dimension limits
+        // Process batches in chunks based on Y-dimension limits (often smaller)
         for (int64_t batch_start = 0; batch_start < batch_size;
-             batch_start += MAX_GRID_DIM_X * threads_per_block.x) {
+             batch_start += MAX_GRID_DIM_Y * threads_per_block.y) {
             int64_t batches_in_chunk =
-                std::min(MAX_GRID_DIM_X * threads_per_block.x, batch_size - batch_start);
-            int grid_x = (batches_in_chunk + threads_per_block.x - 1) / threads_per_block.x;
+                std::min(MAX_GRID_DIM_Y * threads_per_block.y, batch_size - batch_start);
+            int grid_y = (batches_in_chunk + threads_per_block.y - 1) / threads_per_block.y;
 
             dim3 num_blocks(grid_x, grid_y);
 
@@ -151,15 +151,6 @@ torch::Tensor csc_matmat_cuda(const torch::Tensor& sparse_tensor,
                         cols_in_chunk, batches_in_chunk, dense_col_stride, dense_batch_stride,
                         result_row_stride, result_batch_stride);
                 }));
-
-            // Check for errors after each kernel launch
-            cudaError_t cudaErr = cudaGetLastError();
-            if (cudaErr != cudaSuccess) {
-                std::string err_msg = "CUDA error in chunk (col=" + std::to_string(col_start) +
-                                      ", batch=" + std::to_string(batch_start) +
-                                      "): " + std::string(cudaGetErrorString(cudaErr));
-                TORCH_CHECK(false, err_msg);
-            }
         }
     }
 
