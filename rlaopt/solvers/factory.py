@@ -2,9 +2,9 @@ from typing import TYPE_CHECKING
 
 import torch
 
-from rlaopt.solvers.pcg import PCG
-from rlaopt.solvers.sap import SAP
-from rlaopt.solvers.configs import SolverConfig, PCGConfig, SAPConfig
+from .pcg import PCG
+from .sap import SAP
+from .configs import SolverConfig, PCGConfig, SAPConfig
 
 if TYPE_CHECKING:
     from rlaopt.models import Model, LinSys  # Import only for type hints

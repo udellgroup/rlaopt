@@ -7,6 +7,9 @@ import torch
 from rlaopt.linops import SymmetricLinOp
 
 
+__all__ = ["randomized_powering"]
+
+
 def randomized_powering(
     A: Union[SymmetricLinOp, torch.Tensor], num_iters: int = 10, rtol: float = 10**-3
 ) -> Tuple[float, torch.Tensor]:
