@@ -26,6 +26,24 @@ class DistributionMode(Enum):
     ROW = auto()  # Matrix is distributed across rows
     COLUMN = auto()  # Matrix is distributed across columns
 
+    @classmethod
+    def from_string(cls, value):
+        if isinstance(value, cls):
+            return value
+
+        if isinstance(value, str):
+            value = value.upper()
+            if value == "ROW":
+                return cls.ROW
+            elif value == "COLUMN":
+                return cls.COLUMN
+
+        raise ValueError(
+            f"Invalid distribution mode: {value}. "
+            "Expected 'row', 'column', DistributionMode.ROW, "
+            "or DistributionMode.COLUMN."
+        )
+
 
 class _DistributedLinOp(_BaseLinOp):
     """Base class with implementation details for distributed linear operators."""
@@ -43,7 +61,7 @@ class _DistributedLinOp(_BaseLinOp):
     ):
         super().__init__(shape=shape)
         self._is_new = is_new
-        self._distribution_mode = distribution_mode
+        self._distribution_mode = DistributionMode.from_string(distribution_mode)
 
         # Validate input
         if self._is_new:
