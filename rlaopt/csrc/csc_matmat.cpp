@@ -21,9 +21,6 @@ void csc_matmat_cpu_impl(const scalar_t* values, const int64_t* row_indices,
         for (int64_t col = 0; col < num_cols; ++col) {
             scalar_t x_jb = dense_matrix_ptr[col * dense_col_stride + b * dense_batch_stride];
 
-            // Skip computation if value is zero
-            if (x_jb == 0) continue;
-
             for (int64_t k = col_ptrs[col]; k < col_ptrs[col + 1]; ++k) {
                 int64_t row = row_indices[k];
                 scalar_t value = values[k];
@@ -65,11 +62,11 @@ torch::Tensor csc_matmat_cpu(const torch::Tensor& sparse_tensor,
     int64_t result_row_stride = result_strides[0];
     int64_t result_batch_stride = result_strides[1];
 
-// Get the number of available threads (for debugging purposes)
-#ifdef _OPENMP
-    int num_threads = omp_get_max_threads();
-    printf("Running CSC matrix-matrix multiplication with %d OpenMP threads\n", num_threads);
-#endif
+    // // Get the number of available threads (for debugging purposes)
+    // #ifdef _OPENMP
+    //     int num_threads = omp_get_max_threads();
+    //     printf("Running CSC matrix-matrix multiplication with %d OpenMP threads\n", num_threads);
+    // #endif
 
     // Get row indices and column pointers (same for all data types)
     const int64_t* row_indices = sparse_tensor.row_indices().data_ptr<int64_t>();
