@@ -10,7 +10,8 @@ Typical usage example:
 """
 
 import torch
-from rlaopt.preconditioners.sketches.sketch import Sketch
+
+from .sketch import Sketch
 
 
 class Gauss(Sketch):

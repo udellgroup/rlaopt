@@ -1,8 +1,8 @@
 """This module implements the Newton preconditioner."""
 import torch
 
-from rlaopt.preconditioners.preconditioner import Preconditioner
-from rlaopt.preconditioners.configs import NewtonConfig
+from .preconditioner import Preconditioner
+from .configs import NewtonConfig
 
 
 class Newton(Preconditioner):

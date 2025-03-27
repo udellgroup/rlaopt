@@ -1,7 +1,7 @@
 """This module implements the Identity preconditioner."""
 
-from rlaopt.preconditioners.preconditioner import Preconditioner
-from rlaopt.preconditioners.configs import IdentityConfig
+from .preconditioner import Preconditioner
+from .configs import IdentityConfig
 
 
 class Identity(Preconditioner):

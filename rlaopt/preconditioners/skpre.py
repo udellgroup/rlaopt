@@ -3,9 +3,9 @@
 import gc
 import torch
 
-from rlaopt.preconditioners.preconditioner import Preconditioner
-from rlaopt.preconditioners.configs import SkPreConfig
-from rlaopt.preconditioners.sketches.factory import get_sketch
+from .preconditioner import Preconditioner
+from .configs import SkPreConfig
+from rlaopt.sketches import get_sketch
 
 
 class SkPre(Preconditioner):

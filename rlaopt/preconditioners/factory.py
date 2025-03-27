@@ -4,12 +4,12 @@ It includes mappings between preconditioner configurations and their correspondi
 preconditioner classes, as well as a function to instantiate preconditioners.
 """
 
-from rlaopt.preconditioners.identity import Identity
-from rlaopt.preconditioners.newton import Newton
-from rlaopt.preconditioners.nystrom import Nystrom
-from rlaopt.preconditioners.skpre import SkPre
+from .identity import Identity
+from .newton import Newton
+from .nystrom import Nystrom
+from .skpre import SkPre
 
-from rlaopt.preconditioners.configs import (
+from .configs import (
     PreconditionerConfig,
     IdentityConfig,
     NewtonConfig,
