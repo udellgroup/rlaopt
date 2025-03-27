@@ -4,6 +4,7 @@
 
 namespace rlaopt {
 
+namespace {
 // Get properties of the current CUDA device
 cudaDeviceProp get_device_properties() {
     int device;
@@ -70,8 +71,9 @@ dim3 get_optimal_block_config(int64_t batch_size, const cudaDeviceProp& props) {
         }
     }
 
-    printf("Device: %s, Using block size: %d×%d = %d threads (target: %d)\n", props.name, threads_x,
-           threads_y, threads_x * threads_y, target_threads);
+    // printf("Device: %s, Using block size: %d×%d = %d threads (target: %d)\n", props.name,
+    // threads_x,
+    //        threads_y, threads_x * threads_y, target_threads);
 
     return dim3(threads_x, threads_y);
 }
@@ -97,6 +99,7 @@ __global__ void csc_matmat_kernel_2d(
         }
     }
 }
+}  // namespace
 
 torch::Tensor csc_matmat_cuda(const torch::Tensor& sparse_tensor,
                               const torch::Tensor& dense_matrix) {
@@ -161,13 +164,13 @@ torch::Tensor csc_matmat_cuda(const torch::Tensor& sparse_tensor,
 
             dim3 num_blocks(grid_x, grid_y);
 
-            // Uncomment for debugging
-            printf(
-                "Processing columns %ld to %ld, batches %ld to %ld (Grid: %d×%d, Block: "
-                "%d×%d)\n",
-                col_start, col_start + cols_in_chunk - 1, batch_start,
-                batch_start + batches_in_chunk - 1, grid_x, grid_y, threads_per_block.x,
-                threads_per_block.y);
+            // // Uncomment for debugging
+            // printf(
+            //     "Processing columns %ld to %ld, batches %ld to %ld (Grid: %d×%d, Block: "
+            //     "%d×%d)\n",
+            //     col_start, col_start + cols_in_chunk - 1, batch_start,
+            //     batch_start + batches_in_chunk - 1, grid_x, grid_y, threads_per_block.x,
+            //     threads_per_block.y);
 
             AT_DISPATCH_FLOATING_TYPES(
                 sparse_tensor.scalar_type(), "csc_matmat_cuda", ([&] {

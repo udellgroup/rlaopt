@@ -4,6 +4,47 @@
 
 namespace rlaopt {
 
+namespace {
+// Get properties of the current CUDA device
+cudaDeviceProp get_device_properties() {
+    int device;
+    cudaGetDevice(&device);
+    cudaDeviceProp props;
+    cudaGetDeviceProperties(&props, device);
+    return props;
+}
+
+// Helper struct to store device grid limits
+struct DeviceGridLimits {
+    int max_grid_dim_x;
+};
+
+// Helper to get device maximum grid dimension
+DeviceGridLimits get_device_grid_limits(const cudaDeviceProp& props) {
+    DeviceGridLimits limits;
+    limits.max_grid_dim_x = props.maxGridSize[0];
+    return limits;
+}
+
+// Get optimal thread block configuration for vector operations
+int get_optimal_block_size(const cudaDeviceProp& props) {
+    int max_threads_per_block = props.maxThreadsPerBlock;
+    int warp_size = props.warpSize;
+
+    // Default to 256 threads per block for good occupancy
+    int block_size = 256;
+
+    // Adjust based on device capabilities
+    if (max_threads_per_block < 1024) {
+        block_size = max_threads_per_block / 2;
+    }
+
+    // Ensure block_size is a multiple of warp_size
+    block_size = (block_size / warp_size) * warp_size;
+
+    return block_size;
+}
+
 // CUDA kernel for CSC matrix-vector product
 template <typename scalar_t>
 __global__ void csc_matvec_kernel(const scalar_t* __restrict__ values,
@@ -22,6 +63,7 @@ __global__ void csc_matvec_kernel(const scalar_t* __restrict__ values,
         }
     }
 }
+}  // namespace
 
 torch::Tensor csc_matvec_cuda(const torch::Tensor& sparse_tensor,
                               const torch::Tensor& dense_vector) {
@@ -50,16 +92,35 @@ torch::Tensor csc_matvec_cuda(const torch::Tensor& sparse_tensor,
 
     auto result = torch::zeros({num_rows}, dense_vector.options());
 
-    const int threads_per_block = 256;
-    const int num_blocks = (num_cols + threads_per_block - 1) / threads_per_block;
+    // Get device properties
+    cudaDeviceProp props = get_device_properties();
 
-    AT_DISPATCH_FLOATING_TYPES(sparse_tensor.scalar_type(), "csc_matvec_cuda", ([&] {
-                                   csc_matvec_kernel<scalar_t><<<num_blocks, threads_per_block>>>(
-                                       values.data_ptr<scalar_t>(), row_indices.data_ptr<int64_t>(),
-                                       col_ptrs.data_ptr<int64_t>(),
-                                       dense_vector.data_ptr<scalar_t>(),
-                                       result.data_ptr<scalar_t>(), num_cols);
-                               }));
+    // Get optimal block size based on device capabilities
+    int threads_per_block = get_optimal_block_size(props);
+
+    // Get maximum grid dimension from device properties
+    DeviceGridLimits grid_limits = get_device_grid_limits(props);
+    int64_t MAX_GRID_DIM_X = grid_limits.max_grid_dim_x;
+
+    // Process the matrix in column chunks if needed
+    for (int64_t col_start = 0; col_start < num_cols;
+         col_start += MAX_GRID_DIM_X * threads_per_block) {
+        int64_t cols_in_chunk = std::min(MAX_GRID_DIM_X * threads_per_block, num_cols - col_start);
+        int num_blocks = (cols_in_chunk + threads_per_block - 1) / threads_per_block;
+
+        // // Uncomment for debugging
+        // printf("Processing columns %ld to %ld (Blocks: %d, Threads per block: %d)\n",
+        //        col_start, col_start + cols_in_chunk - 1, num_blocks, threads_per_block);
+
+        AT_DISPATCH_FLOATING_TYPES(
+            sparse_tensor.scalar_type(), "csc_matvec_cuda", ([&] {
+                csc_matvec_kernel<scalar_t><<<num_blocks, threads_per_block>>>(
+                    values.data_ptr<scalar_t>(), row_indices.data_ptr<int64_t>(),
+                    col_ptrs.data_ptr<int64_t>() + col_start,
+                    dense_vector.data_ptr<scalar_t>() + col_start, result.data_ptr<scalar_t>(),
+                    cols_in_chunk);
+            }));
+    }
 
     return result;
 }
