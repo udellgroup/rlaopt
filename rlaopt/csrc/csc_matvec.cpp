@@ -5,6 +5,7 @@
 
 namespace rlaopt {
 
+namespace {
 template <typename scalar_t>
 void csc_matvec_cpu_impl(const scalar_t* values, const int64_t* row_indices,
                          const int64_t* col_ptrs, const scalar_t* dense_vector_ptr,
@@ -19,6 +20,7 @@ void csc_matvec_cpu_impl(const scalar_t* values, const int64_t* row_indices,
         }
     }
 }
+}  // namespace
 
 torch::Tensor csc_matvec_cpu(const torch::Tensor& sparse_tensor,
                              const torch::Tensor& dense_vector) {
