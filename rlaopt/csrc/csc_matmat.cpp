@@ -2,6 +2,9 @@
 #include <Python.h>
 #include <torch/all.h>
 #include <torch/library.h>
+#ifdef _OPENMP
+#include <omp.h>
+#endif
 
 namespace rlaopt {
 
@@ -24,7 +27,8 @@ torch::Tensor csc_matmat_cpu_impl(const torch::Tensor& sparse_tensor,
     auto dense_matrix_accessor = dense_matrix.accessor<scalar_t, 2>();
     auto result_accessor = result.accessor<scalar_t, 2>();
 
-    // Loop over columns of the dense matrix (will be easy to parallelize with OpenMP)
+// Parallelize the outer loop (each thread processes a different column of the output)
+#pragma omp parallel for
     for (int64_t b = 0; b < batch_size; ++b) {
         // For this column of the dense matrix, compute sparse_matrix * dense_column
         for (int64_t col = 0; col < num_cols; ++col) {
@@ -58,6 +62,13 @@ torch::Tensor csc_matmat_cpu(const torch::Tensor& sparse_tensor,
     auto num_cols = sparse_tensor.size(1);
     TORCH_CHECK(num_cols == dense_matrix.size(0),
                 "Number of columns in sparse tensor must match dense matrix rows");
+
+// Get the number of available threads (for debugging purposes)
+// This is useful to check if OpenMP is being used correctly
+#ifdef _OPENMP
+    int num_threads = omp_get_max_threads();
+    printf("Running CSC matrix-matrix multiplication with %d OpenMP threads\n", num_threads);
+#endif
 
     if (sparse_tensor.dtype() == torch::kFloat) {
         return csc_matmat_cpu_impl<float>(sparse_tensor, dense_matrix);

@@ -12,8 +12,8 @@ np_precision = np.float32 if torch_precision == torch.float32 else np.float64
 torch.set_default_dtype(torch_precision)
 
 X = sp.load_npz("yelp_train.npz").astype(np_precision)
-device = torch.device("cuda:1" if torch.cuda.is_available() else "cpu")
-# device = torch.device("cpu")
+# device = torch.device("cuda:1" if torch.cuda.is_available() else "cpu")
+device = torch.device("cpu")
 
 X_torch = SparseCSRTensor(data=X, device=device)
 X_torch_T = X_torch.T
@@ -37,7 +37,9 @@ result_np = torch.tensor(result_np, device=device)
 
 assert torch.allclose(result, result_np)
 
-D = torch.randn(X_torch_T.shape[1], 256, device=device)
+# D = torch.randn(X_torch_T.shape[1], 256, device=device)
+D = torch.randn(X_torch_T.shape[1], 32, device=device)
+
 ts = time.time()
 result = X_torch_T @ D
 print("Time taken for csc matmat (extension):", time.time() - ts)

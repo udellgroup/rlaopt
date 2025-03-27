@@ -33,6 +33,7 @@ else:
 def get_extensions():
     debug_mode = os.getenv("DEBUG", "0") == "1"
     use_cuda = os.getenv("USE_CUDA", "1") == "1"
+    use_openmp = os.getenv("USE_OPENMP", "1") == "1"
     if debug_mode:
         print("Compiling in debug mode")
 
@@ -50,6 +51,11 @@ def get_extensions():
             "-O3" if not debug_mode else "-O0",
         ],
     }
+
+    if use_openmp:
+        extra_compile_args["cxx"].append("-fopenmp")
+        extra_link_args.append("-fopenmp")
+
     if debug_mode:
         extra_compile_args["cxx"].append("-g")
         extra_compile_args["nvcc"].append("-g")
