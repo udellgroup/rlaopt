@@ -2,8 +2,8 @@ import importlib
 
 modules_to_import = [
     "rlaopt.solvers.configs",
-    "rlaopt.solvers.solver",
     "rlaopt.solvers.factory",
+    "rlaopt.solvers.solver",
 ]
 
 __all__ = []

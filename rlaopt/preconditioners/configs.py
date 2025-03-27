@@ -6,9 +6,9 @@ preconditioner types, as well as validation utilities.
 
 from abc import ABC
 from dataclasses import dataclass, asdict
-from enum import Enum, auto
 from typing import Any, Union
 
+from .enums import DampingMode
 from rlaopt.utils import (
     _is_str,
     _is_nonneg_float,
@@ -18,7 +18,6 @@ from rlaopt.utils import (
 
 
 __all__ = [
-    "DampingMode",
     "PreconditionerConfig",
     "IdentityConfig",
     "NewtonConfig",
@@ -26,36 +25,6 @@ __all__ = [
     "SkPreConfig",
     "_is_precond_config",
 ]
-
-
-class DampingMode(Enum):
-    """Enumeration for different damping modes.
-
-    Attributes:
-        ADAPTIVE: Adaptive damping mode.
-        NON_ADAPTIVE: Fixed damping mode.
-    """
-
-    ADAPTIVE = auto()
-    NON_ADAPTIVE = auto()
-
-    @classmethod
-    def _from_str(cls, value, param_name):
-        if isinstance(value, cls):
-            return value
-
-        if isinstance(value, str):
-            value = value.lower()
-            if value == "adaptive":
-                return cls.ADAPTIVE
-            elif value == "non_adaptive":
-                return cls.NON_ADAPTIVE
-
-        raise ValueError(
-            f"Invalid value for {param_name}: {value}. "
-            "Expected 'adaptive', 'non_adaptive', DampingMode.ADAPTIVE, "
-            "or DampingMode.NON_ADAPTIVE."
-        )
 
 
 @dataclass(kw_only=True, frozen=False)

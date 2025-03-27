@@ -1,48 +1,19 @@
-from enum import Enum, auto
 from typing import List
 
 import torch
 from torch.multiprocessing import Manager, Process, Queue, set_start_method
 
+from .base import _BaseLinOp
+from .enums import DistributionMode, _Operation
+from .simple import LinOp, TwoSidedLinOp
 from rlaopt.utils import _is_list
-from rlaopt.linops.base import _BaseLinOp
-from rlaopt.linops.simple import LinOp, TwoSidedLinOp
 
 
 __all__ = [
-    "DistributionMode",
     "DistributedLinOp",
     "DistributedTwoSidedLinOp",
     "DistributedSymmetricLinOp",
 ]
-
-
-class _Operation(Enum):
-    MATVEC = auto()
-    RMATVEC = auto()
-
-
-class DistributionMode(Enum):
-    ROW = auto()  # Matrix is distributed across rows
-    COLUMN = auto()  # Matrix is distributed across columns
-
-    @classmethod
-    def _from_str(cls, value):
-        if isinstance(value, cls):
-            return value
-
-        if isinstance(value, str):
-            value = value.lower()
-            if value == "row":
-                return cls.ROW
-            elif value == "column":
-                return cls.COLUMN
-
-        raise ValueError(
-            f"Invalid distribution mode: {value}. "
-            "Expected 'row', 'column', DistributionMode.ROW, "
-            "or DistributionMode.COLUMN."
-        )
 
 
 class _DistributedLinOp(_BaseLinOp):

@@ -3,16 +3,20 @@ from typing import Any, Union, TYPE_CHECKING
 import torch
 
 # Import the base class - this is all we need for runtime checks
-from rlaopt.linops.base import _BaseLinOp
+from .base import _BaseLinOp
 
 # Type checking imports (only for static type checking)
 if TYPE_CHECKING:
-    from rlaopt.linops.simple import LinOp, TwoSidedLinOp, SymmetricLinOp
-    from rlaopt.linops.distributed import (
+    from .simple import LinOp, TwoSidedLinOp, SymmetricLinOp
+    from .distributed import (
         DistributedLinOp,
         DistributedTwoSidedLinOp,
         DistributedSymmetricLinOp,
     )
+
+
+__all__ = ["LinOpType", "_is_linop_or_torch_tensor"]
+
 
 # Type annotation for static type checking
 LinOpType = Union[
@@ -32,6 +36,3 @@ def _is_linop_or_torch_tensor(param: Any, param_name: str):
             f"{param_name} is of type {type(param).__name__}, "
             "but expected type LinOpType or torch.Tensor"
         )
-
-
-__all__ = ["LinOpType", "_is_linop_or_torch_tensor"]
