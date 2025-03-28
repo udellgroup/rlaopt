@@ -11,7 +11,7 @@ __all__ = ["randomized_powering"]
 
 
 def randomized_powering(
-    A: Union[SymmetricLinOp, torch.Tensor], num_iters: int = 10, rtol: float = 10**-3
+    A: Union[SymmetricLinOp, torch.Tensor], max_iters: int = 10, rtol: float = 1e-3
 ) -> Tuple[float, torch.Tensor]:
 
     d = A.shape[0]
@@ -21,7 +21,7 @@ def randomized_powering(
     i = 0
     err = torch.inf
     sig = 0.0
-    while i < num_iters and err > rtol * sig:
+    while i < max_iters and err > rtol * sig:
         v_new = A @ v
         sig_new = torch.dot(v, v_new)
         v = v_new / torch.linalg.norm(v_new, 2)
