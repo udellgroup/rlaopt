@@ -1,9 +1,7 @@
 from enum import Enum, auto
 
-__all__ = ["DampingMode"]
 
-
-class DampingMode(Enum):
+class _DampingMode(Enum):
     """Enumeration for different damping modes.
 
     Attributes:

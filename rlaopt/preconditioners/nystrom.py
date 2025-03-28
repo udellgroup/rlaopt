@@ -2,6 +2,7 @@
 
 import torch
 
+from .enums import _DampingMode
 from .preconditioner import Preconditioner
 from .configs import NystromConfig
 from rlaopt.sketches import get_sketch
@@ -125,3 +126,17 @@ class Nystrom(Preconditioner):
             UTx, (self.S + self.config.rho) ** (0.5)
         )
         return x
+
+    def _update_damping(self, baseline_rho: float) -> None:
+        """Update the damping parameter for the Nyström preconditioner.
+
+        This method adjusts the damping parameter based on the damping mode
+        specified in the configuration. If the damping mode is adaptive,
+        it adds the smallest eigenvalue of the Nyström approximation
+        to the baseline damping parameter.
+
+        Args:
+            baseline_rho (float): The baseline damping parameter.
+        """
+        if self.config.damping_mode == _DampingMode.ADAPTIVE:
+            self.config.rho = baseline_rho + self.S[-1]

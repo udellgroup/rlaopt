@@ -12,7 +12,6 @@ from rlaopt.preconditioners import (
     IdentityConfig,
     NewtonConfig,
     NystromConfig,
-    DampingMode,
 )
 from rlaopt.preconditioners import _get_precond as _pf_get_precond
 from rlaopt.spectral_estimators import randomized_powering
@@ -87,6 +86,8 @@ class SAP(Solver):
 
     def _get_stepsize(self, blk: torch.Tensor, blk_precond: Preconditioner) -> float:
         if isinstance(self.precond_config, NewtonConfig):
+            # TODO(pratik): this needs to be more careful if the damping is inequal
+            # to self.system.reg
             return 1.0
 
         elif isinstance(self.precond_config, IdentityConfig):
@@ -97,8 +98,7 @@ class SAP(Solver):
                 + self.system.reg * v,
             )
         else:
-            if self.precond_config.damping_mode == DampingMode.ADAPTIVE:
-                self._get_damping(blk_precond)
+            blk_precond._update_damping(baseline_rho=self.system.reg)
             L = blk_precond._apply_inverse_sqrt
             M = lambda v: self.system.A_blk_oracle(blk) @ v + self.system.reg * v
             S = SymmetricLinOp(
@@ -109,9 +109,6 @@ class SAP(Solver):
 
         max_eig, _ = randomized_powering(S)
         return max_eig ** (-1.0)
-
-    def _get_damping(self, blk_precond: Preconditioner):
-        self.precond_config.rho = self.system.reg + blk_precond.S[-1]
 
     def _get_block_update(
         self, w: torch.Tensor, blk: torch.Tensor, blk_precond: Preconditioner
