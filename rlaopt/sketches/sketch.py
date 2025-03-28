@@ -23,7 +23,7 @@ class Sketch(ABC):
 
     Attributes:
         mode (_SketchSide): An enum indicating the sketching mode
-                            (SketchSide.LEFT or SketchSide.RIGHT).
+                            (_SketchSide.LEFT or _SketchSide.RIGHT).
         s (int): The sketch size.
         d (int): The dimension of the matrix to be sketched.
         device (torch.device): Device to be used for computations.
