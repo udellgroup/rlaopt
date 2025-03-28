@@ -6,15 +6,10 @@ preconditioner types, as well as validation utilities.
 
 from abc import ABC
 from dataclasses import dataclass, asdict
-from typing import Any, Union
+from typing import Any
 
 from .enums import DampingMode
-from rlaopt.utils import (
-    _is_str,
-    _is_nonneg_float,
-    _is_pos_int,
-    _is_sketch,
-)
+from rlaopt.utils import _is_nonneg_float, _is_pos_int
 
 
 __all__ = [
@@ -76,23 +71,21 @@ class NystromConfig(PreconditionerConfig):
         rank (int): Rank of the Nyström approximation.
         rho (float): Regularization parameter.
         sketch (str): Type of sketching method to use. Defaults to "ortho".
-        damping_mode (DampingMode or str): Damping mode to use. Can be specified as
-            DampingMode.ADAPTIVE, DampingMode.NON_ADAPTIVE,
-            "adaptive", or "non_adaptive". Defaults to DampingMode.ADAPTIVE.
+        damping_mode (str): Damping mode to use. Can be specified as "adaptive",
+            or "non_adaptive". Defaults to "adaptive".
+            The damping mode internally maps to the DampingMode enum.
     """
 
     rank: int
     rho: float
     sketch: str = "ortho"
-    damping_mode: Union[DampingMode, str] = DampingMode.ADAPTIVE
+    damping_mode: str = "adaptive"
 
     def __post_init__(self):
         """Validate the configuration parameters after initialization."""
         _is_pos_int(self.rank, "rank")
         _is_nonneg_float(self.rho, "rho")
-
-        _is_str(self.sketch, "sketch")
-        _is_sketch(self.sketch)
+        # NOTE(pratik): The sketch parameter is validated in the sketches module.
         self.damping_mode = DampingMode._from_str(self.damping_mode, "damping_mode")
 
 
@@ -114,8 +107,7 @@ class SkPreConfig(PreconditionerConfig):
         """Validate the configuration parameters after initialization."""
         _is_pos_int(self.sketch_size, "sketch_size")
         _is_nonneg_float(self.rho, "rho")
-        _is_str(self.sketch, "sketch")
-        _is_sketch(self.sketch)
+        # NOTE(pratik): The sketch parameter is validated in the sketches module.
 
 
 def _is_precond_config(param: Any, param_name: str):

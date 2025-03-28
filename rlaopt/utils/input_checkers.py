@@ -1,4 +1,4 @@
-"""Input type checker helper functions."""
+"""Helper functions for checking input types."""
 
 from typing import Any
 
@@ -18,7 +18,6 @@ __all__ = [
     "_is_nonneg_float",
     "_is_pos_float",
     "_is_pos_int",
-    "_is_sketch",
 ]
 
 
@@ -119,9 +118,3 @@ def _is_pos_int(param: Any, param_name: str):
     _is_int(param, param_name)
     if param < 0:
         raise ValueError(f"{param_name} must be positive, but received {param}")
-
-
-def _is_sketch(sketch: str):
-    valid_sketches = ["gauss", "ortho", "sparse"]
-    if sketch not in valid_sketches:
-        raise ValueError(f"sketch must be in {valid_sketches}, but received {sketch}")
