@@ -3,7 +3,7 @@ from typing import Optional, Union
 import scipy.sparse
 import torch
 
-from rlaopt.sparse.ops import _get_row_slice, _csc_matmul
+from .ops import _get_row_slice, _csc_matmul
 
 
 __all__ = ["SparseCSRTensor"]

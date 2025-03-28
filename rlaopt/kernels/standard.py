@@ -1,4 +1,4 @@
-from rlaopt.kernels.factory import _create_kernel_classes
+from .factory import _create_kernel_classes
 
 
 __all__ = [

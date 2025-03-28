@@ -1,8 +1,8 @@
 from typing import Dict, Callable, Set, Optional, Tuple
 import torch
 
-from rlaopt.kernels.base import _KernelLinOp, _DistributedKernelLinOp
-from rlaopt.kernels.utils import _check_kernel_params, _row_oracle_matvec
+from .base import _KernelLinOp, _DistributedKernelLinOp
+from .utils import _check_kernel_params, _row_oracle_matvec
 
 
 def _create_kernel_classes(

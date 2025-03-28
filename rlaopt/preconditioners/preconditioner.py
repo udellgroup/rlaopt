@@ -9,8 +9,8 @@ from typing import Union
 
 import torch
 
-from rlaopt.linops import LinOpType
 from .configs import PreconditionerConfig
+from rlaopt.linops import LinOpType
 
 
 __all__ = ["Preconditioner"]

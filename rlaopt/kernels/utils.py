@@ -3,8 +3,8 @@ from typing import Any, Callable, Dict
 import torch
 from pykeops.torch import LazyTensor
 
+from .base import _get_cached_lazy_tensor
 from rlaopt.utils import _is_pos_float
-from rlaopt.kernels.base import _get_cached_lazy_tensor
 
 
 def _check_kernel_params(kernel_params: Dict[str, Any]):

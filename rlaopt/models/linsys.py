@@ -2,7 +2,7 @@ from typing import Any, Callable, Union, Optional
 
 import torch
 
-from rlaopt.models.model import Model
+from .model import Model
 from rlaopt.solvers import _is_solver_config, _get_solver_name, _get_solver
 from rlaopt.utils import _is_callable, _is_torch_tensor, _is_nonneg_float, Logger
 from rlaopt.linops import LinOpType, _is_linop_or_torch_tensor
