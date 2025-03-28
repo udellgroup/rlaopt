@@ -1,19 +1,17 @@
 from enum import Enum, auto
 
-__all__ = ["DistributionMode"]
-
 
 class _Operation(Enum):
     MATVEC = auto()
     RMATVEC = auto()
 
 
-class DistributionMode(Enum):
+class _DistributionMode(Enum):
     ROW = auto()  # Matrix is distributed across rows
     COLUMN = auto()  # Matrix is distributed across columns
 
     @classmethod
-    def _from_str(cls, value):
+    def _from_str(cls, value, param_name):
         if isinstance(value, cls):
             return value
 
@@ -25,7 +23,7 @@ class DistributionMode(Enum):
                 return cls.COLUMN
 
         raise ValueError(
-            f"Invalid distribution mode: {value}. "
-            "Expected 'row', 'column', DistributionMode.ROW, "
-            "or DistributionMode.COLUMN."
+            f"Invalid value for {param_name}: {value}. "
+            "Expected 'row', 'column', _DistributionMode.ROW, "
+            "or _DistributionMode.COLUMN."
         )

@@ -9,7 +9,6 @@ from rlaopt.linops import (
     LinOp,
     TwoSidedLinOp,
     SymmetricLinOp,
-    DistributionMode,
     DistributedLinOp,
     DistributedSymmetricLinOp,
 )
@@ -271,7 +270,7 @@ class _DistributedKernelLinOp(DistributedSymmetricLinOp):
         super().__init__(
             shape=torch.Size((self._A_mat.shape[0], self._A_mat.shape[0])),
             A=kernel_ops,
-            distribution_mode=DistributionMode.ROW,
+            distribution_mode="row",
         )
 
         # Store references for cleanup
@@ -356,7 +355,7 @@ class _DistributedKernelLinOp(DistributedSymmetricLinOp):
         return _DistributedLinOp(
             shape=torch.Size((blk.shape[0], self.A_mat.shape[0])),
             A=row_ops,
-            distribution_mode=DistributionMode.COLUMN,
+            distribution_mode="column",
             manager=self._manager,
             result_queue=self._result_queue,
             task_queues=self._task_queues,
