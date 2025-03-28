@@ -2,7 +2,7 @@ from typing import TYPE_CHECKING
 
 import torch
 
-from rlaopt.solvers.solver import Solver
+from .solver import Solver
 from rlaopt.preconditioners import PreconditionerConfig, NystromConfig, DampingMode
 from rlaopt.preconditioners import _get_precond as _pf_get_precond
 

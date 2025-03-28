@@ -1,15 +1,15 @@
 import importlib
 
 modules_to_import = [
-    "rlaopt.preconditioners.configs",
-    "rlaopt.preconditioners.enums",
-    "rlaopt.preconditioners.factory",
-    "rlaopt.preconditioners.preconditioner",
+    ".configs",
+    ".enums",
+    ".factory",
+    ".preconditioner",
 ]
 
 __all__ = []
 for module in modules_to_import:
-    mod = importlib.import_module(module)
+    mod = importlib.import_module(module, package=__package__)
     components = getattr(mod, "__all__", [])
     for component in components:
         globals()[component] = getattr(mod, component)

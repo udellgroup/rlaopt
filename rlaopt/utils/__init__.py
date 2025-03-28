@@ -1,14 +1,14 @@
 import importlib
 
 modules_to_import = [
-    "rlaopt.utils.input_checkers",
-    "rlaopt.utils.logger",
-    "rlaopt.utils.wandb_",
+    ".input_checkers",
+    ".logger",
+    ".wandb_",
 ]
 
 __all__ = []
 for module in modules_to_import:
-    mod = importlib.import_module(module)
+    mod = importlib.import_module(module, package=__package__)
     components = getattr(mod, "__all__", [])
     for component in components:
         globals()[component] = getattr(mod, component)
