@@ -4,7 +4,7 @@ import torch
 from torch.multiprocessing import Manager, Process, Queue, set_start_method
 
 from .base import _BaseLinOp
-from .enums import DistributionMode, _Operation
+from .enums import _DistributionMode, _Operation
 from .simple import LinOp, TwoSidedLinOp
 from rlaopt.utils import _is_list
 
@@ -28,11 +28,13 @@ class _DistributedLinOp(_BaseLinOp):
         task_queues=None,
         workers=None,
         is_new=True,
-        distribution_mode=DistributionMode.ROW,
+        distribution_mode="row",
     ):
         super().__init__(shape=shape)
         self._is_new = is_new
-        self._distribution_mode = DistributionMode._from_str(distribution_mode)
+        self._distribution_mode = _DistributionMode._from_str(
+            distribution_mode, "distribution_mode"
+        )
 
         # Validate input
         if self._is_new:
@@ -152,7 +154,7 @@ class _DistributedLinOp(_BaseLinOp):
         return combined.to(w.device)
 
     def _matvec(self, w: torch.Tensor):
-        if self._distribution_mode == DistributionMode.ROW:
+        if self._distribution_mode == _DistributionMode.ROW:
             # Row-distributed operator: send full vector, concatenate results
             results = self._distribute_tasks(w, _Operation.MATVEC, chunk=False)
             return self._combine_results(results, w, concatenate=True)
@@ -204,7 +206,7 @@ class _DistributedTwoSidedLinOp(_DistributedLinOp):
         task_queues=None,
         workers=None,
         is_new=True,
-        distribution_mode=DistributionMode.ROW,
+        distribution_mode=_DistributionMode.ROW,
     ):
         super().__init__(
             shape=shape,
@@ -221,7 +223,7 @@ class _DistributedTwoSidedLinOp(_DistributedLinOp):
             raise ValueError("All elements of A must be two-sided linear operators.")
 
     def _rmatvec(self, w: torch.Tensor):
-        if self._distribution_mode == DistributionMode.ROW:
+        if self._distribution_mode == _DistributionMode.ROW:
             # Row-distributed operator: chunk by columns, sum results
             results = self._distribute_tasks(
                 w, _Operation.RMATVEC, chunk=True, by_dimension=0
@@ -248,9 +250,9 @@ class _DistributedTwoSidedLinOp(_DistributedLinOp):
         # Create a transposed view with shared worker processes
         # When we transpose, we flip the distribution mode
         transposed_mode = (
-            DistributionMode.COLUMN
-            if self._distribution_mode == DistributionMode.ROW
-            else DistributionMode.ROW
+            _DistributionMode.COLUMN
+            if self._distribution_mode == _DistributionMode.ROW
+            else _DistributionMode.ROW
         )
 
         return _DistributedTwoSidedLinOp(
@@ -278,7 +280,7 @@ class _DistributedSymmetricLinOp(_DistributedTwoSidedLinOp):
         task_queues=None,
         workers=None,
         is_new=True,
-        distribution_mode=DistributionMode.ROW,
+        distribution_mode=_DistributionMode.ROW,
     ):
         super().__init__(
             shape=shape,
@@ -315,7 +317,7 @@ class DistributedLinOp(_DistributedLinOp):
     """Distributed linear operator that performs operations across multiple devices."""
 
     def __init__(
-        self, shape: torch.Size, A: List[LinOp], distribution_mode=DistributionMode.ROW
+        self, shape: torch.Size, A: List[LinOp], distribution_mode=_DistributionMode.ROW
     ):
         super().__init__(
             shape=shape, A=A, is_new=True, distribution_mode=distribution_mode
@@ -330,7 +332,7 @@ class DistributedTwoSidedLinOp(_DistributedTwoSidedLinOp):
         self,
         shape: torch.Size,
         A: List[TwoSidedLinOp],
-        distribution_mode=DistributionMode.ROW,
+        distribution_mode=_DistributionMode.ROW,
     ):
         super().__init__(
             shape=shape, A=A, is_new=True, distribution_mode=distribution_mode
@@ -345,7 +347,7 @@ class DistributedSymmetricLinOp(_DistributedSymmetricLinOp):
         self,
         shape: torch.Size,
         A: List[TwoSidedLinOp],
-        distribution_mode=DistributionMode.ROW,
+        distribution_mode=_DistributionMode.ROW,
     ):
         super().__init__(
             shape=shape, A=A, is_new=True, distribution_mode=distribution_mode

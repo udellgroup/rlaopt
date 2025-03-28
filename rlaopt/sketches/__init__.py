@@ -1,7 +1,6 @@
 import importlib
 
 modules_to_import = [
-    "rlaopt.sketches.enums",
     "rlaopt.sketches.factory",
 ]
 

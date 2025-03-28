@@ -8,7 +8,6 @@ from rlaopt.linops import (
     TwoSidedLinOp,
     DistributedLinOp,
     DistributedTwoSidedLinOp,
-    DistributionMode,
 )
 
 
@@ -74,7 +73,7 @@ def main():
     # Test LinOp with row distribution
     row_shape = torch.Size((sum(mat.shape[0] for mat in row_matrices), col_size))
     dist_row_lin_op = DistributedLinOp(
-        shape=row_shape, A=row_linop_chunks, distribution_mode=DistributionMode.ROW
+        shape=row_shape, A=row_linop_chunks, distribution_mode="row"
     )
 
     # Test with a vector
@@ -96,7 +95,7 @@ def main():
     dist_row_twosided_lin_op = DistributedTwoSidedLinOp(
         shape=row_shape,
         A=row_twosided_linop_chunks,
-        distribution_mode=DistributionMode.ROW,
+        distribution_mode="row",
     )
 
     # Test forward with a vector
@@ -147,7 +146,7 @@ def main():
     # Test LinOp with column distribution
     col_shape = torch.Size((row_size, sum(mat.shape[1] for mat in col_matrices)))
     dist_col_lin_op = DistributedLinOp(
-        shape=col_shape, A=col_linop_chunks, distribution_mode=DistributionMode.COLUMN
+        shape=col_shape, A=col_linop_chunks, distribution_mode="column"
     )
 
     # Test with a vector
@@ -171,7 +170,7 @@ def main():
     dist_col_twosided_lin_op = DistributedTwoSidedLinOp(
         shape=col_shape,
         A=col_twosided_linop_chunks,
-        distribution_mode=DistributionMode.COLUMN,
+        distribution_mode="column",
     )
 
     # Test forward with a vector
@@ -225,7 +224,7 @@ def main():
     dist_row_twosided_lin_op = DistributedTwoSidedLinOp(
         shape=row_shape,
         A=row_twosided_linop_chunks,
-        distribution_mode=DistributionMode.ROW,
+        distribution_mode="row",
     )
 
     # Get its transpose (which should be column-distributed)

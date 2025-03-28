@@ -19,6 +19,6 @@ class _SketchSide(Enum):
 
         raise ValueError(
             f"Invalid value for {param_name}: {value}. "
-            "Expected 'left', 'right', SketchSide.LEFT, "
-            "or SketchSide.RIGHT."
+            "Expected 'left', 'right', _SketchSide.LEFT, "
+            "or _SketchSide.RIGHT."
         )
