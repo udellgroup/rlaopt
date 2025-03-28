@@ -6,12 +6,17 @@ parameters and configurations.
 
 import torch
 
+from .enums import _SketchMode
 from .sketch import Sketch
 from .gauss import Gauss
 from .sparse import Sparse
 from .ortho import Ortho
 
-SKETCHES = {"gauss": Gauss, "ortho": Ortho, "sparse": Sparse}
+SKETCH_MODE_TO_CLASS = {
+    _SketchMode.GAUSS: Gauss,
+    _SketchMode.ORTHO: Ortho,
+    _SketchMode.SPARSE: Sparse,
+}
 
 
 __all__ = ["get_sketch"]
@@ -42,11 +47,6 @@ def get_sketch(
     Example:
         >>> sketch = get_sketch("gauss", "left", 100, 1000, torch.device("cuda"))
     """
-    if name not in SKETCHES:
-        valid_sketches = ", ".join(SKETCHES.keys())
-        raise ValueError(
-            f"{name} is not a valid sketching matrix. "
-            f"Valid sketching matrices are: {valid_sketches}"
-        )
-    sketch_class = SKETCHES[name]
+    sketch_name = _SketchMode._from_str(name, "name")
+    sketch_class = SKETCH_MODE_TO_CLASS[sketch_name]
     return sketch_class(mode, sketch_size, matrix_dim, device)
