@@ -5,14 +5,13 @@ import torch
 
 from .solver import Solver
 from .configs import SAPAccelConfig
-from rlaopt.linops import SymmetricLinOp
+from rlaopt.linops import LinOp
 from rlaopt.preconditioners import (
     Preconditioner,
     PreconditionerConfig,
     IdentityConfig,
     NewtonConfig,
     NystromConfig,
-    DampingMode,
 )
 from rlaopt.preconditioners import _get_precond as _pf_get_precond
 from rlaopt.spectral_estimators import randomized_powering
@@ -71,6 +70,7 @@ class SAP(Solver):
     def _get_precond(self, blk: torch.Tensor) -> Preconditioner:
         P = _pf_get_precond(self.precond_config)
         P._update(self.system.A_blk_oracle(blk), self.device)
+        P._update_damping(baseline_rho=self.system.reg)
         return P
 
     def _get_blk(self) -> torch.Tensor:
@@ -87,31 +87,28 @@ class SAP(Solver):
 
     def _get_stepsize(self, blk: torch.Tensor, blk_precond: Preconditioner) -> float:
         if isinstance(self.precond_config, NewtonConfig):
-            return 1.0
-
-        elif isinstance(self.precond_config, IdentityConfig):
-            S = SymmetricLinOp(
-                device=self.device,
-                shape=torch.Size((self.blk_sz, self.blk_sz)),
-                matvec=lambda v: self.system.A_blk_oracle(blk) @ v
-                + self.system.reg * v,
-            )
+            # If the damping is the regularization, then the preconditioner is exact
+            # and the stepsize is 1.0
+            if self.precond_config.rho == self.system.reg:
+                return 1.0
         else:
-            if self.precond_config.damping_mode == DampingMode.ADAPTIVE:
-                self._get_damping(blk_precond)
-            L = blk_precond._apply_inverse_sqrt
-            M = lambda v: self.system.A_blk_oracle(blk) @ v + self.system.reg * v
-            S = SymmetricLinOp(
+            # If the preconditioner is not exact, we need to compute the stepsize
+            def blk_matvec(v):
+                return self.system.A_blk_oracle(blk) @ v + self.system.reg * v
+
+            # Note that S does not correspond to a symmetric matrix.
+            # This is ok because we assume that A is symmetric,
+            # which also implies the preconditioner P is symmetric.
+            # It follows that P^(-1) A can be plugged into randomized_powering
+            # and the result will be the same as if we had used P^(-1/2) A P^(-1/2).
+            S = LinOp(
                 device=self.device,
                 shape=torch.Size((self.blk_sz, self.blk_sz)),
-                matvec=lambda v: L(M(L(v))),
+                matvec=blk_precond._inverse_matmul_compose(blk_matvec),
             )
 
         max_eig, _ = randomized_powering(S)
         return max_eig ** (-1.0)
-
-    def _get_damping(self, blk_precond: Preconditioner):
-        self.precond_config.rho = self.system.reg + blk_precond.S[-1]
 
     def _get_block_update(
         self, w: torch.Tensor, blk: torch.Tensor, blk_precond: Preconditioner

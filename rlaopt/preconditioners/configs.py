@@ -8,7 +8,7 @@ from abc import ABC
 from dataclasses import dataclass, asdict
 from typing import Any
 
-from .enums import DampingMode
+from .enums import _DampingMode
 from rlaopt.utils import _is_nonneg_float, _is_pos_int
 
 
@@ -86,7 +86,7 @@ class NystromConfig(PreconditionerConfig):
         _is_pos_int(self.rank, "rank")
         _is_nonneg_float(self.rho, "rho")
         # NOTE(pratik): The sketch parameter is validated in the sketches module.
-        self.damping_mode = DampingMode._from_str(self.damping_mode, "damping_mode")
+        self.damping_mode = _DampingMode._from_str(self.damping_mode, "damping_mode")
 
 
 @dataclass(kw_only=True, frozen=False)

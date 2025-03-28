@@ -3,7 +3,7 @@ from typing import TYPE_CHECKING
 import torch
 
 from .solver import Solver
-from rlaopt.preconditioners import PreconditionerConfig, NystromConfig, DampingMode
+from rlaopt.preconditioners import PreconditionerConfig
 from rlaopt.preconditioners import _get_precond as _pf_get_precond
 
 if TYPE_CHECKING:
@@ -39,9 +39,7 @@ class PCG(Solver):
     def _get_precond(self):
         P = _pf_get_precond(self.precond_config)
         P._update(self.system.A, self.device)
-        if isinstance(self.precond_config, NystromConfig):
-            if self.precond_config.damping_mode == DampingMode.ADAPTIVE:
-                self.precond_config.rho = self.system.reg + P.S[-1]
+        P._update_damping(baseline_rho=self.system.reg)
         return P
 
     def _step(self):

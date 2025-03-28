@@ -5,7 +5,7 @@ preconditioners.
 """
 
 from abc import ABC, abstractmethod
-from typing import Union
+from typing import Callable, Union
 
 import torch
 
@@ -73,6 +73,32 @@ class Preconditioner(ABC):
 
         Returns:
             torch.Tensor: The result of the inverse matrix multiplication.
+        """
+        pass
+
+    def _inverse_matmul_compose(self, fn: Callable):
+        """Compose the inverse of the preconditioner with a function.
+
+        Args:
+            fn (Callable): The function to compose with.
+
+        Returns:
+            Callable: The composed function.
+        """
+
+        def composed_fn(*args, **kwargs):
+            return self._inverse_matmul(fn(*args, **kwargs))
+
+        return composed_fn
+
+    def _update_damping(self, baseline_rho: float):
+        """Update the damping parameter based on the damping strategy.
+
+        For most preconditioners, this is a no-op. The only exception is
+        the Nyström preconditioner.
+
+        Args:
+            baseline_rho (float): The baseline damping parameter.
         """
         pass
 

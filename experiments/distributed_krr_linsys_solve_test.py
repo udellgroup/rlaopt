@@ -16,10 +16,10 @@ def main():
     torch.manual_seed(0)
 
     device = torch.device("cuda:0")
-    reg = 1e-8
     n = 100000
     d = 100
     sigma = 1.0
+    reg = 1e-8 * n
     n_chunks = 5
 
     kernel_params = {"sigma": sigma}

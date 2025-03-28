@@ -2,7 +2,6 @@ import importlib
 
 modules_to_import = [
     ".configs",
-    ".enums",
     ".factory",
     ".preconditioner",
 ]
