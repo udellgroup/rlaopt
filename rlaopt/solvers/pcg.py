@@ -14,27 +14,27 @@ class PCG(Solver):
     def __init__(
         self,
         system: "LinSys",
-        w_init: torch.Tensor,
+        W_init: torch.Tensor,
         precond_config: PreconditionerConfig,
         device: torch.device,
     ):
         self.system = system
         self.precond_config = precond_config
-        self._w = w_init.clone()
+        self._W = W_init.clone()
         self.device = device
         self.P = self._get_precond()
-        self.r, self.z, self.p, self.rz = self._init_pcg()
+        self.R, self.Z, self.P_, self.RZ = self._init_pcg()
 
     @property
-    def w(self):
-        return self._w
+    def W(self):
+        return self._W
 
     def _init_pcg(self):
-        r = self.system.b - (self.system.A @ self._w + self.system.reg * self._w)
-        z = self.P._inv @ r
-        p = z.clone()
-        rz = torch.dot(r, z)
-        return r, z, p, rz
+        R = self.system.B - (self.system.A @ self._W + self.system.reg * self._W)
+        Z = self.P._inv @ R
+        P_ = Z.clone()
+        RZ = R.T @ Z
+        return R, Z, P_, RZ
 
     def _get_precond(self):
         P = _pf_get_precond(self.precond_config)
@@ -43,11 +43,17 @@ class PCG(Solver):
         return P
 
     def _step(self):
-        Ap = self.system.A @ self.p + self.system.reg * self.p
-        alpha = self.rz / torch.dot(Ap, self.p)
-        self._w += alpha * self.p
-        self.r -= alpha * Ap
-        self.z = self.P._inv @ self.r
-        rz_new = torch.dot(self.r, self.z)
-        self.p = self.z + (rz_new / self.rz) * self.p
-        self.rz = rz_new
+        AP_ = self.system.A @ self.P_ + self.system.reg * self.P_
+        L = torch.linalg.cholesky(self.P_.T @ AP_, upper=False)
+        alpha = torch.linalg.solve_triangular(L, self.RZ, upper=False)
+        alpha = torch.linalg.solve_triangular(L.T, alpha, upper=True)
+        self._W += self.P_ @ alpha
+        self.R -= AP_ @ alpha
+
+        self.Z = self.P._inv @ self.R
+        L = torch.linalg.cholesky(self.RZ, upper=False)
+        RZ_new = self.R.T @ self.Z
+        beta = torch.linalg.solve_triangular(L, RZ_new, upper=False)
+        beta = torch.linalg.solve_triangular(L.T, beta, upper=True)
+        self.P_ = self.Z + self.P_ @ beta
+        self.RZ = RZ_new

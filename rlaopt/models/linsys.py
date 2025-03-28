@@ -17,7 +17,7 @@ class LinSys(Model):
     def __init__(
         self,
         A: Union[LinOpType, torch.Tensor],
-        b: torch.Tensor,
+        B: torch.Tensor,
         reg: Optional[float] = 0.0,
         A_row_oracle: Optional[Callable] = None,
         A_blk_oracle: Optional[Callable] = None,
@@ -33,9 +33,11 @@ class LinSys(Model):
             A_blk_oracle (Optional[Callable], optional): Oracle for block-wise
             operations. Defaults to None.
         """
-        self._check_inputs(A, b, reg, A_row_oracle, A_blk_oracle)
+        self._check_inputs(A, B, reg, A_row_oracle, A_blk_oracle)
         self._A = A
-        self._b = b
+        self._B = B
+        if self._B.ndim == 1:
+            self._B = self._B.unsqueeze(-1)
         self._reg = reg
         self._A_row_oracle = A_row_oracle
         self._A_blk_oracle = A_blk_oracle
@@ -45,8 +47,8 @@ class LinSys(Model):
         return self._A
 
     @property
-    def b(self):
-        return self._b
+    def B(self):
+        return self._B
 
     @property
     def reg(self):
@@ -63,13 +65,13 @@ class LinSys(Model):
     def _check_inputs(
         self,
         A: Any,
-        b: Any,
+        B: Any,
         reg: Any,
         A_row_oracle: Optional[Any],
         A_blk_oracle: Optional[Any],
     ):
         _is_linop_or_torch_tensor(A, "A")
-        _is_torch_tensor(b, "b")
+        _is_torch_tensor(B, "B")
         _is_nonneg_float(reg, "reg")
         if A_row_oracle is not None:
             _is_callable(A_row_oracle, "A_row_oracle")
@@ -86,21 +88,22 @@ class LinSys(Model):
                 "A_row_oracle must be provided if A_blk_oracle is provided"
             )
 
-    def _compute_internal_metrics(self, w: torch.Tensor):
-        abs_res = torch.linalg.norm(self.b - (self.A @ w + self.reg * w))
-        rel_res = abs_res / torch.linalg.norm(self.b)
-        return {"abs_res": abs_res.item(), "rel_res": rel_res.item()}
+    def _compute_internal_metrics(self, W: torch.Tensor):
+        abs_res = torch.linalg.norm(self.B - (self.A @ W + self.reg * W), dim=0, ord=2)
+        rel_res = abs_res / torch.linalg.norm(self.B, dim=0, ord=2)
+        return {"abs_res": abs_res, "rel_res": rel_res}
 
     def _check_termination_criteria(
         self, internal_metrics: dict, atol: float, rtol: float
     ):
         abs_res = internal_metrics["abs_res"]
-        return abs_res <= max(rtol * torch.linalg.norm(self.b), atol)
+        comp_tol = torch.clamp(rtol * torch.linalg.norm(self.B, dim=0, ord=2), min=atol)
+        return (abs_res <= comp_tol).all().item()
 
     def solve(
         self,
         solver_config,
-        w_init,
+        W_init,
         callback_fn=None,
         callback_args=[],
         callback_kwargs={},
@@ -109,7 +112,7 @@ class LinSys(Model):
         wandb_init_kwargs=None,
     ):
         _is_solver_config(solver_config, "solver_config")
-        _is_torch_tensor(w_init, "w_init")
+        _is_torch_tensor(W_init, "W_init")
         if log_in_wandb and wandb_init_kwargs is None:
             raise ValueError(
                 "wandb_init_kwargs must be specified if log_in_wandb is True"
@@ -137,7 +140,7 @@ class LinSys(Model):
         )
 
         # Get solver
-        solver = _get_solver(model=self, w_init=w_init, solver_config=solver_config)
+        solver = _get_solver(model=self, W_init=W_init, solver_config=solver_config)
 
         # Run solver
         solution, log = self._train(

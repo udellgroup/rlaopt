@@ -94,7 +94,7 @@ class Nystrom(Preconditioner):
         Returns:
             torch.Tensor: The result of the matrix multiplication.
         """
-        return self.U @ (self.S * (self.U.T @ x)) + self.config.rho * x
+        return self.U @ (self.S[:, None] * (self.U.T @ x)) + self.config.rho * x
 
     def _inverse_matmul(self, x: torch.Tensor) -> torch.Tensor:
         """Perform matrix multiplication with the inverse of the preconditioner.
@@ -107,24 +107,9 @@ class Nystrom(Preconditioner):
         """
         UTx = self.U.T @ x
         x = 1 / self.config.rho * (x - self.U @ UTx) + self.U @ torch.divide(
-            UTx, self.S + self.config.rho
+            UTx, (self.S + self.config.rho).unsqueeze(-1)
         )
 
-        return x
-
-    def _apply_inverse_sqrt(self, x: torch.Tensor) -> torch.Tensor:
-        """Applies inverse square root of the preconditioner to a tensor.
-
-           Args:
-            x (torch.Tensor): The tensor to multiply with.
-
-        Returns:
-            torch.Tensor: The result of the inverse square root matrix multiplication.
-        """
-        UTx = self.U.T @ x
-        x = 1 / (self.config.rho) ** (0.5) * (x - self.U @ UTx) + self.U @ torch.divide(
-            UTx, (self.S + self.config.rho) ** (0.5)
-        )
         return x
 
     def _update_damping(self, baseline_rho: float) -> None:
