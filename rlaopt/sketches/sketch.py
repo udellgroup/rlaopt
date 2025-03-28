@@ -9,8 +9,9 @@ from typing import Union
 
 import torch
 
+from .enums import _SketchSide
 from rlaopt.linops import LinOpType
-from rlaopt.utils import _is_str, _is_pos_int
+from rlaopt.utils import _is_pos_int
 
 
 class Sketch(ABC):
@@ -21,9 +22,10 @@ class Sketch(ABC):
     this class and implement the _generate_embedding method.
 
     Attributes:
-        mode (str): A string indicating the sketching mode ('left' or 'right').
-        s (int): An integer representing the sketch size.
-        d (int): An integer representing the original matrix dimension.
+        mode (_SketchSide): An enum indicating the sketching mode
+                            (SketchSide.LEFT or SketchSide.RIGHT).
+        s (int): The sketch size.
+        d (int): The dimension of the matrix to be sketched.
         device (torch.device): Device to be used for computations.
         Omega_mat (torch.device): A torch.Tensor representing the sketching matrix.
     """
@@ -34,23 +36,20 @@ class Sketch(ABC):
         """Initializes the Sketch with given parameters.
 
         Args:
-            mode: A string specifying the sketching mode ('left' or 'right').
+            mode: A string ('left' or 'right') specifying the sketching mode.
             sketch_size: An integer specifying the size of the sketch.
             matrix_dim: An integer specifying the dimension of the original matrix.
             device: A torch.device object specifying the computation device.
 
         Raises:
-            ValueError: If mode is not 'left' or 'right'.
+            ValueError: If mode is an invalid value.
         """
-        self.mode = mode
+        self.mode = _SketchSide._from_str(mode, "mode")
         self.s = sketch_size
         self.d = matrix_dim
         self.device = device
 
-        _is_str(mode, "mode")
         _is_pos_int(sketch_size, "sketch_size")
-        if mode not in ["left", "right"]:
-            raise ValueError(f"mode should equal left or right: received {mode}")
 
         self.Omega_mat = self._generate_embedding()
 

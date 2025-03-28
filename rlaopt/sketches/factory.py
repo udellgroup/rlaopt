@@ -28,7 +28,7 @@ def get_sketch(
     Args:
         name (str): The name of the sketching technique to use.
                     Valid options are "gauss", "ortho", and "sparse".
-        mode (str): The sketching mode, either "left" or "right".
+        mode (str): The sketching mode. Can be specified as "left" or "right".
         sketch_size (int): The target dimension of the sketch.
         matrix_dim (int): The dimension of the original matrix.
         device (torch.device): The device on which to perform computations.
