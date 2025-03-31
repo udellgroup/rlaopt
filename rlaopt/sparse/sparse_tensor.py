@@ -1,9 +1,13 @@
 from typing import Optional, Union
 
-import scipy.sparse
+# import scipy.sparse as sp
+from scipy.sparse import csr_matrix, csr_array, csc_array
 import torch
 
 from .ops import _get_row_slice, _csc_matmul
+
+
+SP_NAME = "scipy.sparse"
 
 
 __all__ = ["SparseCSRTensor"]
@@ -45,10 +49,33 @@ class _SparseTensor:
     def cuda(self, *args, **kwargs) -> "_SparseTensor":
         return _SparseTensor(self.data.cuda(*args, **kwargs))
 
-    def numpy(self, *args, **kwargs) -> "_SparseTensor":
-        return self.data.numpy(*args, **kwargs)
+    def scipy(self, *args, **kwargs) -> Union[csr_array, csc_array]:
+        """Convert to scipy sparse array."""
+        if self.data.layout == torch.sparse_csr:
+            return self._to_scipy_csr(*args, **kwargs)
+        elif self.data.layout == torch.sparse_csc:
+            ccol_indices = self.data.ccol_indices().numpy(*args, **kwargs)
+            row_indices = self.data.row_indices().numpy(*args, **kwargs)
+            values = self.data.values().numpy(*args, **kwargs)
+            return csc_array((values, row_indices, ccol_indices), shape=self.data.shape)
+        else:
+            raise ValueError("Unsupported sparse matrix layout.")
+
+    def _to_scipy_csr(self, *args, **kwargs) -> csr_array:
+        crow_indices = self.data.crow_indices().numpy(*args, **kwargs)
+        col_indices = self.data.col_indices().numpy(*args, **kwargs)
+        values = self.data.values().numpy(*args, **kwargs)
+        return csr_array((values, col_indices, crow_indices), shape=self.data.shape)
+
+    def _to_scipy_csc(self, *args, **kwargs) -> csc_array:
+        ccol_indices = self.data.ccol_indices().numpy(*args, **kwargs)
+        row_indices = self.data.row_indices().numpy(*args, **kwargs)
+        values = self.data.values().numpy(*args, **kwargs)
+        return csc_array((values, row_indices, ccol_indices), shape=self.data.shape)
 
     def __getitem__(self, indices: torch.Tensor) -> "_SparseTensor":
+        # print(f"Indices: {indices}")
+        # print(f"Indices type: {type(indices)}")
         if not isinstance(indices, torch.Tensor):
             raise IndexError("Row slice indices must be a tensor.")
         return _SparseTensor(_get_row_slice(self.data, indices))
@@ -92,22 +119,24 @@ class _SparseTensor:
 class SparseCSRTensor(_SparseTensor):
     def __init__(
         self,
-        data: Union[torch.sparse.Tensor, scipy.sparse.csr_matrix],
+        data: Union[torch.sparse.Tensor, csr_matrix, csr_array],
         device: Optional[Union[str, torch.device]] = None,
     ):
         # Check type of data
         if not self._is_sparse_csr_tensor(data) and not isinstance(
-            data, scipy.sparse.csr_matrix
+            data, (csr_matrix, csr_array)
         ):
             raise TypeError(
-                f"Unsupported data type {type(data)}. "
-                "Expected torch.sparse_csr_tensor or scipy.sparse.csr_matrix."
+                f"Unsupported data type {type(data).__name__}. "
+                f"Expected torch.sparse_csr_tensor, {SP_NAME}.csr_matrix, "
+                f"or {SP_NAME}.csr_array."
             )
 
         # Check device
         if not isinstance(device, str) and not isinstance(device, torch.device):
             raise TypeError(
-                f"Unsupported device type {type(device)}. Expected str or torch.device."
+                f"Unsupported device type {type(device).__name__}. "
+                "Expected str or torch.device."
             )
         if self._is_sparse_csr_tensor(data):
             if device is not None and data.device != device:
@@ -121,19 +150,19 @@ class SparseCSRTensor(_SparseTensor):
                 device = torch.device(device)
 
         # Convert scipy sparse matrix to torch sparse tensor
-        if isinstance(data, scipy.sparse.csr_matrix):
+        if isinstance(data, (csr_matrix, csr_array)):
             data = self._from_scipy(data, device)
         super().__init__(data=data)
 
     def _is_sparse_csr_tensor(
-        self, data: Union[torch.sparse.Tensor, scipy.sparse.csr_matrix]
+        self, data: Union[torch.sparse.Tensor, csr_matrix, csr_array]
     ) -> bool:
         if isinstance(data, torch.sparse.Tensor) and data.layout == torch.sparse_csr:
             return True
         return False
 
     def _from_scipy(
-        self, data: scipy.sparse.csr_matrix, device: torch.device
+        self, data: Union[csr_matrix, csr_array], device: torch.device
     ) -> torch.sparse.Tensor:
         crow_indices = torch.tensor(data.indptr, dtype=torch.int64, device=device)
         col_indices = torch.tensor(data.indices, dtype=torch.int64, device=device)
