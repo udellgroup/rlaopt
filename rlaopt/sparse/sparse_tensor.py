@@ -1,11 +1,10 @@
-from typing import Optional, Union
+from typing import List, Optional, Union
 
-# import scipy.sparse as sp
 from scipy.sparse import csr_matrix, csr_array, csc_array
 import torch
 
 from .ops import _get_row_slice, _csc_matmul
-
+from .utils import _convert_indices_to_tensor
 
 SP_NAME = "scipy.sparse"
 
@@ -49,17 +48,11 @@ class _SparseTensor:
     def cuda(self, *args, **kwargs) -> "_SparseTensor":
         return _SparseTensor(self.data.cuda(*args, **kwargs))
 
-    def scipy(self, *args, **kwargs) -> Union[csr_array, csc_array]:
-        """Convert to scipy sparse array."""
-        if self.data.layout == torch.sparse_csr:
-            return self._to_scipy_csr(*args, **kwargs)
-        elif self.data.layout == torch.sparse_csc:
-            ccol_indices = self.data.ccol_indices().numpy(*args, **kwargs)
-            row_indices = self.data.row_indices().numpy(*args, **kwargs)
-            values = self.data.values().numpy(*args, **kwargs)
-            return csc_array((values, row_indices, ccol_indices), shape=self.data.shape)
-        else:
-            raise ValueError("Unsupported sparse matrix layout.")
+    def _is_csr(self) -> bool:
+        return self.data.layout == torch.sparse_csr
+
+    def _is_csc(self) -> bool:
+        return self.data.layout == torch.sparse_csc
 
     def _to_scipy_csr(self, *args, **kwargs) -> csr_array:
         crow_indices = self.data.crow_indices().numpy(*args, **kwargs)
@@ -73,27 +66,47 @@ class _SparseTensor:
         values = self.data.values().numpy(*args, **kwargs)
         return csc_array((values, row_indices, ccol_indices), shape=self.data.shape)
 
-    def __getitem__(self, indices: torch.Tensor) -> "_SparseTensor":
-        # print(f"Indices: {indices}")
-        # print(f"Indices type: {type(indices)}")
-        if not isinstance(indices, torch.Tensor):
-            raise IndexError("Row slice indices must be a tensor.")
-        return _SparseTensor(_get_row_slice(self.data, indices))
-
-    def __matmul__(self, v: torch.Tensor) -> torch.Tensor:
-        if self.data.layout == torch.sparse_csr:
-            return self.data @ v
-        elif self.data.layout == torch.sparse_csc:
-            return _csc_matmul(self.data, v)
-
-    @property
-    def T(self) -> "_SparseTensor":
-        if self.data.layout == torch.sparse_csr:
-            return self._get_csr_tranpose()
-        elif self.data.layout == torch.sparse_csc:
-            return self._get_csc_tranpose()
+    def scipy(self, *args, **kwargs) -> Union[csr_array, csc_array]:
+        """Convert to scipy sparse array."""
+        if self._is_csr():
+            return self._to_scipy_csr(*args, **kwargs)
+        elif self._is_csc():
+            return self._to_scipy_csc(*args, **kwargs)
         else:
             raise ValueError("Unsupported sparse matrix layout.")
+
+    def __getitem__(
+        self, indices: Union[torch.Tensor, slice, int, List[int]]
+    ) -> "_SparseTensor":
+        """Get rows from a sparse tensor using indices.
+
+        Args:
+            indices: Can be torch.Tensor, slice, int, or list of indices
+
+        Returns:
+            _SparseTensor: A new sparse tensor with the selected rows
+
+        Raises:
+            ValueError: If tensor is not in CSR format
+            IndexError: If indices format is invalid or indices are out of bounds
+        """
+        if not self._is_csr():
+            raise ValueError("Row slicing is only supported for CSR layout.")
+
+        # Convert indices to tensor using the utility function
+        # This function will raise IndexError if indices format is invalid
+        # or indices are out of bounds
+        tensor_indices = _convert_indices_to_tensor(
+            indices, num_rows=self.data.shape[0]
+        )
+
+        return _SparseTensor(_get_row_slice(self.data, tensor_indices))
+
+    def __matmul__(self, v: torch.Tensor) -> torch.Tensor:
+        if self._is_csr():
+            return self.data @ v
+        elif self._is_csc():
+            return _csc_matmul(self.data, v)
 
     def _get_csr_tranpose(self) -> "_SparseTensor":
         return _SparseTensor(
@@ -114,6 +127,15 @@ class _SparseTensor:
                 size=(self.data.shape[1], self.data.shape[0]),
             )
         )
+
+    @property
+    def T(self) -> "_SparseTensor":
+        if self._is_csr():
+            return self._get_csr_tranpose()
+        elif self._is_csc():
+            return self._get_csc_tranpose()
+        else:
+            raise ValueError("Unsupported sparse matrix layout.")
 
 
 class SparseCSRTensor(_SparseTensor):
