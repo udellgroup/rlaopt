@@ -1,7 +1,3 @@
-import time
-import os  # noqa: F401
-from typing import Callable, Tuple
-
 import pytest
 import numpy as np
 import scipy.sparse as sp
@@ -27,45 +23,51 @@ def format_device_name(device_str):
         return f"GPU {gpu_id}"
 
 
-def load_sparse_matrix(file_path, precision):
-    """Load sparse matrix from npz file."""
-    return sp.load_npz(file_path).astype(precision)
+# Dictionary of tolerance values by precision
+TOLERANCES = {
+    torch.float32: {"rtol": 1e-4, "atol": 1e-6},
+    torch.float64: {"rtol": 1e-8, "atol": 1e-8},
+}
 
 
-def time_and_verify_operation(
-    operation: Callable,
-    reference_operation: Callable,
-    device_str: str,
-    rtol: float = 1e-5,
-    atol: float = 1e-8,
-) -> Tuple[float, float, bool]:
-    """Perform operation, time it, and verify against reference."""
-    start = time.time()
-    result = operation()
-    elapsed = time.time() - start
-
-    ref_start = time.time()
-    ref_result = reference_operation()
-    ref_elapsed = time.time() - ref_start
-
-    # Convert reference result to torch tensor on the right device if needed
-    if isinstance(ref_result, np.ndarray):
-        ref_result = torch.tensor(ref_result, device=device_str)
-
-    # Verify results match
-    is_correct = torch.allclose(result, ref_result, rtol=rtol, atol=atol)
-
-    return elapsed, ref_elapsed, is_correct
-
-
-# Fixture for test data preparation
+# Fixture for test data preparation with different precisions
 @pytest.fixture(scope="module")
-def sparse_data():
-    """Fixture to load test data once for all tests."""
+def sparse_data_dict():
+    """Generate test data once and cache different precision versions."""
     n = 10000
     d = 30000
     density = 1e-4
-    return sp.random_array((n, d), density=density, format="csr", dtype=np.float64)
+
+    # Generate base data in high precision
+    base_data = sp.random_array((n, d), density=density, format="csr", dtype=np.float64)
+
+    # Create dictionary with both precision versions
+    return {
+        torch.float32: base_data.astype(np.float32),
+        torch.float64: base_data,  # Already float64, no conversion needed
+    }
+
+
+# Fixture for high-precision reference data
+@pytest.fixture(scope="module")
+def reference_data(sparse_data_dict):
+    """Get high-precision reference data (always float64)."""
+    # Return the float64 version of our test data
+    return sparse_data_dict[torch.float64]
+
+
+# Fixture for properly typed sparse_data based on precision
+@pytest.fixture
+def sparse_data(sparse_data_dict, precision):
+    """Return sparse data with appropriate precision."""
+    return sparse_data_dict[precision]
+
+
+# Fixture for tolerance values
+@pytest.fixture
+def tol(precision):
+    """Return appropriate tolerance values for the current precision."""
+    return TOLERANCES[precision]
 
 
 # Fixture for device parameters
@@ -79,26 +81,20 @@ def device(request):
 @pytest.fixture(params=[torch.float32, torch.float64])
 def precision(request):
     """Parameterized fixture for testing with different precision."""
+    torch.set_default_dtype(request.param)  # Set default dtype for torch
     return request.param
 
 
 # Fixture to create the sparse tensor for testing
 @pytest.fixture
-def sparse_tensor(sparse_data, device, precision):
+def sparse_tensor(sparse_data, device):
     """Create a sparse tensor with appropriate precision and device."""
-    # Set default dtype for torch
-    torch.set_default_dtype(precision)
-
-    # Convert data to the right numpy precision
-    np_precision = np.float32 if precision == torch.float32 else np.float64
-    data = sparse_data.astype(np_precision)
-
     # Create the sparse tensor
-    return SparseCSRTensor(data=data, device=device)
+    return SparseCSRTensor(data=sparse_data, device=device)
 
 
 # Test cases
-def test_row_slicing(sparse_tensor, device):
+def test_row_slicing(sparse_tensor, device, tol):
     """Test for CSR row slicing."""
     idx_size = min(1024, sparse_tensor.shape[0])
     idx = torch.tensor(np.arange(idx_size), dtype=torch.int64, device=device)
@@ -109,47 +105,60 @@ def test_row_slicing(sparse_tensor, device):
     reference_result = (sparse_tensor @ b)[idx]
 
     # Verify results
-    assert torch.allclose(sliced_result, reference_result, rtol=1e-5, atol=1e-8)
+    assert torch.allclose(sliced_result, reference_result, **tol)
 
 
-def test_csc_matvec(sparse_tensor, sparse_data, device):
+def test_csc_matvec(sparse_tensor, reference_data, device, tol):
     """Test for CSC matrix-vector multiply."""
+    # Create random vector
     d = torch.randn(sparse_tensor.shape[0], device=device)
-    d_np = d.cpu().numpy()
 
-    # Operation and reference
+    # Get numpy versions for reference calc (high precision)
+    d_np_64 = d.cpu().numpy().astype(np.float64)
+
+    # Operation using the tensor with the current precision
     result = sparse_tensor.T @ d
-    reference = sparse_data.T @ d_np
 
-    # Convert reference to torch tensor
-    reference_tensor = torch.tensor(reference, device=device)
+    # Reference calculation using high precision
+    reference = reference_data.T @ d_np_64
 
-    print(f"result.dtype: {result.dtype}")
-    print(f"reference_tensor.dtype: {reference_tensor.dtype}")
+    # Convert result to float64 for comparison
+    result_64 = result.to(torch.float64)
+
+    # Convert reference to torch tensor (always float64)
+    reference_tensor = torch.tensor(reference, device=device, dtype=torch.float64)
 
     # Verify results
-    assert torch.allclose(result, reference_tensor, rtol=1e-5, atol=1e-8)
+    assert torch.allclose(result_64, reference_tensor, **tol)
 
 
 @pytest.mark.parametrize("cols", [1, 32, 128])
-def test_csc_matmat(sparse_tensor, sparse_data, device, cols):
+def test_csc_matmat(sparse_tensor, reference_data, device, tol, cols):
     """Test for CSC matrix-matrix multiply with different column sizes."""
     # Skip large matrix multiplication on CPU for performance reasons
     if device == "cpu" and cols > 32:
         pytest.skip("Skipping large matrix multiplication on CPU")
 
+    # Create random matrix for multiplication
     D = torch.randn(sparse_tensor.shape[0], cols, device=device)
-    D_np = D.cpu().numpy()
 
-    # Operation and reference
+    # Get numpy versions for reference calc (high precision)
+    D_np_64 = D.cpu().numpy().astype(np.float64)
+
+    # Operation using the tensor with the current precision
     result = sparse_tensor.T @ D
-    reference = sparse_data.T @ D_np
 
-    # Convert reference to torch tensor
-    reference_tensor = torch.tensor(reference, device=device)
+    # Reference calculation using high precision
+    reference = reference_data.T @ D_np_64
+
+    # Convert result to float64 for comparison
+    result_64 = result.to(torch.float64)
+
+    # Convert reference to torch tensor (always float64)
+    reference_tensor = torch.tensor(reference, device=device, dtype=torch.float64)
 
     # Verify results
-    assert torch.allclose(result, reference_tensor, rtol=1e-5, atol=1e-8)
+    assert torch.allclose(result_64, reference_tensor, **tol)
 
 
 # # Performance testing - can be marked to run separately if needed
