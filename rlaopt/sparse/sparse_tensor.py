@@ -25,12 +25,28 @@ class _SparseTensor:
         return self.data.shape
 
     @property
+    def ndim(self) -> int:
+        return self.data.ndim
+
+    @property
     def dtype(self) -> torch.dtype:
         return self.data.dtype
 
     @property
     def device(self) -> torch.device:
         return self.data.device
+
+    def to(self, *args, **kwargs) -> "_SparseTensor":
+        return _SparseTensor(self.data.to(*args, **kwargs))
+
+    def cpu(self, *args, **kwargs) -> "_SparseTensor":
+        return _SparseTensor(self.data.cpu(*args, **kwargs))
+
+    def cuda(self, *args, **kwargs) -> "_SparseTensor":
+        return _SparseTensor(self.data.cuda(*args, **kwargs))
+
+    def numpy(self, *args, **kwargs) -> "_SparseTensor":
+        return self.data.numpy(*args, **kwargs)
 
     def __getitem__(self, indices: torch.Tensor) -> "_SparseTensor":
         if not isinstance(indices, torch.Tensor):
