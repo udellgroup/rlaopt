@@ -67,7 +67,18 @@ class _SparseTensor:
         return csc_array((values, row_indices, ccol_indices), shape=self.data.shape)
 
     def scipy(self, *args, **kwargs) -> Union[csr_array, csc_array]:
-        """Convert to scipy sparse array."""
+        """Convert to scipy sparse array.
+
+        Args:
+            *args: Additional arguments to pass to torch.Tensor.numpy()
+            **kwargs: Additional keyword arguments to pass to torch.Tensor.numpy()
+
+        Returns:
+            Union[csr_array, csc_array]: The converted scipy sparse array
+
+        Raises:
+            ValueError: If the sparse tensor is not in CSR or CSC format
+        """
         if self._is_csr():
             return self._to_scipy_csr(*args, **kwargs)
         elif self._is_csc():
@@ -130,6 +141,14 @@ class _SparseTensor:
 
     @property
     def T(self) -> "_SparseTensor":
+        """Transpose of the sparse tensor.
+
+        Returns:
+            _SparseTensor: Transposed sparse tensor
+
+        Raises:
+            ValueError: If the sparse tensor is not in CSR or CSC format
+        """
         if self._is_csr():
             return self._get_csr_tranpose()
         elif self._is_csc():
