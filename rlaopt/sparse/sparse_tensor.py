@@ -99,14 +99,13 @@ class _SparseTensor:
 
         Raises:
             ValueError: If tensor is not in CSR format
-            IndexError: If indices format is invalid or indices are out of bounds
+            TypeError: If indices format is invalid
+            IndexError: If indices are out of bounds
         """
         if not self._is_csr():
             raise ValueError("Row slicing is only supported for CSR layout.")
 
         # Convert indices to tensor using the utility function
-        # This function will raise IndexError if indices format is invalid
-        # or indices are out of bounds
         tensor_indices = _convert_indices_to_tensor(
             indices, num_rows=self.data.shape[0]
         )

@@ -19,7 +19,8 @@ def _convert_indices_to_tensor(
         torch.Tensor: A 1D long tensor containing the indices
 
     Raises:
-        IndexError: If indices format is invalid or indices are out of bounds
+        TypeError: If indices format is invalid
+        IndexError: If indices are out of bounds
     """
     # Handle different types of indices
     if isinstance(indices, slice):
@@ -33,10 +34,6 @@ def _convert_indices_to_tensor(
         # Convert single integer to tensor with one element
         if indices < 0:
             indices = num_rows + indices
-        if indices < 0 or indices >= num_rows:
-            raise IndexError(
-                f"Index {indices} out of bounds for tensor with {num_rows} rows"
-            )
         tensor_indices = torch.tensor([indices])
 
     elif isinstance(indices, list):
@@ -49,7 +46,7 @@ def _convert_indices_to_tensor(
 
     else:
         # Handle unsupported types
-        raise IndexError(
+        raise TypeError(
             f"Slicing indices must be a tensor, slice, int, or list. "
             f"Got type {type(indices).__name__}"
         )

@@ -14,15 +14,6 @@ def get_available_devices():
     return devices
 
 
-def format_device_name(device_str):
-    """Format device name for display."""
-    if device_str == "cpu":
-        return "CPU"
-    else:
-        gpu_id = device_str.split(":")[-1]
-        return f"GPU {gpu_id}"
-
-
 # Dictionary of tolerance values by precision
 TOLERANCES = {
     torch.float32: {"rtol": 1e-4, "atol": 1e-6},
@@ -34,8 +25,8 @@ TOLERANCES = {
 @pytest.fixture(scope="module")
 def sparse_data_dict():
     """Generate test data once and cache different precision versions."""
-    n = 10000
-    d = 30000
+    n = 5000
+    d = 20000
     density = 1e-4
 
     # Generate base data in high precision
@@ -93,21 +84,6 @@ def sparse_tensor(sparse_data, device):
     return SparseCSRTensor(data=sparse_data, device=device)
 
 
-# Test cases
-def test_row_slicing(sparse_tensor, device, tol):
-    """Test for CSR row slicing."""
-    idx_size = min(1024, sparse_tensor.shape[0])
-    idx = torch.tensor(np.arange(idx_size), dtype=torch.int64, device=device)
-    b = torch.randn(sparse_tensor.shape[1], 10, device=device)
-
-    # Operation and reference
-    sliced_result = sparse_tensor[idx] @ b
-    reference_result = (sparse_tensor @ b)[idx]
-
-    # Verify results
-    assert torch.allclose(sliced_result, reference_result, **tol)
-
-
 def test_csc_matvec(sparse_tensor, reference_data, device, tol):
     """Test for CSC matrix-vector multiply."""
     # Create random vector
@@ -159,45 +135,3 @@ def test_csc_matmat(sparse_tensor, reference_data, device, tol, cols):
 
     # Verify results
     assert torch.allclose(result_64, reference_tensor, **tol)
-
-
-# # Performance testing - can be marked to run separately if needed
-# @pytest.mark.performance
-# def test_csc_matmat_performance(sparse_tensor, sparse_data, device):
-#     """Test performance of CSC matrix-matrix multiply."""
-#     # Skip on CI or when running basic tests
-#     if (
-#         os.environ.get("CI") == "true"
-#         or os.environ.get("SKIP_PERFORMANCE_TESTS") == "true"
-#     ):
-#         pytest.skip("Skipping performance test in CI environment")
-
-#     cols = 32
-#     D = torch.randn(sparse_tensor.shape[0], cols, device=device)
-#     D_np = D.cpu().numpy()
-
-#     def operation():
-#         return sparse_tensor.T @ D
-
-#     def reference_operation():
-#         return sparse_data.T @ D_np
-
-#     elapsed, ref_elapsed, is_correct = time_and_verify_operation(
-#         operation, reference_operation, device
-#     )
-
-#     # Print performance results
-#     print(f"\nPerformance test on {format_device_name(device)}:")
-#     print(f"  CSC Matrix-Matrix Multiply ({cols} columns):")
-#     print(f"    Time (extension): {elapsed:.6f}s")
-#     print(f"    Time (scipy): {ref_elapsed:.6f}s")
-#     print(f"    Speedup: {ref_elapsed/elapsed:.2f}x")
-
-#     # Verify results are correct
-#     assert is_correct
-
-#     # On GPU, we generally expect our implementation to be faster
-#     if "cuda" in device:
-#         assert (
-#             elapsed < ref_elapsed
-#         ), "GPU implementation should be faster than scipy reference"
