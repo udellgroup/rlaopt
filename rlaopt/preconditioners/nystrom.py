@@ -6,6 +6,7 @@ from .enums import _DampingMode
 from .preconditioner import Preconditioner
 from .configs import NystromConfig
 from rlaopt.sketches import get_sketch
+from rlaopt.utils import _is_torch_tensor_1d_2d
 
 
 class Nystrom(Preconditioner):
@@ -94,6 +95,7 @@ class Nystrom(Preconditioner):
         Returns:
             torch.Tensor: The result of the matrix multiplication.
         """
+        _is_torch_tensor_1d_2d(x, "x")
         return self.U @ (self.S[:, None] * (self.U.T @ x)) + self.config.rho * x
 
     def _inverse_matmul(self, x: torch.Tensor) -> torch.Tensor:
@@ -105,18 +107,18 @@ class Nystrom(Preconditioner):
         Returns:
             torch.Tensor: The result of the inverse matrix multiplication.
         """
+        _is_torch_tensor_1d_2d(x, "x")
+        
         UTx = self.U.T @ x
+       
         if x.ndim == 2:
             x = 1 / self.config.rho * (x - self.U @ UTx) + self.U @ torch.divide(
                 UTx, (self.S + self.config.rho).unsqueeze(-1)
             )
-        elif x.ndim == 1:
+        else:
             x = 1 / self.config.rho * (x - self.U @ UTx) + self.U @ torch.divide(
                 UTx, (self.S + self.config.rho)
             )
-
-        else:
-            raise ValueError(f"x must be a 1D or 2D tensor. Received {x.ndim}D tensor.")
 
         return x
 
