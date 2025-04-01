@@ -4,6 +4,7 @@ It includes mappings between preconditioner configurations and their correspondi
 preconditioner classes, as well as a function to instantiate preconditioners.
 """
 
+from .preconditioner import Preconditioner
 from .identity import Identity
 from .newton import Newton
 from .nystrom import Nystrom
@@ -30,7 +31,7 @@ CONFIG_TO_PRECONDITIONER = {
 __all__ = ["_get_precond"]
 
 
-def _get_precond(precond_config: PreconditionerConfig):
+def _get_precond(precond_config: PreconditionerConfig) -> Preconditioner:
     """Create and return a preconditioner instance based on the given configuration.
 
     This function acts as a factory, instantiating the appropriate preconditioner
