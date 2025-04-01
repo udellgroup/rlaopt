@@ -30,7 +30,7 @@ jobs:
 
       # Set up CUDA for C++/CUDA extensions
       - name: Setup CUDA
-        uses: Jimver/cuda-toolkit@v0.2.11
+        uses: Jimver/cuda-toolkit@v0.2.22
         with:
           cuda: '12.5.0'  # Updated to CUDA 12.5
           method: 'network'
