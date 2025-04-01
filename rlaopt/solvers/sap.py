@@ -26,7 +26,7 @@ class SAP(Solver):
     def __init__(
         self,
         system: "LinSys",
-        w_init: torch.Tensor,
+        W_init: torch.Tensor,
         precond_config: PreconditionerConfig,
         device: torch.device,
         blk_sz: int,
@@ -44,7 +44,7 @@ class SAP(Solver):
             )
         self.precond_config = precond_config
 
-        self._w = w_init.clone()
+        self._W = W_init.clone()
         self.device = device
         self.blk_sz = blk_sz
         self.accel = accel
@@ -60,12 +60,12 @@ class SAP(Solver):
             self.gamma = 1 / (self.accel_config.mu * self.accel_config.nu) ** 0.5
             self.alpha = 1 / (1 + self.gamma * self.accel_config.nu)
 
-            self.v = self._w.clone()
-            self.y = self._w.clone()
+            self.V = self._W.clone()
+            self.Y = self._W.clone()
 
     @property
-    def w(self):
-        return self._w
+    def W(self):
+        return self._W
 
     def _get_precond(self, blk: torch.Tensor) -> Preconditioner:
         P = _pf_get_precond(self.precond_config)
@@ -111,13 +111,13 @@ class SAP(Solver):
         return max_eig ** (-1.0)
 
     def _get_block_update(
-        self, w: torch.Tensor, blk: torch.Tensor, blk_precond: Preconditioner
+        self, W: torch.Tensor, blk: torch.Tensor, blk_precond: Preconditioner
     ):
         # Compute the block gradient
         blk_grad = (
-            self.system.A_row_oracle(blk) @ w
-            + self.system.reg * w[blk]
-            - self.system.b[blk]
+            self.system.A_row_oracle(blk) @ W
+            + self.system.reg * W[blk, :]
+            - self.system.B[blk, :]
         )
 
         # Apply the preconditioner
@@ -133,16 +133,16 @@ class SAP(Solver):
         blk_stepsize = self._get_stepsize(blk, blk_precond)
 
         # Get the update direction
-        # Update direction is computed at self.y if accelerated, else at self._w
-        eval_loc = self.y if self.accel else self._w
+        # Update direction is computed at self.Y if accelerated, else at self._W
+        eval_loc = self.Y if self.accel else self._W
         dir = self._get_block_update(eval_loc, blk, blk_precond)
 
         # Update parameters
         if self.accel:
-            self._w = self.y.clone()
-            self._w[blk] -= blk_stepsize * dir
-            self.v = self.beta * self.v + (1 - self.beta) * self.y
-            self.v[blk] -= blk_stepsize * self.gamma * dir
-            self.y = self.alpha * self.v + (1 - self.alpha) * self._w
+            self._W = self.Y.clone()
+            self._W[blk, :] -= blk_stepsize * dir
+            self.V = self.beta * self.V + (1 - self.beta) * self.Y
+            self.V[blk, :] -= blk_stepsize * self.gamma * dir
+            self.Y = self.alpha * self.V + (1 - self.alpha) * self._W
         else:
-            self._w[blk] -= blk_stepsize * dir
+            self._W[blk, :] -= blk_stepsize * dir

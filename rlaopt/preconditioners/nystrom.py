@@ -106,9 +106,17 @@ class Nystrom(Preconditioner):
             torch.Tensor: The result of the inverse matrix multiplication.
         """
         UTx = self.U.T @ x
-        x = 1 / self.config.rho * (x - self.U @ UTx) + self.U @ torch.divide(
-            UTx, (self.S + self.config.rho).unsqueeze(-1)
-        )
+        if x.ndim == 2:
+            x = 1 / self.config.rho * (x - self.U @ UTx) + self.U @ torch.divide(
+                UTx, (self.S + self.config.rho).unsqueeze(-1)
+            )
+        elif x.ndim == 1:
+            x = 1 / self.config.rho * (x - self.U @ UTx) + self.U @ torch.divide(
+                UTx, (self.S + self.config.rho)
+            )
+
+        else:
+            raise ValueError(f"x must be a 1D or 2D tensor. Received {x.ndim}D tensor.")
 
         return x
 
