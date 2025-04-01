@@ -1,5 +1,4 @@
 import os
-import re
 import torch
 import glob
 from setuptools import find_packages, setup
@@ -10,18 +9,12 @@ from torch.utils.cpp_extension import (
     CUDA_HOME,
 )
 
-library_name = "rlaopt"
+LIBRARY_NAME = "rlaopt"
 
 
 def parse_requirements(filename):
     with open(filename, "r", encoding="utf-8") as f:
         return [line.strip() for line in f if line.strip() and not line.startswith("#")]
-
-
-def get_version():
-    with open(os.path.join(library_name, "__init__.py"), "r", encoding="utf-8") as f:
-        match = re.search(r'__version__ = "(.*?)"', f.read())
-        return match.group(1) if match else "0.0.0"
 
 
 if torch.__version__ >= "2.6.0":
@@ -62,7 +55,7 @@ def get_extensions():
         extra_link_args.extend(["-O0", "-g"])
 
     this_dir = os.path.dirname(os.path.curdir)
-    extensions_dir = os.path.join(this_dir, library_name, "csrc")
+    extensions_dir = os.path.join(this_dir, LIBRARY_NAME, "csrc")
     sources = list(glob.glob(os.path.join(extensions_dir, "*.cpp")))
 
     extensions_cuda_dir = os.path.join(extensions_dir, "cuda")
@@ -73,7 +66,7 @@ def get_extensions():
 
     ext_modules = [
         extension(
-            f"{library_name}._C",
+            f"{LIBRARY_NAME}._C",
             sources,
             extra_compile_args=extra_compile_args,
             extra_link_args=extra_link_args,
@@ -85,8 +78,7 @@ def get_extensions():
 
 
 setup(
-    name=library_name,
-    version=get_version(),
+    name=LIBRARY_NAME,
     packages=find_packages(),
     ext_modules=get_extensions(),
     install_requires=parse_requirements("requirements.txt"),

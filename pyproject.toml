@@ -2,6 +2,9 @@
 requires = ["setuptools", "wheel", "torch>=2.6.0"]
 build-backend = "setuptools.build_meta"
 
+[project]
+version = "0.1.0"
+
 [project.optional-dependencies]
 test = [
     "pytest>=8.0.0",
