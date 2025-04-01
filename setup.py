@@ -11,12 +11,6 @@ from torch.utils.cpp_extension import (
 
 LIBRARY_NAME = "rlaopt"
 
-
-def parse_requirements(filename):
-    with open(filename, "r", encoding="utf-8") as f:
-        return [line.strip() for line in f if line.strip() and not line.startswith("#")]
-
-
 if torch.__version__ >= "2.6.0":
     py_limited_api = True
 else:
@@ -80,24 +74,6 @@ def get_extensions():
 setup(
     packages=find_packages(),
     ext_modules=get_extensions(),
-    install_requires=parse_requirements("requirements.txt"),
-    author="Pratik Rathore, Zachary Frangella, Weimu Lei",
-    author_email="pratikr@stanford.edu, zfran@stanford.edu, leiweimu@gmail.com",
-    description="Randomized linear algebra-based methods for optimization",
-    long_description=open("README.md", encoding="utf-8").read(),
-    long_description_content_type="text/markdown",
-    url="https://github.com/udellgroup/rlaopt",
-    license="Apache 2.0",
-    classifiers=[
-        "Programming Language :: Python :: 3",
-        "License :: OSI Approved :: Apache Software License",
-        "Operating System :: OS Independent",
-    ],
-    project_urls={
-        "Source": "https://github.com/udellgroup/rlaopt",
-        "Issue Tracker": "https://github.com/udellgroup/rlaopt/issues",
-    },
-    python_requires=">=3.9",  # Based on the Py_LIMITED_API setting
     cmdclass={"build_ext": BuildExtension},
     options={"bdist_wheel": {"py_limited_api": "cp39"}} if py_limited_api else {},
 )
