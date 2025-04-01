@@ -1,14 +1,8 @@
-import importlib
+from .linsys import *
+from .model import *
 
-modules_to_import = [
-    ".linsys",
-    ".model",
-]
-
+# Collect __all__ from imported modules
 __all__ = []
-for module in modules_to_import:
-    mod = importlib.import_module(module, package=__package__)
-    components = getattr(mod, "__all__", [])
-    for component in components:
-        globals()[component] = getattr(mod, component)
-        __all__.append(component)
+for module in [linsys, model]:
+    if hasattr(module, "__all__"):
+        __all__.extend(module.__all__)

@@ -1,17 +1,10 @@
-"""Spectral estimators module __init__.py file."""
+"""spectral_estimators module __init__.py file."""
+from .frobenius_norm import *
+from .spectral_norm import *
+from .trace import *
 
-import importlib
-
-modules_to_import = [
-    ".frobenius_norm",
-    ".spectral_norm",
-    ".trace",
-]
-
+# Collect __all__ from imported modules
 __all__ = []
-for module in modules_to_import:
-    mod = importlib.import_module(module, package=__package__)
-    components = getattr(mod, "__all__", [])
-    for component in components:
-        globals()[component] = getattr(mod, component)
-        __all__.append(component)
+for module in [frobenius_norm, spectral_norm, trace]:
+    if hasattr(module, "__all__"):
+        __all__.extend(module.__all__)
