@@ -6,9 +6,11 @@ build-backend = "setuptools.build_meta"
 name = "rlaopt"
 version = "0.1.0"
 description = "Randomized linear algebra-based methods for optimization in PyTorch."
+keywords = ["optimization", "linear algebra", "randomized algorithms", "PyTorch"]
 readme = "README.md"
 requires-python = ">=3.10"
-license = {text = "Apache License, Version 2.0"}
+license = "Apache-2.0"
+license-files = ["LICENSE"]
 authors = [
     {name = "Pratik Rathore", email = "pratikr@stanford.edu"},
     {name = "Zachary Frangella", email = "zfran@stanford.edu"},
@@ -23,8 +25,8 @@ dependencies = [
 ]
 
 [project.urls]
-"Source" = "https://github.com/udellgroup/rlaopt"
-"Issue Tracker" = "https://github.com/udellgroup/rlaopt/issues"
+Homepage = "https://github.com/udellgroup/rlaopt"
+Issues = "https://github.com/udellgroup/rlaopt/issues"
 
 [project.optional-dependencies]
 test = [

@@ -20,14 +20,6 @@ jobs:
         with:
           python-version: '3.10'  # Change to your preferred Python version
 
-      # Cache CUDA toolkit
-      - name: Cache CUDA toolkit
-        uses: actions/cache@v3
-        id: cuda-toolkit-cache
-        with:
-          path: /usr/local/cuda-12.5
-          key: ${{ runner.os }}-cuda-toolkit-12.5
-
       # Set up CUDA for C++/CUDA extensions
       - name: Setup CUDA
         uses: Jimver/cuda-toolkit@v0.2.22
@@ -35,6 +27,7 @@ jobs:
           cuda: '12.5.0'  # Updated to CUDA 12.5
           method: 'network'
           sub-packages: '["nvcc", "cudart"]'
+          use-github-cache: 'true'
 
       # Verify CUDA installation
       - name: Verify CUDA
