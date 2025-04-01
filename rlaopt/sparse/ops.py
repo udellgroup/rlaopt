@@ -57,5 +57,3 @@ def _csc_matmul(sparse_tensor: Tensor, dense_tensor: Tensor) -> Tensor:
         return _csc_matvec(sparse_tensor, dense_tensor)
     elif dense_tensor.ndim == 2:
         return _csc_matmat(sparse_tensor, dense_tensor)
-    else:
-        raise ValueError("The dense tensor must be 1D or 2D.")

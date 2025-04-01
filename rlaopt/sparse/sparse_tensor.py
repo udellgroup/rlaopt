@@ -112,11 +112,23 @@ class _SparseTensor:
 
         return _SparseTensor(_get_row_slice(self.data, tensor_indices))
 
+    def _check_matmul_input_shape(self, v: torch.Tensor) -> None:
+        if v.ndim not in [1, 2]:
+            raise ValueError(f"v must be a 1D or 2D tensor. Received {v.ndim}D tensor.")
+
     def __matmul__(self, v: torch.Tensor) -> torch.Tensor:
+        self._check_matmul_input_shape(v)
         if self._is_csr():
             return self.data @ v
         elif self._is_csc():
             return _csc_matmul(self.data, v)
+
+    def __rmatmul__(self, v: torch.Tensor) -> torch.Tensor:
+        self._check_matmul_input_shape(v)
+        if v.ndim == 1:
+            return self.T @ v
+        elif v.ndim == 2:
+            return (self.T @ v.T).T
 
     def _get_csr_tranpose(self) -> "_SparseTensor":
         return _SparseTensor(
