@@ -69,7 +69,7 @@ def device(request):
 
 
 # Fixtures for different precisions
-@pytest.fixture(params=[torch.float32, torch.float64])
+@pytest.fixture(params=[torch.float32, torch.float64], ids=["float32", "float64"])
 def precision(request):
     """Parameterized fixture for testing with different precision."""
     torch.set_default_dtype(request.param)  # Set default dtype for torch
@@ -108,13 +108,9 @@ def test_csc_matvec(sparse_tensor, reference_data, device, tol):
     assert torch.allclose(result_64, reference_tensor, **tol)
 
 
-@pytest.mark.parametrize("cols", [1, 32, 128])
+@pytest.mark.parametrize("cols", [1, 32, 128], ids=["col1", "col32", "col128"])
 def test_csc_matmat(sparse_tensor, reference_data, device, tol, cols):
     """Test for CSC matrix-matrix multiply with different column sizes."""
-    # Skip large matrix multiplication on CPU for performance reasons
-    if device == "cpu" and cols > 32:
-        pytest.skip("Skipping large matrix multiplication on CPU")
-
     # Create random matrix for multiplication
     D = torch.randn(sparse_tensor.shape[0], cols, device=device)
 
