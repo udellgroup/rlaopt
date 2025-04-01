@@ -1,0 +1,59 @@
+name: Build
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    types: [opened, synchronize, reopened]
+jobs:
+  sonarqube:
+    name: SonarQube
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Shallow clones for better analysis relevancy
+
+      # Set up Python
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'  # Change to your preferred Python version
+
+      # Cache CUDA toolkit
+      - name: Cache CUDA toolkit
+        uses: actions/cache@v3
+        id: cuda-toolkit-cache
+        with:
+          path: /usr/local/cuda-12.5
+          key: ${{ runner.os }}-cuda-toolkit-12.5
+
+      # Set up CUDA for C++/CUDA extensions
+      - name: Setup CUDA
+        uses: Jimver/cuda-toolkit@v0.2.22
+        with:
+          cuda: '12.5.0'  # Updated to CUDA 12.5
+          method: 'network'
+          sub-packages: '["nvcc", "cudart"]'
+
+      # Verify CUDA installation
+      - name: Verify CUDA
+        run: nvcc --version
+
+      # Install the project and its dependencies using pip + pyproject.toml
+      - name: Install project
+        run: |
+          python -m pip install --upgrade pip
+          # Install the package in development mode with test dependencies
+          pip install -e ".[test]"
+
+      # Run tests with coverage
+      - name: Run tests with coverage
+        run: |
+          pytest --cov=. --cov-report=xml
+
+      # SonarQube Scan
+      - name: SonarQube Scan
+        uses: SonarSource/sonarqube-scan-action@v5
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
