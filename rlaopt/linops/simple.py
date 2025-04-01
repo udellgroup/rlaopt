@@ -72,9 +72,6 @@ class TwoSidedLinOp(LinOp):
 
     def __rmatmul__(self, x: torch.Tensor):
         if x.ndim == 1:
-            # x = x.unsqueeze(0)
-            # result = self._rmatvec(x.T).T
-            # return result.squeeze(0)
             return self._rmatvec(x)
         elif x.ndim == 2:
             return self._rmatmat(x.T).T

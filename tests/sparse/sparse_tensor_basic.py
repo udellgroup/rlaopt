@@ -49,9 +49,7 @@ def test_movement(sparse_tensor):
         sparse_tensor_moved = sparse_tensor_moved.cuda()
         assert sparse_tensor_moved.device == torch.device("cuda:0")
     else:
-        # If CUDA is not available, ensure the tensor remains on CPU
-        sparse_tensor_moved = sparse_tensor.cuda()
-        assert sparse_tensor_moved.device == torch.device("cpu")
+        pytest.skip("CUDA is not available.")
 
 
 # Parameterized test for scipy conversion

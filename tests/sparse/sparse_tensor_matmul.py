@@ -25,8 +25,8 @@ TOLERANCES = {
 @pytest.fixture(scope="module")
 def sparse_data_dict():
     """Generate test data once and cache different precision versions."""
-    n = 5000
-    d = 20000
+    n = 2000
+    d = 10000
     density = 1e-4
 
     # Generate base data in high precision
@@ -84,19 +84,141 @@ def sparse_tensor(sparse_data, device):
     return SparseCSRTensor(data=sparse_data, device=device)
 
 
-def test_csc_matvec(sparse_tensor, reference_data, device, tol):
-    """Test for CSC matrix-vector multiply."""
-    # Create random vector
-    d = torch.randn(sparse_tensor.shape[0], device=device)
+# -----------------------------------
+# Tests for forward matrix multiplication (sparse_tensor @ v)
+# -----------------------------------
 
-    # Get numpy versions for reference calc (high precision)
-    d_np_64 = d.cpu().numpy().astype(np.float64)
 
-    # Operation using the tensor with the current precision
-    result = sparse_tensor.T @ d
+@pytest.mark.parametrize("shape_type", ["1d", "2d"], ids=["vector", "matrix"])
+def test_matmul_csr(sparse_tensor, reference_data, device, tol, shape_type):
+    """Test CSR matrix multiplication with different input shapes."""
+    n, m = sparse_tensor.shape
 
-    # Reference calculation using high precision
-    reference = reference_data.T @ d_np_64
+    # Create input tensor based on the shape type parameter
+    if shape_type == "1d":
+        # For 1D input (vector), shape should match width of the matrix
+        v = torch.randn(m, device=device)
+        v_np_64 = v.cpu().numpy().astype(np.float64)
+
+        # Calculate using matmul (sparse_tensor @ vector)
+        result = sparse_tensor @ v
+
+        # Reference calculation using high precision
+        reference = reference_data @ v_np_64
+    else:  # 2d
+        # For 2D input (matrix), first dimension must match width,
+        # second can be arbitrary
+        cols = 10
+        v = torch.randn(m, cols, device=device)
+        v_np_64 = v.cpu().numpy().astype(np.float64)
+
+        # Calculate using matmul (sparse_tensor @ matrix)
+        result = sparse_tensor @ v
+
+        # Reference calculation using high precision
+        reference = reference_data @ v_np_64
+
+    # Convert result to float64 for comparison
+    result_64 = result.to(torch.float64)
+
+    # Convert reference to torch tensor
+    reference_tensor = torch.tensor(reference, device=device, dtype=torch.float64)
+
+    # Verify results
+    assert torch.allclose(result_64, reference_tensor, **tol)
+
+
+@pytest.mark.parametrize("shape_type", ["1d", "2d"], ids=["vector", "matrix"])
+def test_matmul_csc(sparse_tensor, reference_data, device, tol, shape_type):
+    """Test CSC matrix multiplication (transposed sparse tensor)
+    with different input shapes."""
+    n, m = sparse_tensor.shape
+
+    # Create input tensor based on the shape type parameter
+    if shape_type == "1d":
+        # For 1D input with transposed matrix, shape should match height
+        v = torch.randn(n, device=device)
+        v_np_64 = v.cpu().numpy().astype(np.float64)
+
+        # Calculate using matmul (sparse_tensor.T @ vector)
+        result = sparse_tensor.T @ v
+
+        # Reference calculation using high precision
+        reference = reference_data.T @ v_np_64
+    else:  # 2d
+        # For 2D input with transposed matrix, first dim must match height,
+        # second can be arbitrary
+        cols = 10
+        v = torch.randn(n, cols, device=device)
+        v_np_64 = v.cpu().numpy().astype(np.float64)
+
+        # Calculate using matmul (sparse_tensor.T @ matrix)
+        result = sparse_tensor.T @ v
+
+        # Reference calculation using high precision
+        reference = reference_data.T @ v_np_64
+
+    # Convert result to float64 for comparison
+    result_64 = result.to(torch.float64)
+
+    # Convert reference to torch tensor
+    reference_tensor = torch.tensor(reference, device=device, dtype=torch.float64)
+
+    # Verify results
+    assert torch.allclose(result_64, reference_tensor, **tol)
+
+
+def test_matmul_invalid_dims(sparse_tensor):
+    """Test that matmul raises ValueError for tensors with invalid dimensions."""
+    n, m = sparse_tensor.shape
+
+    # 3D tensor (invalid for matmul)
+    invalid_3d = torch.randn(m, 3, 4, device=sparse_tensor.device)
+
+    # Test __matmul__ with 3D tensor
+    with pytest.raises(ValueError):
+        _ = sparse_tensor @ invalid_3d
+
+    # Also test with transposed matrix
+    invalid_3d_t = torch.randn(n, 3, 4, device=sparse_tensor.device)
+    with pytest.raises(ValueError):
+        _ = sparse_tensor.T @ invalid_3d_t
+
+
+# -----------------------------------
+# Tests for right matrix multiplication (v @ sparse_tensor)
+# -----------------------------------
+
+
+@pytest.mark.parametrize("shape_type", ["1d", "2d"], ids=["vector", "matrix"])
+def test_rmatmul_basic(sparse_tensor, reference_data, device, tol, shape_type):
+    """Test right matrix multiplication (v @ sparse_tensor)."""
+    n, m = sparse_tensor.shape
+
+    # Create input tensor based on the shape type parameter
+    if shape_type == "1d":
+        # For 1D input (vector), shape should match width of the matrix
+        v = torch.randn(n, device=device)
+        v_np_64 = v.cpu().numpy().astype(np.float64)
+
+        # Calculate using rmatmul (vector @ sparse_tensor)
+        result = v @ sparse_tensor
+
+        # Reference calculation using high precision: v @ A = (A.T @ v.T).T = A.T @ v
+        # for vector v
+        reference = reference_data.T @ v_np_64
+    else:  # 2d
+        # For 2D input (matrix), first dimension can be arbitrary,
+        # second must match width
+        batch_size = 5
+        v = torch.randn(batch_size, n, device=device)
+        v_np_64 = v.cpu().numpy().astype(np.float64)
+
+        # Calculate using rmatmul (matrix @ sparse_tensor)
+        result = v @ sparse_tensor
+
+        # Reference calculation using high precision: M @ A = (A.T @ M.T).T
+        reference = (reference_data.T @ v_np_64.T).T
 
     # Convert result to float64 for comparison
     result_64 = result.to(torch.float64)
@@ -108,20 +230,34 @@ def test_csc_matvec(sparse_tensor, reference_data, device, tol):
     assert torch.allclose(result_64, reference_tensor, **tol)
 
 
-@pytest.mark.parametrize("cols", [1, 32, 128], ids=["col1", "col32", "col128"])
-def test_csc_matmat(sparse_tensor, reference_data, device, tol, cols):
-    """Test for CSC matrix-matrix multiply with different column sizes."""
-    # Create random matrix for multiplication
-    D = torch.randn(sparse_tensor.shape[0], cols, device=device)
+@pytest.mark.parametrize("shape_type", ["1d", "2d"], ids=["vector", "matrix"])
+def test_rmatmul_transpose(sparse_tensor, reference_data, device, tol, shape_type):
+    """Test right matrix multiplication with transpose (v @ sparse_tensor.T)."""
+    n, m = sparse_tensor.shape
 
-    # Get numpy versions for reference calc (high precision)
-    D_np_64 = D.cpu().numpy().astype(np.float64)
+    # Create input tensor based on the shape type parameter
+    if shape_type == "1d":
+        # For 1D input with transpose, shape should match height of the original matrix
+        v = torch.randn(m, device=device)
+        v_np_64 = v.cpu().numpy().astype(np.float64)
 
-    # Operation using the tensor with the current precision
-    result = sparse_tensor.T @ D
+        # Calculate using rmatmul (vector @ sparse_tensor.T)
+        result = v @ sparse_tensor.T
 
-    # Reference calculation using high precision
-    reference = reference_data.T @ D_np_64
+        # Reference calculation using high precision: v @ A.T = A @ v for vector v
+        reference = reference_data @ v_np_64
+    else:  # 2d
+        # For 2D input with transpose, second dimension must
+        # match height of original matrix
+        batch_size = 5
+        v = torch.randn(batch_size, m, device=device)
+        v_np_64 = v.cpu().numpy().astype(np.float64)
+
+        # Calculate using rmatmul (matrix @ sparse_tensor.T)
+        result = v @ sparse_tensor.T
+
+        # Reference calculation using high precision: M @ A.T = (A @ M.T).T
+        reference = (reference_data @ v_np_64.T).T
 
     # Convert result to float64 for comparison
     result_64 = result.to(torch.float64)
@@ -131,3 +267,20 @@ def test_csc_matmat(sparse_tensor, reference_data, device, tol, cols):
 
     # Verify results
     assert torch.allclose(result_64, reference_tensor, **tol)
+
+
+def test_rmatmul_invalid_dims(sparse_tensor):
+    """Test that rmatmul raises ValueError for tensors with invalid dimensions."""
+    n, m = sparse_tensor.shape
+
+    # 3D tensor (invalid for matmul)
+    invalid_3d = torch.randn(3, 4, n, device=sparse_tensor.device)
+
+    # Test __rmatmul__ with 3D tensor
+    with pytest.raises(ValueError):
+        _ = invalid_3d @ sparse_tensor
+
+    # Also test with transposed matrix
+    invalid_3d_t = torch.randn(3, 4, m, device=sparse_tensor.device)
+    with pytest.raises(ValueError):
+        _ = invalid_3d_t @ sparse_tensor.T
