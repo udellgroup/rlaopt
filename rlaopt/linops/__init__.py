@@ -1,3 +1,4 @@
+"""Linops module __init__.py file."""
 from .distributed import *
 from .simple import *
 from .types import *

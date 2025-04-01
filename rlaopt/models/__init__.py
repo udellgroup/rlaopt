@@ -1,3 +1,4 @@
+"""Models module __init__.py file."""
 from .linsys import *
 from .model import *
 

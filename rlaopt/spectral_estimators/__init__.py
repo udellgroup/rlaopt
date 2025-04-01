@@ -1,4 +1,4 @@
-"""spectral_estimators module __init__.py file."""
+"""Spectral estimators module __init__.py file."""
 from .frobenius_norm import *
 from .spectral_norm import *
 from .trace import *

@@ -1,3 +1,4 @@
+"""Sketches module __init__.py file."""
 from .factory import *
 
 # Collect __all__ from imported modules

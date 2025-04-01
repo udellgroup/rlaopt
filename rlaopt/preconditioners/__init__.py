@@ -1,3 +1,4 @@
+"""Preconditioners module __init__.py file."""
 from .configs import *
 from .factory import *
 from .preconditioner import *

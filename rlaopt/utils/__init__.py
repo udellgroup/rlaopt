@@ -1,3 +1,4 @@
+"""Utils module __init__.py file."""
 from .input_checkers import *
 from .logger import *
 from .wandb_ import *

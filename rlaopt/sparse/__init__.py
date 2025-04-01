@@ -1,3 +1,4 @@
+"""Sparse module __init__.py file."""
 from .sparse_tensor import *
 
 # Collect __all__ from imported modules

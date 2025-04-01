@@ -1,3 +1,4 @@
+"""Kernels module __init__.py file."""
 from .standard import *
 
 # Collect __all__ from imported modules
