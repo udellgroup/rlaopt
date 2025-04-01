@@ -78,7 +78,6 @@ def get_extensions():
 
 
 setup(
-    name=LIBRARY_NAME,
     packages=find_packages(),
     ext_modules=get_extensions(),
     install_requires=parse_requirements("requirements.txt"),
