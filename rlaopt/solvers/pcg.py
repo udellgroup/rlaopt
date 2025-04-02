@@ -42,18 +42,79 @@ class PCG(Solver):
         P._update_damping(baseline_rho=self.system.reg)
         return P
 
-    def _step(self):
-        AP_ = self.system.A @ self.P_ + self.system.reg * self.P_
-        L = torch.linalg.cholesky(self.P_.T @ AP_, upper=False)
-        alpha = torch.linalg.solve_triangular(L, self.RZ, upper=False)
-        alpha = torch.linalg.solve_triangular(L.T, alpha, upper=True)
-        self._W += self.P_ @ alpha
-        self.R -= AP_ @ alpha
+    # def _step(self):
+    #     AP_ = self.system.A @ self.P_ + self.system.reg * self.P_
+    #     L = torch.linalg.cholesky(self.P_.T @ AP_, upper=False)
+    #     alpha = torch.linalg.solve_triangular(L, self.RZ, upper=False)
+    #     alpha = torch.linalg.solve_triangular(L.T, alpha, upper=True)
+    #     print(alpha)
+    #     self._W += self.P_ @ alpha
+    #     self.R -= AP_ @ alpha
 
-        self.Z = self.P._inv @ self.R
-        L = torch.linalg.cholesky(self.RZ, upper=False)
-        RZ_new = self.R.T @ self.Z
-        beta = torch.linalg.solve_triangular(L, RZ_new, upper=False)
-        beta = torch.linalg.solve_triangular(L.T, beta, upper=True)
-        self.P_ = self.Z + self.P_ @ beta
-        self.RZ = RZ_new
+    #     self.Z = self.P._inv @ self.R
+    #     L = torch.linalg.cholesky(self.RZ, upper=False)
+    #     RZ_new = self.R.T @ self.Z
+    #     beta = torch.linalg.solve_triangular(L, RZ_new, upper=False)
+    #     beta = torch.linalg.solve_triangular(L.T, beta, upper=True)
+    #     print(beta)
+    #     self.P_ = self.Z + self.P_ @ beta
+    #     self.RZ = RZ_new
+
+    def _step(self):
+        # Get current mask from the system
+        mask = self.system.mask
+
+        # If all components have converged, nothing to do
+        if not mask.any():
+            return
+
+        # Apply mask to relevant matrices to only work with non-converged components
+        P_masked = self.P_[:, mask]
+        RZ_masked = self.RZ[mask][:, mask]  # This is a smaller matrix now
+
+        # Compute A*P only for non-converged directions
+        AP_masked = self.system.A @ P_masked + self.system.reg * P_masked
+
+        # Compute alpha for active components
+        # print((torch.diag(P_masked.T @ AP_masked)>=0).all().item())
+        # L = torch.linalg.cholesky(P_masked.T @ AP_masked, upper=False)
+        # alpha_masked = torch.linalg.solve_triangular(L, RZ_masked, upper=False)
+        # alpha_masked = torch.linalg.solve_triangular(L.T, alpha_masked, upper=True)
+        alpha_masked = torch.linalg.solve(P_masked.T @ AP_masked, RZ_masked)
+        # print(alpha_masked)
+
+        # Only update the active parts
+        self._W[:, mask] += P_masked @ alpha_masked
+
+        # Update residual for all components
+        self.R[:, mask] -= AP_masked @ alpha_masked
+
+        # Compute new preconditioned residuals for active components
+        Z_new_masked = self.P._inv @ self.R[:, mask]
+
+        # Update Z with the new values for active components
+        self.Z[:, mask] = Z_new_masked
+
+        # Compute new RZ for active components
+        RZ_new_masked = self.R[:, mask].T @ Z_new_masked
+
+        # Compute beta for active components
+        # L = torch.linalg.cholesky(RZ_masked, upper=False)
+        # beta_masked = torch.linalg.solve_triangular(L, RZ_new_masked, upper=False)
+        # beta_masked = torch.linalg.solve_triangular(L.T, beta_masked, upper=True)
+        beta_masked = torch.linalg.solve(RZ_masked, RZ_new_masked)
+        # print(beta_masked)
+
+        # Update P for active components
+        self.P_[:, mask] = Z_new_masked + P_masked @ beta_masked
+
+        # Update RZ for the next iteration
+        if mask.any():  # Only if there are still active components
+            # Create a new RZ tensor with zeros
+            new_RZ = torch.zeros_like(self.RZ)
+            # Fill in the active part
+            new_RZ[torch.outer(mask, mask)] = RZ_new_masked.flatten()
+            self.RZ = new_RZ
+        else:
+            # All components have converged, set RZ to zeros
+            self.RZ = torch.zeros_like(self.RZ)

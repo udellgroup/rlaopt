@@ -41,6 +41,7 @@ class LinSys(Model):
         self._reg = reg
         self._A_row_oracle = A_row_oracle
         self._A_blk_oracle = A_blk_oracle
+        self._mask = torch.full((self._B.shape[1],), True, dtype=torch.bool)
 
     @property
     def A(self):
@@ -61,6 +62,10 @@ class LinSys(Model):
     @property
     def A_blk_oracle(self):
         return self._A_blk_oracle
+
+    @property
+    def mask(self):
+        return self._mask
 
     def _check_inputs(
         self,
@@ -98,7 +103,8 @@ class LinSys(Model):
     ):
         abs_res = internal_metrics["abs_res"]
         comp_tol = torch.clamp(rtol * torch.linalg.norm(self.B, dim=0, ord=2), min=atol)
-        return (abs_res <= comp_tol).all().item()
+        self._mask = abs_res > comp_tol
+        return (~self._mask).all().item()
 
     def solve(
         self,
