@@ -6,6 +6,14 @@ import torch
 from rlaopt.sparse import SparseCSRTensor
 
 
+def get_available_devices():
+    """Return a list of available devices to test."""
+    devices = ["cpu"]
+    if torch.cuda.is_available():
+        devices.append("cuda:0")
+    return devices
+
+
 # Fixture for test data preparation
 @pytest.fixture(scope="module")
 def sparse_data():
@@ -16,11 +24,18 @@ def sparse_data():
     return sp.random_array((n, d), density=density, format="csr", dtype=np.float32)
 
 
+# Fixture for device parameters
+@pytest.fixture(params=get_available_devices())
+def device(request):
+    """Parameterized fixture for testing on different devices."""
+    return request.param
+
+
 # Fixture to create the sparse tensor for testing
-@pytest.fixture(scope="module")
-def sparse_tensor(sparse_data):
-    """Create a SparseCSRTensor from the sparse data."""
-    return SparseCSRTensor(sparse_data, device="cpu")
+@pytest.fixture
+def sparse_tensor(sparse_data, device):
+    """Create a SparseCSRTensor from the sparse data on the appropriate device."""
+    return SparseCSRTensor(sparse_data, device=device)
 
 
 # Test cases
