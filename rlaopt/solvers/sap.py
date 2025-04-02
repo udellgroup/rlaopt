@@ -111,13 +111,15 @@ class SAP(Solver):
         return max_eig ** (-1.0)
 
     def _get_block_update(
-        self, W: torch.Tensor, blk: torch.Tensor, blk_precond: Preconditioner
+        self,
+        W: torch.Tensor,
+        B: torch.Tensor,
+        blk: torch.Tensor,
+        blk_precond: Preconditioner,
     ):
         # Compute the block gradient
         blk_grad = (
-            self.system.A_row_oracle(blk) @ W
-            + self.system.reg * W[blk, :]
-            - self.system.B[blk, :]
+            self.system.A_row_oracle(blk) @ W + self.system.reg * W[blk, :] - B[blk, :]
         )
 
         # Apply the preconditioner
@@ -125,6 +127,13 @@ class SAP(Solver):
         return dir
 
     def _step(self):
+        # Get mask
+        mask = self.system.mask
+
+        # If all components have converged, nothing to do
+        if not mask.any():
+            return
+
         # Randomly select a block
         blk = self._get_blk()
 
@@ -134,15 +143,33 @@ class SAP(Solver):
 
         # Get the update direction
         # Update direction is computed at self.Y if accelerated, else at self._W
-        eval_loc = self.Y if self.accel else self._W
-        dir = self._get_block_update(eval_loc, blk, blk_precond)
+        eval_loc = self.Y[:, mask] if self.accel else self._W[:, mask]
+        dir = self._get_block_update(eval_loc, self.system.B[:, mask], blk, blk_precond)
 
-        # Update parameters
+        # Update
         if self.accel:
-            self._W = self.Y.clone()
-            self._W[blk, :] -= blk_stepsize * dir
-            self.V = self.beta * self.V + (1 - self.beta) * self.Y
-            self.V[blk, :] -= blk_stepsize * self.gamma * dir
-            self.Y = self.alpha * self.V + (1 - self.alpha) * self._W
+            # Copy accelerated point to solution for masked columns
+            self._W[:, mask] = self.Y[:, mask].clone()
+
+            # Create update and apply it
+            update = torch.zeros_like(self._W[:, mask])
+            update[blk] = blk_stepsize * dir
+            self._W[:, mask] -= update
+
+            # Update momentum terms similarly
+            self.V[:, mask] = (
+                self.beta * self.V[:, mask] + (1 - self.beta) * self.Y[:, mask]
+            )
+
+            v_update = torch.zeros_like(self.V[:, mask])
+            v_update[blk] = blk_stepsize * self.gamma * dir
+            self.V[:, mask] -= v_update
+
+            # Update acceleration point
+            self.Y[:, mask] = (
+                self.alpha * self.V[:, mask] + (1 - self.alpha) * self._W[:, mask]
+            )
         else:
-            self._W[blk, :] -= blk_stepsize * dir
+            update = torch.zeros_like(self._W[:, mask])
+            update[blk] = blk_stepsize * dir
+            self._W[:, mask] -= update
