@@ -83,8 +83,9 @@ template <typename scalar_t>
 __global__ void csc_matmat_kernel_2d(
     const scalar_t* __restrict__ values, const int64_t* __restrict__ row_indices,
     const int64_t* __restrict__ col_ptrs, const scalar_t* __restrict__ dense_matrix,
-    scalar_t* __restrict__ result, int64_t num_cols, int64_t batch_size, int64_t dense_col_stride,
-    int64_t dense_batch_stride, int64_t result_row_stride, int64_t result_batch_stride) {
+    scalar_t* __restrict__ result, const int64_t num_cols, const int64_t batch_size,
+    const int64_t dense_col_stride, const int64_t dense_batch_stride,
+    const int64_t result_row_stride, const int64_t result_batch_stride) {
     // x dimension is for columns and y dimension is for batches
     int col = blockIdx.x * blockDim.x + threadIdx.x;
     int b = blockIdx.y * blockDim.y + threadIdx.y;
