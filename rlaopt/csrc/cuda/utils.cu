@@ -3,19 +3,10 @@
 #include "utils.h"
 
 namespace rlaopt::cuda_utils {
-cudaDeviceProp get_device_properties() {
+void get_device_properties(cudaDeviceProp& props) {
     int device;
     cudaGetDevice(&device);
-    cudaDeviceProp props;
     cudaGetDeviceProperties(&props, device);
-    return props;
-}
-
-DeviceGridLimits get_device_grid_limits(const cudaDeviceProp& props) {
-    DeviceGridLimits limits;
-    limits.max_grid_dim_x = props.maxGridSize[0];
-    limits.max_grid_dim_y = props.maxGridSize[1];
-    return limits;
 }
 
 dim3 get_optimal_block_size_1d(const cudaDeviceProp& props) {
@@ -78,5 +69,25 @@ dim3 get_optimal_block_size_2d(const cudaDeviceProp& props, int64_t batch_size) 
     }
 
     return dim3(threads_x, threads_y);
+}
+
+void get_base_kernel_launch_config(KernelLaunchConfig& config) {
+    get_device_properties(config.props);
+    config.max_grid_dim_x = config.props.maxGridSize[0];
+    config.max_grid_dim_y = config.props.maxGridSize[1];
+}
+
+KernelLaunchConfig get_kernel_launch_config_1d() {
+    KernelLaunchConfig config;
+    get_base_kernel_launch_config(config);
+    config.block_size = get_optimal_block_size_1d(config.props);
+    return config;
+}
+
+KernelLaunchConfig get_kernel_launch_config_2d(int64_t batch_size) {
+    KernelLaunchConfig config;
+    get_base_kernel_launch_config(config);
+    config.block_size = get_optimal_block_size_2d(config.props, batch_size);
+    return config;
 }
 }  // namespace rlaopt::cuda_utils

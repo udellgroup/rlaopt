@@ -67,17 +67,12 @@ torch::Tensor csc_matmat_cuda(const torch::Tensor& sparse_tensor,
     int64_t result_row_stride = result_strides[0];
     int64_t result_batch_stride = result_strides[1];
 
-    // Get device properties
-    cudaDeviceProp props = rlaopt::cuda_utils::get_device_properties();
-
-    // Dynamically determine optimal thread block configuration
-    dim3 threads_per_block = rlaopt::cuda_utils::get_optimal_block_size_2d(props, batch_size);
-
-    // Dynamically get maximum grid dimensions from the current device
-    rlaopt::cuda_utils::DeviceGridLimits grid_limits =
-        rlaopt::cuda_utils::get_device_grid_limits(props);
-    int64_t MAX_GRID_DIM_X = grid_limits.max_grid_dim_x;
-    int64_t MAX_GRID_DIM_Y = grid_limits.max_grid_dim_y;
+    // Get kernel launch configuration
+    rlaopt::cuda_utils::KernelLaunchConfig config =
+        rlaopt::cuda_utils::get_kernel_launch_config_2d(batch_size);
+    dim3 threads_per_block = config.block_size;
+    int64_t MAX_GRID_DIM_X = config.max_grid_dim_x;
+    int64_t MAX_GRID_DIM_Y = config.max_grid_dim_y;
 
     // Process the matrix in column chunks based on X-dimension limits (often larger)
     for (int64_t col_start = 0; col_start < num_cols;

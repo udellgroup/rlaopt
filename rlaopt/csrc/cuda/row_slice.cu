@@ -63,16 +63,11 @@ at::Tensor get_row_slice_cuda(const at::Tensor& sparse_tensor, const at::Tensor&
     // Compute new crow_indices
     auto new_crow_indices = at::zeros({num_requested_rows + 1}, crow_indices.options());
 
-    // Get device properties
-    cudaDeviceProp props = rlaopt::cuda_utils::get_device_properties();
-
-    // Get optimal block size based on device capabilities
-    dim3 threads_per_block = rlaopt::cuda_utils::get_optimal_block_size_1d(props);
-
-    // Get maximum grid dimension from device properties
-    rlaopt::cuda_utils::DeviceGridLimits grid_limits =
-        rlaopt::cuda_utils::get_device_grid_limits(props);
-    int64_t MAX_GRID_DIM_X = grid_limits.max_grid_dim_x;
+    // Get kernel launch configuration
+    rlaopt::cuda_utils::KernelLaunchConfig config =
+        rlaopt::cuda_utils::get_kernel_launch_config_1d();
+    dim3 threads_per_block = config.block_size;
+    int64_t MAX_GRID_DIM_X = config.max_grid_dim_x;
 
     // Process the matrix in row chunks if needed
     for (int64_t row_start = 0; row_start < num_requested_rows;
