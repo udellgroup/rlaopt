@@ -2,7 +2,7 @@
 #include <cuda_runtime.h>
 #include <torch/extension.h>
 
-#include "utils.h"
+#include "../utils/cuda_specific.h"
 
 namespace rlaopt {
 

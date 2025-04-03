@@ -1,6 +1,6 @@
 #include <cuda_runtime.h>
 
-#include "utils.h"
+#include "cuda_specific.h"
 
 namespace rlaopt::cuda_utils {
 void get_device_properties(cudaDeviceProp& props) {

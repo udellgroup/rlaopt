@@ -17,6 +17,12 @@ else:
     py_limited_api = False
 
 
+def find_sources(root_dir, file_ext):
+    """Find all files with the given extension recursively starting from root_dir."""
+    pattern = os.path.join(root_dir, f"**/*{file_ext}")
+    return glob.glob(pattern, recursive=True)
+
+
 def get_extensions():
     debug_mode = os.getenv("DEBUG", "0") == "1"
     use_cuda = os.getenv("USE_CUDA", "1") == "1"
@@ -57,13 +63,11 @@ def get_extensions():
 
     this_dir = os.path.dirname(os.path.curdir)
     extensions_dir = os.path.join(this_dir, LIBRARY_NAME, "csrc")
-    sources = list(glob.glob(os.path.join(extensions_dir, "*.cpp")))
+    extensions_include_dir = os.path.join(extensions_dir, "utils")
 
-    extensions_cuda_dir = os.path.join(extensions_dir, "cuda")
-    cuda_sources = list(glob.glob(os.path.join(extensions_cuda_dir, "*.cu")))
-
+    sources = find_sources(extensions_dir, ".cpp")
     if use_cuda:
-        sources += cuda_sources
+        sources += find_sources(extensions_dir, ".cu")
 
     ext_modules = [
         extension(
@@ -71,7 +75,9 @@ def get_extensions():
             sources,
             extra_compile_args=extra_compile_args,
             extra_link_args=extra_link_args,
-            include_dirs=[extensions_dir, extensions_cuda_dir],
+            include_dirs=[
+                extensions_include_dir
+            ],  # Tells compiler where to find the header files
             library_dirs=[torch_lib_path],  # Add PyTorch library directory
             runtime_library_dirs=[torch_lib_path],  # Add runtime path (RPATH)
             py_limited_api=py_limited_api,
