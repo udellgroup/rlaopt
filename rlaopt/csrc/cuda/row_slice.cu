@@ -67,7 +67,7 @@ at::Tensor get_row_slice_cuda(const at::Tensor& sparse_tensor, const at::Tensor&
     cudaDeviceProp props = rlaopt::cuda_utils::get_device_properties();
 
     // Get optimal block size based on device capabilities
-    int threads_per_block = rlaopt::cuda_utils::get_optimal_block_size_1d(props);
+    dim3 threads_per_block = rlaopt::cuda_utils::get_optimal_block_size_1d(props);
 
     // Get maximum grid dimension from device properties
     rlaopt::cuda_utils::DeviceGridLimits grid_limits =
@@ -76,13 +76,13 @@ at::Tensor get_row_slice_cuda(const at::Tensor& sparse_tensor, const at::Tensor&
 
     // Process the matrix in row chunks if needed
     for (int64_t row_start = 0; row_start < num_requested_rows;
-         row_start += MAX_GRID_DIM_X * threads_per_block) {
+         row_start += MAX_GRID_DIM_X * threads_per_block.x) {
         int64_t rows_in_chunk =
-            std::min(MAX_GRID_DIM_X * threads_per_block, num_requested_rows - row_start);
-        int num_blocks = (rows_in_chunk + threads_per_block - 1) / threads_per_block;
+            std::min(MAX_GRID_DIM_X * threads_per_block.x, num_requested_rows - row_start);
+        int num_blocks = (rows_in_chunk + threads_per_block.x - 1) / threads_per_block.x;
 
         // Compute number of non-zero elements in each row
-        compute_row_nnz_kernel<<<num_blocks, threads_per_block>>>(
+        compute_row_nnz_kernel<<<num_blocks, threads_per_block.x>>>(
             rows_in_chunk, crow_indices.data_ptr<int64_t>(),
             row_indices.data_ptr<int64_t>() + row_start,
             new_crow_indices.data_ptr<int64_t>() + 1 +
@@ -102,15 +102,15 @@ at::Tensor get_row_slice_cuda(const at::Tensor& sparse_tensor, const at::Tensor&
 
     // Process the matrix in row chunks if needed
     for (int64_t row_start = 0; row_start < num_requested_rows;
-         row_start += MAX_GRID_DIM_X * threads_per_block) {
+         row_start += MAX_GRID_DIM_X * threads_per_block.x) {
         int64_t rows_in_chunk =
-            std::min(MAX_GRID_DIM_X * threads_per_block, num_requested_rows - row_start);
-        int num_blocks = (rows_in_chunk + threads_per_block - 1) / threads_per_block;
+            std::min(MAX_GRID_DIM_X * threads_per_block.x, num_requested_rows - row_start);
+        int num_blocks = (rows_in_chunk + threads_per_block.x - 1) / threads_per_block.x;
 
         // Copy values and indices
         AT_DISPATCH_FLOATING_TYPES(
             sparse_tensor.scalar_type(), "get_row_slice_cuda", ([&] {
-                copy_values_and_indices_kernel<scalar_t><<<num_blocks, threads_per_block>>>(
+                copy_values_and_indices_kernel<scalar_t><<<num_blocks, threads_per_block.x>>>(
                     rows_in_chunk, crow_indices.data_ptr<int64_t>(),
                     col_indices.data_ptr<int64_t>(), values.data_ptr<scalar_t>(),
                     row_indices.data_ptr<int64_t>() + row_start,

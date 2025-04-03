@@ -18,7 +18,7 @@ DeviceGridLimits get_device_grid_limits(const cudaDeviceProp& props) {
     return limits;
 }
 
-int get_optimal_block_size_1d(const cudaDeviceProp& props) {
+dim3 get_optimal_block_size_1d(const cudaDeviceProp& props) {
     int max_threads_per_block = props.maxThreadsPerBlock;
     int warp_size = props.warpSize;
 
@@ -33,7 +33,7 @@ int get_optimal_block_size_1d(const cudaDeviceProp& props) {
     // Ensure block_size is a multiple of warp_size
     block_size = (block_size / warp_size) * warp_size;
 
-    return block_size;
+    return dim3(block_size);
 }
 
 dim3 get_optimal_block_size_2d(const cudaDeviceProp& props, int64_t batch_size) {

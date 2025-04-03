@@ -58,7 +58,7 @@ torch::Tensor csc_matvec_cuda(const torch::Tensor& sparse_tensor,
     cudaDeviceProp props = rlaopt::cuda_utils::get_device_properties();
 
     // Get optimal block size based on device capabilities
-    int threads_per_block = rlaopt::cuda_utils::get_optimal_block_size_1d(props);
+    dim3 threads_per_block = rlaopt::cuda_utils::get_optimal_block_size_1d(props);
 
     // Get maximum grid dimension from device properties
     rlaopt::cuda_utils::DeviceGridLimits grid_limits =
@@ -67,17 +67,18 @@ torch::Tensor csc_matvec_cuda(const torch::Tensor& sparse_tensor,
 
     // Process the matrix in column chunks if needed
     for (int64_t col_start = 0; col_start < num_cols;
-         col_start += MAX_GRID_DIM_X * threads_per_block) {
-        int64_t cols_in_chunk = std::min(MAX_GRID_DIM_X * threads_per_block, num_cols - col_start);
-        int num_blocks = (cols_in_chunk + threads_per_block - 1) / threads_per_block;
+         col_start += MAX_GRID_DIM_X * threads_per_block.x) {
+        int64_t cols_in_chunk =
+            std::min(MAX_GRID_DIM_X * threads_per_block.x, num_cols - col_start);
+        int num_blocks = (cols_in_chunk + threads_per_block.x - 1) / threads_per_block.x;
 
         // // Uncomment for debugging
         // printf("Processing columns %ld to %ld (Blocks: %d, Threads per block: %d)\n",
-        //        col_start, col_start + cols_in_chunk - 1, num_blocks, threads_per_block);
+        //        col_start, col_start + cols_in_chunk - 1, num_blocks, threads_per_block.x);
 
         AT_DISPATCH_FLOATING_TYPES(
             sparse_tensor.scalar_type(), "csc_matvec_cuda", ([&] {
-                csc_matvec_kernel<scalar_t><<<num_blocks, threads_per_block>>>(
+                csc_matvec_kernel<scalar_t><<<num_blocks, threads_per_block.x>>>(
                     values.data_ptr<scalar_t>(), row_indices.data_ptr<int64_t>(),
                     col_ptrs.data_ptr<int64_t>() + col_start,
                     dense_vector.data_ptr<scalar_t>() + col_start, result.data_ptr<scalar_t>(),
