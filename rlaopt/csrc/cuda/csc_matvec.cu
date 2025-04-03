@@ -3,6 +3,7 @@
 #include <torch/extension.h>
 
 #include "../utils/cuda_specific.h"
+#include "../utils/input_checks.h"
 
 namespace rlaopt {
 
@@ -29,18 +30,12 @@ __global__ void csc_matvec_kernel(const scalar_t* __restrict__ values,
 
 torch::Tensor csc_matvec_cuda(const torch::Tensor& sparse_tensor,
                               const torch::Tensor& dense_vector) {
-    TORCH_CHECK(sparse_tensor.layout() == at::kSparseCsc, "Input tensor must be in CSC format");
-    TORCH_CHECK(dense_vector.is_contiguous(), "dense_vector must be contiguous");
-    TORCH_CHECK(dense_vector.dim() == 1, "dense_vector must be 1-dimensional");
-    TORCH_CHECK(sparse_tensor.device().type() == at::DeviceType::CUDA,
-                "Input tensor must be on CUDA");
-    TORCH_CHECK(dense_vector.device().type() == at::DeviceType::CUDA,
-                "dense_vector must be on CUDA");
-
-    TORCH_CHECK(sparse_tensor.dtype() == dense_vector.dtype(),
-                "sparse_tensor and dense_vector must have the same dtype");
-    TORCH_CHECK(sparse_tensor.dtype() == torch::kFloat || sparse_tensor.dtype() == torch::kDouble,
-                "sparse_tensor must be float32 or float64");
+    rlaopt::utils::check_is_sparse_csc(sparse_tensor, "sparse_tensor");
+    rlaopt::utils::check_dim(dense_vector, 1, "dense_vector");
+    rlaopt::utils::check_is_floating_point(sparse_tensor, "sparse_tensor");
+    rlaopt::utils::check_is_cuda(sparse_tensor, "sparse_tensor");
+    rlaopt::utils::check_same_device(sparse_tensor, dense_vector, "sparse_tensor", "dense_vector");
+    rlaopt::utils::check_same_dtype(sparse_tensor, dense_vector, "sparse_tensor", "dense_vector");
 
     auto values = sparse_tensor.values();
     auto row_indices = sparse_tensor.row_indices();
@@ -55,8 +50,7 @@ torch::Tensor csc_matvec_cuda(const torch::Tensor& sparse_tensor,
     auto result = torch::zeros({num_rows}, dense_vector.options());
 
     // Get kernel launch configuration
-    rlaopt::cuda_utils::KernelLaunchConfig config =
-        rlaopt::cuda_utils::get_kernel_launch_config_1d();
+    rlaopt::utils::KernelLaunchConfig config = rlaopt::utils::get_kernel_launch_config_1d();
     dim3 threads_per_block = config.block_size;
     int64_t MAX_GRID_DIM_X = config.max_grid_dim_x;
 

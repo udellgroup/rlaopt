@@ -1,7 +1,7 @@
 #pragma once
 #include <cuda_runtime.h>
 
-namespace rlaopt::cuda_utils {
+namespace rlaopt::utils {
 // Get properties of the current CUDA device
 void get_device_properties(cudaDeviceProp& props);
 
@@ -27,4 +27,4 @@ KernelLaunchConfig get_kernel_launch_config_1d();
 
 // Get launch configuration for 2D kernels
 KernelLaunchConfig get_kernel_launch_config_2d(int64_t batch_size);
-}  // namespace rlaopt::cuda_utils
+}  // namespace rlaopt::utils

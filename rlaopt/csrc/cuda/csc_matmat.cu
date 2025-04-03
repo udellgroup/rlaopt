@@ -3,6 +3,7 @@
 #include <torch/extension.h>
 
 #include "../utils/cuda_specific.h"
+#include "../utils/input_checks.h"
 
 namespace rlaopt {
 
@@ -33,17 +34,12 @@ __global__ void csc_matmat_kernel_2d(
 
 torch::Tensor csc_matmat_cuda(const torch::Tensor& sparse_tensor,
                               const torch::Tensor& dense_matrix) {
-    TORCH_CHECK(sparse_tensor.layout() == at::kSparseCsc, "Input tensor must be in CSC format");
-    TORCH_CHECK(dense_matrix.dim() == 2, "dense_matrix must be 2-dimensional");
-    TORCH_CHECK(sparse_tensor.device().type() == at::DeviceType::CUDA,
-                "Input tensor must be on CUDA");
-    TORCH_CHECK(dense_matrix.device().type() == at::DeviceType::CUDA,
-                "dense_matrix must be on CUDA");
-
-    TORCH_CHECK(sparse_tensor.dtype() == dense_matrix.dtype(),
-                "sparse_tensor and dense_matrix must have the same dtype");
-    TORCH_CHECK(sparse_tensor.dtype() == torch::kFloat || sparse_tensor.dtype() == torch::kDouble,
-                "sparse_tensor must be float32 or float64");
+    rlaopt::utils::check_is_sparse_csc(sparse_tensor, "sparse_tensor");
+    rlaopt::utils::check_dim(dense_matrix, 2, "dense_matrix");
+    rlaopt::utils::check_is_floating_point(sparse_tensor, "sparse_tensor");
+    rlaopt::utils::check_is_cuda(sparse_tensor, "sparse_tensor");
+    rlaopt::utils::check_same_device(sparse_tensor, dense_matrix, "sparse_tensor", "dense_matrix");
+    rlaopt::utils::check_same_dtype(sparse_tensor, dense_matrix, "sparse_tensor", "dense_matrix");
 
     auto values = sparse_tensor.values();
     auto row_indices = sparse_tensor.row_indices();
@@ -68,8 +64,8 @@ torch::Tensor csc_matmat_cuda(const torch::Tensor& sparse_tensor,
     int64_t result_batch_stride = result_strides[1];
 
     // Get kernel launch configuration
-    rlaopt::cuda_utils::KernelLaunchConfig config =
-        rlaopt::cuda_utils::get_kernel_launch_config_2d(batch_size);
+    rlaopt::utils::KernelLaunchConfig config =
+        rlaopt::utils::get_kernel_launch_config_2d(batch_size);
     dim3 threads_per_block = config.block_size;
     int64_t MAX_GRID_DIM_X = config.max_grid_dim_x;
     int64_t MAX_GRID_DIM_Y = config.max_grid_dim_y;

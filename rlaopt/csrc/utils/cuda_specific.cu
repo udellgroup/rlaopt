@@ -2,7 +2,7 @@
 
 #include "cuda_specific.h"
 
-namespace rlaopt::cuda_utils {
+namespace rlaopt::utils {
 void get_device_properties(cudaDeviceProp& props) {
     int device;
     cudaGetDevice(&device);
@@ -90,4 +90,4 @@ KernelLaunchConfig get_kernel_launch_config_2d(int64_t batch_size) {
     config.block_size = get_optimal_block_size_2d(config.props, batch_size);
     return config;
 }
-}  // namespace rlaopt::cuda_utils
+}  // namespace rlaopt::utils

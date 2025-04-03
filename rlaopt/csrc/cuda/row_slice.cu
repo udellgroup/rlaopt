@@ -3,6 +3,7 @@
 #include <torch/extension.h>
 
 #include "../utils/cuda_specific.h"
+#include "../utils/input_checks.h"
 
 namespace rlaopt {
 
@@ -41,18 +42,12 @@ __global__ void copy_values_and_indices_kernel(const int64_t num_requested_rows,
 }  // namespace
 
 at::Tensor get_row_slice_cuda(const at::Tensor& sparse_tensor, const at::Tensor& row_indices) {
-    TORCH_CHECK(sparse_tensor.layout() == at::kSparseCsr, "Input tensor must be in CSR format");
-    TORCH_CHECK(row_indices.is_contiguous(), "row_indices must be contiguous");
-    TORCH_CHECK(row_indices.dim() == 1, "row_indices must be 1-dimensional");
-    TORCH_CHECK(sparse_tensor.dtype() == at::kFloat || sparse_tensor.dtype() == at::kDouble,
-                "Input tensor must be float32 or float64");
-    TORCH_CHECK(row_indices.dtype() == at::kLong, "Row indices must be long");
-    TORCH_CHECK(sparse_tensor.device().type() == at::DeviceType::CUDA,
-                "Sparse tensor must be a CUDA tensor");
-    TORCH_CHECK(row_indices.device().type() == at::DeviceType::CUDA,
-                "Row indices must be a CUDA tensor");
-    TORCH_CHECK(sparse_tensor.device() == row_indices.device(),
-                "Sparse tensor and row indices must be on the same CUDA device");
+    rlaopt::utils::check_is_sparse_csr(sparse_tensor, "sparse_tensor");
+    rlaopt::utils::check_dim(row_indices, 1, "row_indices");
+    rlaopt::utils::check_is_floating_point(sparse_tensor, "sparse_tensor");
+    rlaopt::utils::check_dtype(row_indices, at::kLong, "row_indices");
+    rlaopt::utils::check_is_cuda(sparse_tensor, "sparse_tensor");
+    rlaopt::utils::check_same_device(sparse_tensor, row_indices, "sparse_tensor", "row_indices");
 
     auto values = sparse_tensor.values();
     auto crow_indices = sparse_tensor.crow_indices();
@@ -64,8 +59,7 @@ at::Tensor get_row_slice_cuda(const at::Tensor& sparse_tensor, const at::Tensor&
     auto new_crow_indices = at::zeros({num_requested_rows + 1}, crow_indices.options());
 
     // Get kernel launch configuration
-    rlaopt::cuda_utils::KernelLaunchConfig config =
-        rlaopt::cuda_utils::get_kernel_launch_config_1d();
+    rlaopt::utils::KernelLaunchConfig config = rlaopt::utils::get_kernel_launch_config_1d();
     dim3 threads_per_block = config.block_size;
     int64_t MAX_GRID_DIM_X = config.max_grid_dim_x;
 
