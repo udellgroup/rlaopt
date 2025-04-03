@@ -71,6 +71,7 @@ def get_extensions():
             sources,
             extra_compile_args=extra_compile_args,
             extra_link_args=extra_link_args,
+            include_dirs=[extensions_dir, extensions_cuda_dir],
             library_dirs=[torch_lib_path],  # Add PyTorch library directory
             runtime_library_dirs=[torch_lib_path],  # Add runtime path (RPATH)
             py_limited_api=py_limited_api,

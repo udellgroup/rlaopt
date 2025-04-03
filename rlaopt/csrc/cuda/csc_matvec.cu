@@ -2,49 +2,11 @@
 #include <cuda_runtime.h>
 #include <torch/extension.h>
 
+#include "utils.h"
+
 namespace rlaopt {
 
 namespace {
-// Get properties of the current CUDA device
-cudaDeviceProp get_device_properties() {
-    int device;
-    cudaGetDevice(&device);
-    cudaDeviceProp props;
-    cudaGetDeviceProperties(&props, device);
-    return props;
-}
-
-// Helper struct to store device grid limits
-struct DeviceGridLimits {
-    int max_grid_dim_x;
-};
-
-// Helper to get device maximum grid dimension
-DeviceGridLimits get_device_grid_limits(const cudaDeviceProp& props) {
-    DeviceGridLimits limits;
-    limits.max_grid_dim_x = props.maxGridSize[0];
-    return limits;
-}
-
-// Get optimal thread block configuration for vector operations
-int get_optimal_block_size(const cudaDeviceProp& props) {
-    int max_threads_per_block = props.maxThreadsPerBlock;
-    int warp_size = props.warpSize;
-
-    // Default to 256 threads per block for good occupancy
-    int block_size = 256;
-
-    // Adjust based on device capabilities
-    if (max_threads_per_block < 1024) {
-        block_size = max_threads_per_block / 2;
-    }
-
-    // Ensure block_size is a multiple of warp_size
-    block_size = (block_size / warp_size) * warp_size;
-
-    return block_size;
-}
-
 // CUDA kernel for CSC matrix-vector product
 template <typename scalar_t>
 __global__ void csc_matvec_kernel(const scalar_t* __restrict__ values,
@@ -93,13 +55,14 @@ torch::Tensor csc_matvec_cuda(const torch::Tensor& sparse_tensor,
     auto result = torch::zeros({num_rows}, dense_vector.options());
 
     // Get device properties
-    cudaDeviceProp props = get_device_properties();
+    cudaDeviceProp props = rlaopt::cuda_utils::get_device_properties();
 
     // Get optimal block size based on device capabilities
-    int threads_per_block = get_optimal_block_size(props);
+    int threads_per_block = rlaopt::cuda_utils::get_optimal_block_size(props);
 
     // Get maximum grid dimension from device properties
-    DeviceGridLimits grid_limits = get_device_grid_limits(props);
+    rlaopt::cuda_utils::DeviceGridLimits grid_limits =
+        rlaopt::cuda_utils::get_device_grid_limits(props);
     int64_t MAX_GRID_DIM_X = grid_limits.max_grid_dim_x;
 
     // Process the matrix in column chunks if needed
