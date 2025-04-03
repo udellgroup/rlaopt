@@ -2,33 +2,11 @@
 #include <cuda_runtime.h>
 #include <torch/extension.h>
 
+#include "utils.h"
+
 namespace rlaopt {
 
 namespace {
-// Get properties of the current CUDA device
-cudaDeviceProp get_device_properties() {
-    int device;
-    cudaGetDevice(&device);
-    cudaDeviceProp props;
-    cudaGetDeviceProperties(&props, device);
-    return props;
-}
-
-// Helper struct to store device grid limits
-struct DeviceGridLimits {
-    int max_grid_dim_x;
-    int max_grid_dim_y;
-};
-
-// Helper to get device properties and maximum grid dimensions
-DeviceGridLimits get_device_grid_limits(const cudaDeviceProp& props) {
-    DeviceGridLimits limits;
-    limits.max_grid_dim_x = props.maxGridSize[0];
-    limits.max_grid_dim_y = props.maxGridSize[1];
-
-    return limits;
-}
-
 // Get optimal thread block configuration based on device properties and problem size
 dim3 get_optimal_block_config(int64_t batch_size, const cudaDeviceProp& props) {
     // Calculate target threads based on device capabilities
@@ -139,13 +117,14 @@ torch::Tensor csc_matmat_cuda(const torch::Tensor& sparse_tensor,
     int64_t result_batch_stride = result_strides[1];
 
     // Get device properties
-    cudaDeviceProp props = get_device_properties();
+    cudaDeviceProp props = rlaopt::cuda_utils::get_device_properties();
 
     // Dynamically determine optimal thread block configuration
     dim3 threads_per_block = get_optimal_block_config(batch_size, props);
 
     // Dynamically get maximum grid dimensions from the current device
-    DeviceGridLimits grid_limits = get_device_grid_limits(props);
+    rlaopt::cuda_utils::DeviceGridLimits grid_limits =
+        rlaopt::cuda_utils::get_device_grid_limits(props);
     int64_t MAX_GRID_DIM_X = grid_limits.max_grid_dim_x;
     int64_t MAX_GRID_DIM_Y = grid_limits.max_grid_dim_y;
 

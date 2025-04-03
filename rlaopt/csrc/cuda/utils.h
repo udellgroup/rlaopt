@@ -8,6 +8,7 @@ cudaDeviceProp get_device_properties();
 // Helper struct to store device grid limits
 struct DeviceGridLimits {
     int max_grid_dim_x;
+    int max_grid_dim_y;
 };
 
 // Helper to get device maximum grid dimension

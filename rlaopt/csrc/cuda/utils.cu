@@ -14,6 +14,7 @@ cudaDeviceProp get_device_properties() {
 DeviceGridLimits get_device_grid_limits(const cudaDeviceProp& props) {
     DeviceGridLimits limits;
     limits.max_grid_dim_x = props.maxGridSize[0];
+    limits.max_grid_dim_y = props.maxGridSize[1];
     return limits;
 }
 
