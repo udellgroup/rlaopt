@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools", "wheel", "torch>=2.6.0"]
+requires = ["setuptools", "wheel", "torch>=2.6.0", "ninja>=1.11.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -18,9 +18,9 @@ authors = [
 ]
 dependencies = [
     "numpy>=2.2.0",
-    "scipy>=1.15.0", 
-    "torch>=2.6.0", 
-    "wandb>=0.19.0", 
+    "scipy>=1.15.0",
+    "torch>=2.6.0",
+    "wandb>=0.19.0",
     "pykeops>=2.2.0"
 ]
 
@@ -29,9 +29,11 @@ Homepage = "https://github.com/udellgroup/rlaopt"
 Issues = "https://github.com/udellgroup/rlaopt/issues"
 
 [project.optional-dependencies]
-test = [
+dev = [
     "pytest>=8.0.0",
     "pytest-cov>=6.0.0",
+    "ninja>=1.11.0",
+    "pre-commit>=4.0.0",
 ]
 
 [tool.pytest.ini_options]
