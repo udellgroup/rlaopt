@@ -58,7 +58,7 @@ torch::Tensor csc_matvec_cuda(const torch::Tensor& sparse_tensor,
     cudaDeviceProp props = rlaopt::cuda_utils::get_device_properties();
 
     // Get optimal block size based on device capabilities
-    int threads_per_block = rlaopt::cuda_utils::get_optimal_block_size(props);
+    int threads_per_block = rlaopt::cuda_utils::get_optimal_block_size_1d(props);
 
     // Get maximum grid dimension from device properties
     rlaopt::cuda_utils::DeviceGridLimits grid_limits =
