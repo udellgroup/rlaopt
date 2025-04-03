@@ -55,15 +55,15 @@ class _SparseTensor:
         return self.data.layout == torch.sparse_csc
 
     def _to_scipy_csr(self, *args, **kwargs) -> csr_array:
-        crow_indices = self.data.crow_indices().numpy(*args, **kwargs)
-        col_indices = self.data.col_indices().numpy(*args, **kwargs)
-        values = self.data.values().numpy(*args, **kwargs)
+        crow_indices = self.data.crow_indices().cpu().numpy(*args, **kwargs)
+        col_indices = self.data.col_indices().cpu().numpy(*args, **kwargs)
+        values = self.data.values().cpu().numpy(*args, **kwargs)
         return csr_array((values, col_indices, crow_indices), shape=self.data.shape)
 
     def _to_scipy_csc(self, *args, **kwargs) -> csc_array:
-        ccol_indices = self.data.ccol_indices().numpy(*args, **kwargs)
-        row_indices = self.data.row_indices().numpy(*args, **kwargs)
-        values = self.data.values().numpy(*args, **kwargs)
+        ccol_indices = self.data.ccol_indices().cpu().numpy(*args, **kwargs)
+        row_indices = self.data.row_indices().cpu().numpy(*args, **kwargs)
+        values = self.data.values().cpu().numpy(*args, **kwargs)
         return csc_array((values, row_indices, ccol_indices), shape=self.data.shape)
 
     def scipy(self, *args, **kwargs) -> Union[csr_array, csc_array]:
@@ -110,7 +110,7 @@ class _SparseTensor:
             indices, num_rows=self.data.shape[0]
         )
 
-        return _SparseTensor(_get_row_slice(self.data, tensor_indices))
+        return _SparseTensor(_get_row_slice(self.data, tensor_indices.to(self.device)))
 
     def _check_matmul_input_shape(self, v: torch.Tensor) -> None:
         if v.ndim not in [1, 2]:

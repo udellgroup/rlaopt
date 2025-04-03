@@ -51,7 +51,7 @@ __global__ void csc_matvec_kernel(const scalar_t* __restrict__ values,
                                   const int64_t* __restrict__ row_indices,
                                   const int64_t* __restrict__ col_ptrs,
                                   const scalar_t* __restrict__ dense_vector,
-                                  scalar_t* __restrict__ result, int64_t num_cols) {
+                                  scalar_t* __restrict__ result, const int64_t num_cols) {
     int col = blockIdx.x * blockDim.x + threadIdx.x;
     if (col < num_cols) {
         scalar_t x_j = dense_vector[col];
