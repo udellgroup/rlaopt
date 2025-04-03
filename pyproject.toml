@@ -29,6 +29,10 @@ Homepage = "https://github.com/udellgroup/rlaopt"
 Issues = "https://github.com/udellgroup/rlaopt/issues"
 
 [project.optional-dependencies]
+test = [
+    "pytest>=8.0.0",
+    "pytest-cov>=6.0.0",
+]
 dev = [
     "pytest>=8.0.0",
     "pytest-cov>=6.0.0",
