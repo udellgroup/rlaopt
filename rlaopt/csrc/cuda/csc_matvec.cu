@@ -33,9 +33,9 @@ torch::Tensor csc_matvec_cuda(const torch::Tensor& sparse_tensor,
     rlaopt::utils::check_is_sparse_csc(sparse_tensor, "sparse_tensor");
     rlaopt::utils::check_dim(dense_vector, 1, "dense_vector");
     rlaopt::utils::check_is_floating_point(sparse_tensor, "sparse_tensor");
-    rlaopt::utils::check_is_cuda(sparse_tensor, "sparse_tensor");
     rlaopt::utils::check_same_device(sparse_tensor, dense_vector, "sparse_tensor", "dense_vector");
     rlaopt::utils::check_same_dtype(sparse_tensor, dense_vector, "sparse_tensor", "dense_vector");
+    rlaopt::utils::check_is_cuda(sparse_tensor, "sparse_tensor");
 
     auto values = sparse_tensor.values();
     auto row_indices = sparse_tensor.row_indices();

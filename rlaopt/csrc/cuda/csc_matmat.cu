@@ -37,9 +37,10 @@ torch::Tensor csc_matmat_cuda(const torch::Tensor& sparse_tensor,
     rlaopt::utils::check_is_sparse_csc(sparse_tensor, "sparse_tensor");
     rlaopt::utils::check_dim(dense_matrix, 2, "dense_matrix");
     rlaopt::utils::check_is_floating_point(sparse_tensor, "sparse_tensor");
-    rlaopt::utils::check_is_cuda(sparse_tensor, "sparse_tensor");
     rlaopt::utils::check_same_device(sparse_tensor, dense_matrix, "sparse_tensor", "dense_matrix");
     rlaopt::utils::check_same_dtype(sparse_tensor, dense_matrix, "sparse_tensor", "dense_matrix");
+    rlaopt::utils::check_is_cuda(sparse_tensor, "sparse_tensor");
+    rlaopt::utils::check_common_dim(sparse_tensor, dense_matrix, "sparse_tensor", "dense_matrix");
 
     auto values = sparse_tensor.values();
     auto row_indices = sparse_tensor.row_indices();
@@ -48,9 +49,6 @@ torch::Tensor csc_matmat_cuda(const torch::Tensor& sparse_tensor,
     auto num_rows = sparse_tensor.size(0);
     auto num_cols = sparse_tensor.size(1);
     auto batch_size = dense_matrix.size(1);
-
-    TORCH_CHECK(num_cols == dense_matrix.size(0),
-                "Number of columns in sparse tensor must match dense matrix rows");
 
     auto result = torch::zeros({num_rows, batch_size}, dense_matrix.options());
 

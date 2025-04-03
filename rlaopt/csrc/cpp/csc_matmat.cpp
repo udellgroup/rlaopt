@@ -6,6 +6,8 @@
 #include <omp.h>
 #endif
 
+#include "../utils/input_checks.h"
+
 namespace rlaopt {
 
 namespace {
@@ -34,24 +36,18 @@ void csc_matmat_cpu_impl(const scalar_t* values, const int64_t* row_indices,
 
 torch::Tensor csc_matmat_cpu(const torch::Tensor& sparse_tensor,
                              const torch::Tensor& dense_matrix) {
-    TORCH_CHECK(sparse_tensor.layout() == at::kSparseCsc, "Input tensor must be in CSC format");
-    TORCH_CHECK(dense_matrix.dim() == 2, "dense_matrix must be 2-dimensional");
-    TORCH_CHECK(sparse_tensor.device().type() == at::DeviceType::CPU,
-                "Input tensor must be on CPU");
-    TORCH_CHECK(dense_matrix.device().type() == at::DeviceType::CPU, "dense_matrix must be on CPU");
-
-    TORCH_CHECK(sparse_tensor.dtype() == dense_matrix.dtype(),
-                "sparse_tensor and dense_matrix must have the same dtype");
-    TORCH_CHECK(sparse_tensor.dtype() == torch::kFloat || sparse_tensor.dtype() == torch::kDouble,
-                "sparse_tensor must be float32 or float64");
+    rlaopt::utils::check_is_sparse_csc(sparse_tensor, "sparse_tensor");
+    rlaopt::utils::check_dim(dense_matrix, 2, "dense_matrix");
+    rlaopt::utils::check_is_floating_point(sparse_tensor, "sparse_tensor");
+    rlaopt::utils::check_same_device(sparse_tensor, dense_matrix, "sparse_tensor", "dense_matrix");
+    rlaopt::utils::check_same_dtype(sparse_tensor, dense_matrix, "sparse_tensor", "dense_matrix");
+    rlaopt::utils::check_is_cpu(sparse_tensor, "sparse_tensor");
+    rlaopt::utils::check_common_dim(sparse_tensor, dense_matrix, "sparse_tensor", "dense_matrix");
 
     // Get tensor sizes
     auto num_rows = sparse_tensor.size(0);
     auto num_cols = sparse_tensor.size(1);
     auto batch_size = dense_matrix.size(1);
-
-    TORCH_CHECK(num_cols == dense_matrix.size(0),
-                "Number of columns in sparse tensor must match dense matrix rows");
 
     // Get strides for efficient memory access
     auto dense_strides = dense_matrix.strides();

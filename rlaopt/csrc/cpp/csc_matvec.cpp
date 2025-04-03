@@ -3,6 +3,8 @@
 #include <torch/all.h>
 #include <torch/library.h>
 
+#include "../utils/input_checks.h"
+
 namespace rlaopt {
 
 namespace {
@@ -24,17 +26,12 @@ void csc_matvec_cpu_impl(const scalar_t* values, const int64_t* row_indices,
 
 torch::Tensor csc_matvec_cpu(const torch::Tensor& sparse_tensor,
                              const torch::Tensor& dense_vector) {
-    TORCH_CHECK(sparse_tensor.layout() == at::kSparseCsc, "Input tensor must be in CSC format");
-    TORCH_CHECK(dense_vector.is_contiguous(), "dense_vector must be contiguous");
-    TORCH_CHECK(dense_vector.dim() == 1, "dense_vector must be 1-dimensional");
-    TORCH_CHECK(sparse_tensor.device().type() == at::DeviceType::CPU,
-                "Input tensor must be on CPU");
-    TORCH_CHECK(dense_vector.device().type() == at::DeviceType::CPU, "dense_vector must be on CPU");
-
-    TORCH_CHECK(sparse_tensor.dtype() == dense_vector.dtype(),
-                "sparse_tensor and dense_vector must have the same dtype");
-    TORCH_CHECK(sparse_tensor.dtype() == torch::kFloat || sparse_tensor.dtype() == torch::kDouble,
-                "sparse_tensor must be float32 or float64");
+    rlaopt::utils::check_is_sparse_csc(sparse_tensor, "sparse_tensor");
+    rlaopt::utils::check_dim(dense_vector, 1, "dense_vector");
+    rlaopt::utils::check_is_floating_point(sparse_tensor, "sparse_tensor");
+    rlaopt::utils::check_same_device(sparse_tensor, dense_vector, "sparse_tensor", "dense_vector");
+    rlaopt::utils::check_same_dtype(sparse_tensor, dense_vector, "sparse_tensor", "dense_vector");
+    rlaopt::utils::check_is_cpu(sparse_tensor, "sparse_tensor");
 
     // Get tensor sizes
     auto num_rows = sparse_tensor.size(0);
