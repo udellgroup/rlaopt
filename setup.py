@@ -27,7 +27,14 @@ def get_extensions():
     use_cuda = use_cuda and torch.cuda.is_available() and CUDA_HOME is not None
     extension = CUDAExtension if use_cuda else CppExtension
 
-    extra_link_args = []
+    # Get PyTorch library path for RPATH
+    torch_lib_path = os.path.join(os.path.dirname(torch.__file__), "lib")
+
+    extra_link_args = [
+        # Add RPATH to ensure PyTorch libraries can be found at runtime
+        f"-Wl,-rpath,{torch_lib_path}"
+    ]
+
     extra_compile_args = {
         "cxx": [
             "-O3" if not debug_mode else "-O0",
@@ -64,6 +71,8 @@ def get_extensions():
             sources,
             extra_compile_args=extra_compile_args,
             extra_link_args=extra_link_args,
+            library_dirs=[torch_lib_path],  # Add PyTorch library directory
+            runtime_library_dirs=[torch_lib_path],  # Add runtime path (RPATH)
             py_limited_api=py_limited_api,
         )
     ]
