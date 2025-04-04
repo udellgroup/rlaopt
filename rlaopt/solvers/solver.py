@@ -1,15 +1,17 @@
-from abc import ABC
-
+from abc import ABC, abstractmethod
+from typing import List, Dict
 
 __all__ = ["Solver"]
 
 
 class Solver(ABC):
-    def __init__(self, *args: list, **kwargs: dict):
+    def __init__(self, *args: List, **kwargs: Dict):
         pass
 
-    def _get_precond(self):
+    @abstractmethod
+    def _get_precond(self, *args: List, **kwargs: Dict):
         pass
 
-    def _step(self, *args: list, **kwargs: dict):
+    @abstractmethod
+    def _step(self, *args: List, **kwargs: Dict):
         pass
