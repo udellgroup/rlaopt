@@ -63,11 +63,12 @@ def get_extensions():
 
     this_dir = os.path.dirname(os.path.curdir)
     extensions_dir = os.path.join(this_dir, LIBRARY_NAME, "csrc")
-    extensions_include_dir = os.path.join(extensions_dir, "utils")
+    extensions_include_dirs = [os.path.join(extensions_dir, "cpp_include")]
 
     sources = find_sources(extensions_dir, ".cpp")
     if use_cuda:
         sources += find_sources(extensions_dir, ".cu")
+        extensions_include_dirs.append(os.path.join(extensions_dir, "cuda_include"))
 
     ext_modules = [
         extension(
@@ -75,9 +76,8 @@ def get_extensions():
             sources,
             extra_compile_args=extra_compile_args,
             extra_link_args=extra_link_args,
-            include_dirs=[
-                extensions_include_dir
-            ],  # Tells compiler where to find the header files
+            # Tells compiler where to find the header files
+            include_dirs=extensions_include_dirs,
             library_dirs=[torch_lib_path],  # Add PyTorch library directory
             runtime_library_dirs=[torch_lib_path],  # Add runtime path (RPATH)
             py_limited_api=py_limited_api,

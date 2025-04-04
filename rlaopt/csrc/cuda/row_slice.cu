@@ -2,8 +2,8 @@
 #include <cuda_runtime.h>
 #include <torch/extension.h>
 
-#include "../utils/cuda_specific.h"
-#include "../utils/input_checks.h"
+#include "../cpp_include/input_checks.h"
+#include "../cuda_include/cuda_specific.h"
 
 namespace rlaopt {
 
