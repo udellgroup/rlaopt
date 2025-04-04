@@ -3,6 +3,9 @@
 #include <ATen/ATen.h>
 
 namespace rlaopt::utils {
+
+namespace {
+// Internal helper functions
 void check_is_sparse_csr(const at::Tensor& tensor, const char* tensor_name) {
     TORCH_CHECK(tensor.layout() == at::kSparseCsr, tensor_name, " must be in CSR format");
 }
@@ -64,11 +67,11 @@ void check_same_device(const at::Tensor& tensor1, const at::Tensor& tensor2,
     TORCH_CHECK(tensor1.device() == tensor2.device(), tensor1_name, " and ", tensor2_name,
                 " must be on the same device");
 }
+}  // namespace
 
 void check_csr_slicing_inputs(const at::Tensor& sparse_tensor, const at::Tensor& row_indices,
                               at::DeviceType device_type, const char* sparse_name,
                               const char* row_name) {
-    // Common validations
     check_is_sparse_csr(sparse_tensor, sparse_name);
     check_dim(row_indices, 1, row_name);
     check_is_floating_point(sparse_tensor, sparse_name);
@@ -80,7 +83,6 @@ void check_csr_slicing_inputs(const at::Tensor& sparse_tensor, const at::Tensor&
 void check_csc_matmul_inputs(const at::Tensor& sparse_tensor, const at::Tensor& dense_tensor,
                              at::DeviceType device_type, const int64_t expected_dim,
                              const char* sparse_name, const char* dense_name) {
-    // Common validations
     check_is_sparse_csc(sparse_tensor, sparse_name);
     check_dim(dense_tensor, expected_dim, dense_name);
     check_is_floating_point(sparse_tensor, sparse_name);

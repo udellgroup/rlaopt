@@ -3,10 +3,19 @@
 #include "cuda_specific.h"
 
 namespace rlaopt::utils {
+
+namespace {
+// Internal helper functions
 void get_device_properties(cudaDeviceProp& props) {
     int device;
     cudaGetDevice(&device);
     cudaGetDeviceProperties(&props, device);
+}
+
+void get_base_kernel_launch_config(KernelLaunchConfig& config) {
+    get_device_properties(config.props);
+    config.max_grid_dim_x = config.props.maxGridSize[0];
+    config.max_grid_dim_y = config.props.maxGridSize[1];
 }
 
 dim3 get_optimal_block_size_1d(const cudaDeviceProp& props) {
@@ -70,12 +79,7 @@ dim3 get_optimal_block_size_2d(const cudaDeviceProp& props, int64_t batch_size) 
 
     return dim3(threads_x, threads_y);
 }
-
-void get_base_kernel_launch_config(KernelLaunchConfig& config) {
-    get_device_properties(config.props);
-    config.max_grid_dim_x = config.props.maxGridSize[0];
-    config.max_grid_dim_y = config.props.maxGridSize[1];
-}
+}  // namespace
 
 KernelLaunchConfig get_kernel_launch_config_1d() {
     KernelLaunchConfig config;
