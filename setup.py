@@ -1,7 +1,8 @@
-import os
-import torch
 import glob
+import os
+
 from setuptools import find_packages, setup
+import torch
 from torch.utils.cpp_extension import (
     CppExtension,
     CUDAExtension,
@@ -24,13 +25,24 @@ def find_sources(root_dir, file_ext):
 
 
 def get_extensions():
-    debug_mode = os.getenv("DEBUG", "0") == "1"
-    use_cuda = os.getenv("USE_CUDA", "1") == "1"
-    use_openmp = os.getenv("USE_OPENMP", "1") == "1"
+    debug_mode = os.getenv("RLAOPT_DEBUG", "0") == "1"
+
+    # Check for CPU-only build
+    cpu_only_build = os.getenv("RLAOPT_CPU_ONLY", "0") == "1"
+
+    # Only enable CUDA if not in CPU-only mode
+    if cpu_only_build:
+        use_cuda = False
+        print("Building CPU-only version (CUDA disabled)")
+    else:
+        use_cuda = os.getenv("RLAOPT_USE_CUDA", "1") == "1"
+        use_cuda = use_cuda and torch.cuda.is_available() and CUDA_HOME is not None
+
+    use_openmp = os.getenv("RLAOPT_USE_OPENMP", "1") == "1"
+
     if debug_mode:
         print("Compiling in debug mode")
 
-    use_cuda = use_cuda and torch.cuda.is_available() and CUDA_HOME is not None
     extension = CUDAExtension if use_cuda else CppExtension
 
     # Get PyTorch library path for RPATH
