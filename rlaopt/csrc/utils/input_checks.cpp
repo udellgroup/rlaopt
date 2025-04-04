@@ -48,6 +48,17 @@ void check_is_cuda(const at::Tensor& tensor, const char* tensor_name) {
                 " must be a CUDA tensor");
 }
 
+void check_is_specific_device(const at::Tensor& tensor, at::DeviceType device_type,
+                              const char* tensor_name) {
+    if (device_type == at::DeviceType::CPU) {
+        check_is_cpu(tensor, tensor_name);
+    } else if (device_type == at::DeviceType::CUDA) {
+        check_is_cuda(tensor, tensor_name);
+    } else {
+        TORCH_CHECK(false, device_type, " is not a supported device type");
+    }
+}
+
 void check_same_device(const at::Tensor& tensor1, const at::Tensor& tensor2,
                        const char* tensor1_name, const char* tensor2_name) {
     TORCH_CHECK(tensor1.device() == tensor2.device(), tensor1_name, " and ", tensor2_name,
@@ -63,13 +74,7 @@ void check_csr_slicing_inputs(const at::Tensor& sparse_tensor, const at::Tensor&
     check_is_floating_point(sparse_tensor, sparse_name);
     check_dtype(row_indices, at::kLong, row_name);
     check_same_device(sparse_tensor, row_indices, sparse_name, row_name);
-
-    // Device-specific validation
-    if (device_type == at::DeviceType::CPU) {
-        check_is_cpu(sparse_tensor, sparse_name);
-    } else if (device_type == at::DeviceType::CUDA) {
-        check_is_cuda(sparse_tensor, sparse_name);
-    }
+    check_is_specific_device(sparse_tensor, device_type, sparse_name);
 }
 
 void check_csc_matmul_inputs(const at::Tensor& sparse_tensor, const at::Tensor& dense_tensor,
@@ -79,15 +84,9 @@ void check_csc_matmul_inputs(const at::Tensor& sparse_tensor, const at::Tensor& 
     check_is_sparse_csc(sparse_tensor, sparse_name);
     check_dim(dense_tensor, expected_dim, dense_name);
     check_is_floating_point(sparse_tensor, sparse_name);
-    check_same_device(sparse_tensor, dense_tensor, sparse_name, dense_name);
     check_same_dtype(sparse_tensor, dense_tensor, sparse_name, dense_name);
+    check_is_specific_device(sparse_tensor, device_type, sparse_name);
+    check_same_device(sparse_tensor, dense_tensor, sparse_name, dense_name);
     check_common_dim(sparse_tensor, dense_tensor, sparse_name, dense_name);
-
-    // Device-specific validation
-    if (device_type == at::DeviceType::CPU) {
-        check_is_cpu(sparse_tensor, sparse_name);
-    } else if (device_type == at::DeviceType::CUDA) {
-        check_is_cuda(sparse_tensor, sparse_name);
-    }
 }
 }  // namespace rlaopt::utils

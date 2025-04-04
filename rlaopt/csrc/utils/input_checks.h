@@ -24,6 +24,8 @@ void check_same_dtype(const at::Tensor& tensor1, const at::Tensor& tensor2,
 // Device validation
 void check_is_cpu(const at::Tensor& tensor, const char* tensor_name = "Input tensor");
 void check_is_cuda(const at::Tensor& tensor, const char* tensor_name = "Input tensor");
+void check_is_specific_device(const at::Tensor& tensor, at::DeviceType device_type,
+                              const char* tensor_name = "Input tensor");
 void check_same_device(const at::Tensor& tensor1, const at::Tensor& tensor2,
                        const char* tensor1_name = "First tensor",
                        const char* tensor2_name = "Second tensor");
