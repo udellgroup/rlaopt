@@ -42,12 +42,8 @@ __global__ void copy_values_and_indices_kernel(const int64_t num_requested_rows,
 }  // namespace
 
 at::Tensor get_row_slice_cuda(const at::Tensor& sparse_tensor, const at::Tensor& row_indices) {
-    rlaopt::utils::check_is_sparse_csr(sparse_tensor, "sparse_tensor");
-    rlaopt::utils::check_dim(row_indices, 1, "row_indices");
-    rlaopt::utils::check_is_floating_point(sparse_tensor, "sparse_tensor");
-    rlaopt::utils::check_dtype(row_indices, at::kLong, "row_indices");
-    rlaopt::utils::check_same_device(sparse_tensor, row_indices, "sparse_tensor", "row_indices");
-    rlaopt::utils::check_is_cuda(sparse_tensor, "sparse_tensor");
+    rlaopt::utils::check_csr_slicing_inputs(sparse_tensor, row_indices, at::DeviceType::CUDA,
+                                            "sparse_tensor", "row_indices");
 
     auto values = sparse_tensor.values();
     auto crow_indices = sparse_tensor.crow_indices();

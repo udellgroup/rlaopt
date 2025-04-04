@@ -27,4 +27,9 @@ void check_is_cuda(const at::Tensor& tensor, const char* tensor_name = "Input te
 void check_same_device(const at::Tensor& tensor1, const at::Tensor& tensor2,
                        const char* tensor1_name = "First tensor",
                        const char* tensor2_name = "Second tensor");
+
+// Combined input validation
+void check_csr_slicing_inputs(const at::Tensor& sparse_tensor, const at::Tensor& row_indices,
+                              at::DeviceType device_type, const char* sparse_name = "sparse_tensor",
+                              const char* row_name = "row_indices");
 }  // namespace rlaopt::utils

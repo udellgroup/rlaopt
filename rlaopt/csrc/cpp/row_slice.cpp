@@ -54,12 +54,8 @@ void get_row_slice_cpu_impl(const scalar_t* values_ptr, const int64_t* crow_indi
 }  // namespace
 
 at::Tensor get_row_slice_cpu(const at::Tensor& sparse_tensor, const at::Tensor& row_indices) {
-    rlaopt::utils::check_is_sparse_csr(sparse_tensor, "sparse_tensor");
-    rlaopt::utils::check_dim(row_indices, 1, "row_indices");
-    rlaopt::utils::check_is_floating_point(sparse_tensor, "sparse_tensor");
-    rlaopt::utils::check_dtype(row_indices, at::kLong, "row_indices");
-    rlaopt::utils::check_same_device(sparse_tensor, row_indices, "sparse_tensor", "row_indices");
-    rlaopt::utils::check_is_cpu(sparse_tensor, "sparse_tensor");
+    rlaopt::utils::check_csr_slicing_inputs(sparse_tensor, row_indices, at::DeviceType::CPU,
+                                            "sparse_tensor", "row_indices");
 
     // Get sizes and pointers
     auto num_requested_rows = row_indices.size(0);

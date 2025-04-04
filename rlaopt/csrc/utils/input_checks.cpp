@@ -53,4 +53,22 @@ void check_same_device(const at::Tensor& tensor1, const at::Tensor& tensor2,
     TORCH_CHECK(tensor1.device() == tensor2.device(), tensor1_name, " and ", tensor2_name,
                 " must be on the same device");
 }
+
+void check_csr_slicing_inputs(const at::Tensor& sparse_tensor, const at::Tensor& row_indices,
+                              at::DeviceType device_type, const char* sparse_name,
+                              const char* row_name) {
+    // Common validations
+    check_is_sparse_csr(sparse_tensor, sparse_name);
+    check_dim(row_indices, 1, row_name);
+    check_is_floating_point(sparse_tensor, sparse_name);
+    check_dtype(row_indices, at::kLong, row_name);
+    check_same_device(sparse_tensor, row_indices, sparse_name, row_name);
+
+    // Device-specific validation
+    if (device_type == at::DeviceType::CPU) {
+        check_is_cpu(sparse_tensor, sparse_name);
+    } else if (device_type == at::DeviceType::CUDA) {
+        check_is_cuda(sparse_tensor, sparse_name);
+    }
+}
 }  // namespace rlaopt::utils
