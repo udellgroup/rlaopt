@@ -1,6 +1,6 @@
 #include <cuda_runtime.h>
 
-#include "cuda_specific.h"
+#include "../cuda_include/cuda_specific.h"
 
 namespace rlaopt::utils {
 

@@ -3,7 +3,7 @@
 #include <torch/all.h>
 #include <torch/library.h>
 
-#include "../utils/input_checks.h"
+#include "../cpp_include/input_checks.h"
 
 extern "C" {
 /* Creates a dummy empty _C module that can be imported from Python.

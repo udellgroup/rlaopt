@@ -6,7 +6,7 @@
 #include <omp.h>
 #endif
 
-#include "../utils/input_checks.h"
+#include "../cpp_include/input_checks.h"
 
 namespace rlaopt {
 
