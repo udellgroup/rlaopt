@@ -26,12 +26,8 @@ void csc_matvec_cpu_impl(const scalar_t* values, const int64_t* row_indices,
 
 torch::Tensor csc_matvec_cpu(const torch::Tensor& sparse_tensor,
                              const torch::Tensor& dense_vector) {
-    rlaopt::utils::check_is_sparse_csc(sparse_tensor, "sparse_tensor");
-    rlaopt::utils::check_dim(dense_vector, 1, "dense_vector");
-    rlaopt::utils::check_is_floating_point(sparse_tensor, "sparse_tensor");
-    rlaopt::utils::check_same_device(sparse_tensor, dense_vector, "sparse_tensor", "dense_vector");
-    rlaopt::utils::check_same_dtype(sparse_tensor, dense_vector, "sparse_tensor", "dense_vector");
-    rlaopt::utils::check_is_cpu(sparse_tensor, "sparse_tensor");
+    rlaopt::utils::check_csc_matmul_inputs(sparse_tensor, dense_vector, at::DeviceType::CPU, 1,
+                                           "sparse_tensor", "dense_vector");
 
     // Get tensor sizes
     auto num_rows = sparse_tensor.size(0);
