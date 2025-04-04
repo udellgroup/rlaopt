@@ -2,49 +2,12 @@
 #include <cuda_runtime.h>
 #include <torch/extension.h>
 
+#include "../utils/cuda_specific.h"
+#include "../utils/input_checks.h"
+
 namespace rlaopt {
 
 namespace {
-// Get properties of the current CUDA device
-cudaDeviceProp get_device_properties() {
-    int device;
-    cudaGetDevice(&device);
-    cudaDeviceProp props;
-    cudaGetDeviceProperties(&props, device);
-    return props;
-}
-
-// Helper struct to store device grid limits
-struct DeviceGridLimits {
-    int max_grid_dim_x;
-};
-
-// Helper to get device maximum grid dimension
-DeviceGridLimits get_device_grid_limits(const cudaDeviceProp& props) {
-    DeviceGridLimits limits;
-    limits.max_grid_dim_x = props.maxGridSize[0];
-    return limits;
-}
-
-// Get optimal thread block configuration
-int get_optimal_block_size(const cudaDeviceProp& props) {
-    int max_threads_per_block = props.maxThreadsPerBlock;
-    int warp_size = props.warpSize;
-
-    // Default to 256 threads per block for good occupancy
-    int block_size = 256;
-
-    // Adjust based on device capabilities
-    if (max_threads_per_block < 1024) {
-        block_size = max_threads_per_block / 2;
-    }
-
-    // Ensure block_size is a multiple of warp_size
-    block_size = (block_size / warp_size) * warp_size;
-
-    return block_size;
-}
-
 __global__ void compute_row_nnz_kernel(const int64_t num_requested_rows,
                                        const int64_t* crow_indices, const int64_t* row_indices,
                                        int64_t* new_crow_indices) {
@@ -79,18 +42,8 @@ __global__ void copy_values_and_indices_kernel(const int64_t num_requested_rows,
 }  // namespace
 
 at::Tensor get_row_slice_cuda(const at::Tensor& sparse_tensor, const at::Tensor& row_indices) {
-    TORCH_CHECK(sparse_tensor.layout() == at::kSparseCsr, "Input tensor must be in CSR format");
-    TORCH_CHECK(row_indices.is_contiguous(), "row_indices must be contiguous");
-    TORCH_CHECK(row_indices.dim() == 1, "row_indices must be 1-dimensional");
-    TORCH_CHECK(sparse_tensor.dtype() == at::kFloat || sparse_tensor.dtype() == at::kDouble,
-                "Input tensor must be float32 or float64");
-    TORCH_CHECK(row_indices.dtype() == at::kLong, "Row indices must be long");
-    TORCH_CHECK(sparse_tensor.device().type() == at::DeviceType::CUDA,
-                "Sparse tensor must be a CUDA tensor");
-    TORCH_CHECK(row_indices.device().type() == at::DeviceType::CUDA,
-                "Row indices must be a CUDA tensor");
-    TORCH_CHECK(sparse_tensor.device() == row_indices.device(),
-                "Sparse tensor and row indices must be on the same CUDA device");
+    rlaopt::utils::check_csr_slicing_inputs(sparse_tensor, row_indices, at::DeviceType::CUDA,
+                                            "sparse_tensor", "row_indices");
 
     auto values = sparse_tensor.values();
     auto crow_indices = sparse_tensor.crow_indices();
@@ -101,25 +54,20 @@ at::Tensor get_row_slice_cuda(const at::Tensor& sparse_tensor, const at::Tensor&
     // Compute new crow_indices
     auto new_crow_indices = at::zeros({num_requested_rows + 1}, crow_indices.options());
 
-    // Get device properties
-    cudaDeviceProp props = get_device_properties();
-
-    // Get optimal block size based on device capabilities
-    int threads_per_block = get_optimal_block_size(props);
-
-    // Get maximum grid dimension from device properties
-    DeviceGridLimits grid_limits = get_device_grid_limits(props);
-    int64_t MAX_GRID_DIM_X = grid_limits.max_grid_dim_x;
+    // Get kernel launch configuration
+    rlaopt::utils::KernelLaunchConfig config = rlaopt::utils::get_kernel_launch_config_1d();
+    dim3 threads_per_block = config.block_size;
+    int64_t MAX_GRID_DIM_X = config.max_grid_dim_x;
 
     // Process the matrix in row chunks if needed
     for (int64_t row_start = 0; row_start < num_requested_rows;
-         row_start += MAX_GRID_DIM_X * threads_per_block) {
+         row_start += MAX_GRID_DIM_X * threads_per_block.x) {
         int64_t rows_in_chunk =
-            std::min(MAX_GRID_DIM_X * threads_per_block, num_requested_rows - row_start);
-        int num_blocks = (rows_in_chunk + threads_per_block - 1) / threads_per_block;
+            std::min(MAX_GRID_DIM_X * threads_per_block.x, num_requested_rows - row_start);
+        int num_blocks = (rows_in_chunk + threads_per_block.x - 1) / threads_per_block.x;
 
         // Compute number of non-zero elements in each row
-        compute_row_nnz_kernel<<<num_blocks, threads_per_block>>>(
+        compute_row_nnz_kernel<<<num_blocks, threads_per_block.x>>>(
             rows_in_chunk, crow_indices.data_ptr<int64_t>(),
             row_indices.data_ptr<int64_t>() + row_start,
             new_crow_indices.data_ptr<int64_t>() + 1 +
@@ -139,15 +87,15 @@ at::Tensor get_row_slice_cuda(const at::Tensor& sparse_tensor, const at::Tensor&
 
     // Process the matrix in row chunks if needed
     for (int64_t row_start = 0; row_start < num_requested_rows;
-         row_start += MAX_GRID_DIM_X * threads_per_block) {
+         row_start += MAX_GRID_DIM_X * threads_per_block.x) {
         int64_t rows_in_chunk =
-            std::min(MAX_GRID_DIM_X * threads_per_block, num_requested_rows - row_start);
-        int num_blocks = (rows_in_chunk + threads_per_block - 1) / threads_per_block;
+            std::min(MAX_GRID_DIM_X * threads_per_block.x, num_requested_rows - row_start);
+        int num_blocks = (rows_in_chunk + threads_per_block.x - 1) / threads_per_block.x;
 
         // Copy values and indices
         AT_DISPATCH_FLOATING_TYPES(
             sparse_tensor.scalar_type(), "get_row_slice_cuda", ([&] {
-                copy_values_and_indices_kernel<scalar_t><<<num_blocks, threads_per_block>>>(
+                copy_values_and_indices_kernel<scalar_t><<<num_blocks, threads_per_block.x>>>(
                     rows_in_chunk, crow_indices.data_ptr<int64_t>(),
                     col_indices.data_ptr<int64_t>(), values.data_ptr<scalar_t>(),
                     row_indices.data_ptr<int64_t>() + row_start,

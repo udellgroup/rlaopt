@@ -3,6 +3,8 @@
 #include <torch/all.h>
 #include <torch/library.h>
 
+#include "../utils/input_checks.h"
+
 extern "C" {
 /* Creates a dummy empty _C module that can be imported from Python.
    The import from Python will load the .so consisting of this file
@@ -52,15 +54,8 @@ void get_row_slice_cpu_impl(const scalar_t* values_ptr, const int64_t* crow_indi
 }  // namespace
 
 at::Tensor get_row_slice_cpu(const at::Tensor& sparse_tensor, const at::Tensor& row_indices) {
-    TORCH_CHECK(sparse_tensor.layout() == at::kSparseCsr, "Input tensor must be in CSR format");
-    TORCH_CHECK(row_indices.is_contiguous(), "row_indices must be contiguous");
-    TORCH_CHECK(row_indices.dim() == 1, "row_indices must be 1-dimensional");
-    TORCH_CHECK(sparse_tensor.dtype() == at::kFloat || sparse_tensor.dtype() == at::kDouble,
-                "Input tensor must be float32 or float64");
-    TORCH_CHECK(row_indices.dtype() == at::kLong, "Row indices must be long");
-    TORCH_CHECK(sparse_tensor.device().type() == at::DeviceType::CPU,
-                "Input tensor must be on CPU");
-    TORCH_CHECK(row_indices.device().type() == at::DeviceType::CPU, "row_indices must be on CPU");
+    rlaopt::utils::check_csr_slicing_inputs(sparse_tensor, row_indices, at::DeviceType::CPU,
+                                            "sparse_tensor", "row_indices");
 
     // Get sizes and pointers
     auto num_requested_rows = row_indices.size(0);
