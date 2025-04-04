@@ -13,11 +13,11 @@ template <typename scalar_t>
 __global__ void csc_matvec_kernel(const scalar_t* __restrict__ values,
                                   const int64_t* __restrict__ row_indices,
                                   const int64_t* __restrict__ col_ptrs,
-                                  const scalar_t* __restrict__ dense_vector,
+                                  const scalar_t* __restrict__ dense_tensor,
                                   scalar_t* __restrict__ result, const int64_t num_cols) {
     int col = blockIdx.x * blockDim.x + threadIdx.x;
     if (col < num_cols) {
-        scalar_t x_j = dense_vector[col];
+        scalar_t x_j = dense_tensor[col];
 
         for (int64_t k = col_ptrs[col]; k < col_ptrs[col + 1]; ++k) {
             int64_t row = row_indices[k];
@@ -29,9 +29,9 @@ __global__ void csc_matvec_kernel(const scalar_t* __restrict__ values,
 }  // namespace
 
 torch::Tensor csc_matvec_cuda(const torch::Tensor& sparse_tensor,
-                              const torch::Tensor& dense_vector) {
-    rlaopt::utils::check_csc_matmul_inputs(sparse_tensor, dense_vector, at::DeviceType::CUDA, 1,
-                                           "sparse_tensor", "dense_vector");
+                              const torch::Tensor& dense_tensor) {
+    rlaopt::utils::check_csc_matmul_inputs(sparse_tensor, dense_tensor, at::DeviceType::CUDA, 1,
+                                           "sparse_tensor", "dense_tensor");
 
     auto values = sparse_tensor.values();
     auto row_indices = sparse_tensor.row_indices();
@@ -40,10 +40,10 @@ torch::Tensor csc_matvec_cuda(const torch::Tensor& sparse_tensor,
     auto num_rows = sparse_tensor.size(0);
     auto num_cols = sparse_tensor.size(1);
 
-    TORCH_CHECK(num_cols == dense_vector.size(0),
+    TORCH_CHECK(num_cols == dense_tensor.size(0),
                 "Number of columns in sparse tensor must match dense vector size");
 
-    auto result = torch::zeros({num_rows}, dense_vector.options());
+    auto result = torch::zeros({num_rows}, dense_tensor.options());
 
     // Get kernel launch configuration
     rlaopt::utils::KernelLaunchConfig config = rlaopt::utils::get_kernel_launch_config_1d();
@@ -66,7 +66,7 @@ torch::Tensor csc_matvec_cuda(const torch::Tensor& sparse_tensor,
                 csc_matvec_kernel<scalar_t><<<num_blocks, threads_per_block.x>>>(
                     values.data_ptr<scalar_t>(), row_indices.data_ptr<int64_t>(),
                     col_ptrs.data_ptr<int64_t>() + col_start,
-                    dense_vector.data_ptr<scalar_t>() + col_start, result.data_ptr<scalar_t>(),
+                    dense_tensor.data_ptr<scalar_t>() + col_start, result.data_ptr<scalar_t>(),
                     cols_in_chunk);
             }));
     }

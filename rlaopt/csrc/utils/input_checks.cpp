@@ -81,11 +81,7 @@ void check_csc_matmul_inputs(const at::Tensor& sparse_tensor, const at::Tensor& 
     check_is_floating_point(sparse_tensor, sparse_name);
     check_same_device(sparse_tensor, dense_tensor, sparse_name, dense_name);
     check_same_dtype(sparse_tensor, dense_tensor, sparse_name, dense_name);
-
-    // If the expected dimension is 2, check the common dimension
-    if (expected_dim == 2) {
-        check_common_dim(sparse_tensor, dense_tensor, sparse_name, dense_name);
-    }
+    check_common_dim(sparse_tensor, dense_tensor, sparse_name, dense_name);
 
     // Device-specific validation
     if (device_type == at::DeviceType::CPU) {

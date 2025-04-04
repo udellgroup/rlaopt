@@ -10,10 +10,10 @@ namespace rlaopt {
 namespace {
 template <typename scalar_t>
 void csc_matvec_cpu_impl(const scalar_t* values, const int64_t* row_indices,
-                         const int64_t* col_ptrs, const scalar_t* dense_vector_ptr,
+                         const int64_t* col_ptrs, const scalar_t* dense_tensor_ptr,
                          scalar_t* result_ptr, int64_t num_rows, int64_t num_cols) {
     for (int64_t col = 0; col < num_cols; ++col) {
-        scalar_t x_j = dense_vector_ptr[col];
+        scalar_t x_j = dense_tensor_ptr[col];
 
         for (int64_t k = col_ptrs[col]; k < col_ptrs[col + 1]; ++k) {
             int64_t row = row_indices[k];
@@ -25,19 +25,19 @@ void csc_matvec_cpu_impl(const scalar_t* values, const int64_t* row_indices,
 }  // namespace
 
 torch::Tensor csc_matvec_cpu(const torch::Tensor& sparse_tensor,
-                             const torch::Tensor& dense_vector) {
-    rlaopt::utils::check_csc_matmul_inputs(sparse_tensor, dense_vector, at::DeviceType::CPU, 1,
-                                           "sparse_tensor", "dense_vector");
+                             const torch::Tensor& dense_tensor) {
+    rlaopt::utils::check_csc_matmul_inputs(sparse_tensor, dense_tensor, at::DeviceType::CPU, 1,
+                                           "sparse_tensor", "dense_tensor");
 
     // Get tensor sizes
     auto num_rows = sparse_tensor.size(0);
     auto num_cols = sparse_tensor.size(1);
 
-    TORCH_CHECK(num_cols == dense_vector.size(0),
+    TORCH_CHECK(num_cols == dense_tensor.size(0),
                 "Number of columns in sparse tensor must match dense vector size");
 
     // Create result tensor
-    auto result = torch::zeros({num_rows}, dense_vector.options());
+    auto result = torch::zeros({num_rows}, dense_tensor.options());
 
     // Get row indices and column pointers (same for all data types)
     const int64_t* row_indices = sparse_tensor.row_indices().data_ptr<int64_t>();
@@ -48,11 +48,11 @@ torch::Tensor csc_matvec_cpu(const torch::Tensor& sparse_tensor,
         sparse_tensor.scalar_type(), "csc_matvec_cpu", ([&] {
             // Get type-specific pointers
             const scalar_t* values = sparse_tensor.values().data_ptr<scalar_t>();
-            const scalar_t* dense_vector_ptr = dense_vector.data_ptr<scalar_t>();
+            const scalar_t* dense_tensor_ptr = dense_tensor.data_ptr<scalar_t>();
             scalar_t* result_ptr = result.data_ptr<scalar_t>();
 
             // Call implementation with the right type
-            csc_matvec_cpu_impl<scalar_t>(values, row_indices, col_ptrs, dense_vector_ptr,
+            csc_matvec_cpu_impl<scalar_t>(values, row_indices, col_ptrs, dense_tensor_ptr,
                                           result_ptr, num_rows, num_cols);
         }));
 
@@ -60,7 +60,7 @@ torch::Tensor csc_matvec_cpu(const torch::Tensor& sparse_tensor,
 }
 
 TORCH_LIBRARY_FRAGMENT(rlaopt, m) {
-    m.def("csc_matvec(Tensor sparse_csc_tensor, Tensor dense_vector) -> Tensor");
+    m.def("csc_matvec(Tensor sparse_csc_tensor, Tensor dense_tensor) -> Tensor");
 }
 
 TORCH_LIBRARY_IMPL(rlaopt, SparseCsrCPU, m) { m.impl("csc_matvec", &csc_matvec_cpu); }

@@ -12,7 +12,7 @@ namespace {
 template <typename scalar_t>
 __global__ void csc_matmat_kernel_2d(
     const scalar_t* __restrict__ values, const int64_t* __restrict__ row_indices,
-    const int64_t* __restrict__ col_ptrs, const scalar_t* __restrict__ dense_matrix,
+    const int64_t* __restrict__ col_ptrs, const scalar_t* __restrict__ dense_tensor,
     scalar_t* __restrict__ result, const int64_t num_cols, const int64_t batch_size,
     const int64_t dense_col_stride, const int64_t dense_batch_stride,
     const int64_t result_row_stride, const int64_t result_batch_stride) {
@@ -21,7 +21,7 @@ __global__ void csc_matmat_kernel_2d(
     int b = blockIdx.y * blockDim.y + threadIdx.y;
 
     if (col < num_cols && b < batch_size) {
-        scalar_t x_jb = dense_matrix[col * dense_col_stride + b * dense_batch_stride];
+        scalar_t x_jb = dense_tensor[col * dense_col_stride + b * dense_batch_stride];
 
         for (int64_t k = col_ptrs[col]; k < col_ptrs[col + 1]; ++k) {
             int64_t row = row_indices[k];
@@ -33,9 +33,9 @@ __global__ void csc_matmat_kernel_2d(
 }  // namespace
 
 torch::Tensor csc_matmat_cuda(const torch::Tensor& sparse_tensor,
-                              const torch::Tensor& dense_matrix) {
-    rlaopt::utils::check_csc_matmul_inputs(sparse_tensor, dense_matrix, at::DeviceType::CUDA, 2,
-                                           "sparse_tensor", "dense_matrix");
+                              const torch::Tensor& dense_tensor) {
+    rlaopt::utils::check_csc_matmul_inputs(sparse_tensor, dense_tensor, at::DeviceType::CUDA, 2,
+                                           "sparse_tensor", "dense_tensor");
 
     auto values = sparse_tensor.values();
     auto row_indices = sparse_tensor.row_indices();
@@ -43,12 +43,12 @@ torch::Tensor csc_matmat_cuda(const torch::Tensor& sparse_tensor,
 
     auto num_rows = sparse_tensor.size(0);
     auto num_cols = sparse_tensor.size(1);
-    auto batch_size = dense_matrix.size(1);
+    auto batch_size = dense_tensor.size(1);
 
-    auto result = torch::zeros({num_rows, batch_size}, dense_matrix.options());
+    auto result = torch::zeros({num_rows, batch_size}, dense_tensor.options());
 
     // Get strides for proper memory indexing
-    auto dense_strides = dense_matrix.strides();
+    auto dense_strides = dense_tensor.strides();
     auto result_strides = result.strides();
 
     int64_t dense_col_stride = dense_strides[0];
@@ -92,7 +92,7 @@ torch::Tensor csc_matmat_cuda(const torch::Tensor& sparse_tensor,
                     csc_matmat_kernel_2d<scalar_t><<<num_blocks, threads_per_block>>>(
                         values.data_ptr<scalar_t>(), row_indices.data_ptr<int64_t>(),
                         col_ptrs.data_ptr<int64_t>() + col_start,
-                        dense_matrix.data_ptr<scalar_t>() + col_start * dense_col_stride +
+                        dense_tensor.data_ptr<scalar_t>() + col_start * dense_col_stride +
                             batch_start * dense_batch_stride,
                         result.data_ptr<scalar_t>() + batch_start * result_batch_stride,
                         cols_in_chunk, batches_in_chunk, dense_col_stride, dense_batch_stride,
