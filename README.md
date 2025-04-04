@@ -15,6 +15,20 @@ Please clone this repo. The package can be installed in a python environment in 
 pip install -e .
 ```
 
+We provide several environment variables to control the build process.
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `RLAOPT_CPU_ONLY` | `0` | Set to `1` to force CPU-only build |
+| `RLAOPT_USE_CUDA` | `1` | Set to `0` to disable CUDA even if available |
+| `RLAOPT_USE_OPENMP` | `1` | Set to `0` to disable OpenMP parallelization |
+| `RLAOPT_DEBUG` | `0` | Set to `1` to build with debug symbols and no optimization |
+
+Example usage:
+
+```bash
+RLAOPT_CPU_ONLY=1 pip install -e .
+```
 
 ## Citation
 
