@@ -3,6 +3,7 @@ import torch
 
 from .preconditioner import Preconditioner
 from .configs import NewtonConfig
+from rlaopt.utils import _is_torch_tensor_1d_2d
 
 
 class Newton(Preconditioner):
@@ -87,6 +88,12 @@ class Newton(Preconditioner):
         Returns:
             torch.Tensor: The result of the inverse matrix multiplication.
         """
-        x = torch.linalg.solve_triangular(self.L, x.unsqueeze(-1), upper=False)
-        x = torch.linalg.solve_triangular(self.L.T, x, upper=True)
-        return x.squeeze()
+        _is_torch_tensor_1d_2d(x, "x")
+        if x.ndim == 1:
+            x = torch.linalg.solve_triangular(self.L, x.unsqueeze(-1), upper=False)
+            x = torch.linalg.solve_triangular(self.L.T, x, upper=True)
+            return x.squeeze()
+        else:
+            x = torch.linalg.solve_triangular(self.L, x, upper=False)
+            x = torch.linalg.solve_triangular(self.L.T, x, upper=True)
+            return x
