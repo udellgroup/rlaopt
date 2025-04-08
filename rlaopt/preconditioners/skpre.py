@@ -110,7 +110,7 @@ class SkPre(Preconditioner):
                 # Get lower Cholesky factor of G
                 self.L = torch.linalg.cholesky(G, upper=False)
 
-    def __matmul__(self, x):
+    def _matmul(self, x):
         """Perform matrix multiplication with the preconditioner.
 
         Args:

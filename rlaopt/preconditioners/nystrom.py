@@ -86,7 +86,7 @@ class Nystrom(Preconditioner):
         self.U, self.S, _ = torch.linalg.svd(B.T, full_matrices=False)
         self.S = torch.maximum(self.S**2 - shift, torch.tensor(0.0))
 
-    def __matmul__(self, x: torch.Tensor) -> torch.Tensor:
+    def _matmul(self, x: torch.Tensor) -> torch.Tensor:
         """Perform matrix multiplication with the preconditioner.
 
         Args:

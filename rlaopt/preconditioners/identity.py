@@ -53,7 +53,7 @@ class Identity(Preconditioner):
         """
         pass
 
-    def __matmul__(self, x):
+    def _matmul(self, x):
         """Perform matrix multiplication with the preconditioner.
 
         For the Identity preconditioner,

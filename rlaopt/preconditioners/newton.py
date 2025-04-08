@@ -64,7 +64,7 @@ class Newton(Preconditioner):
         A_true.diagonal().add_(self.config.rho)  # Add rho to the diagonal in-place
         self.L = torch.linalg.cholesky(A_true, upper=False)
 
-    def __matmul__(self, x):
+    def _matmul(self, x):
         """Perform matrix multiplication with the preconditioner.
 
         Args:

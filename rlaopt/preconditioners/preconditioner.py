@@ -53,7 +53,7 @@ class Preconditioner(ABC):
         pass
 
     @abstractmethod
-    def __matmul__(self, x: torch.Tensor) -> torch.Tensor:
+    def _matmul(self, x: torch.Tensor) -> torch.Tensor:
         """Perform matrix multiplication with the preconditioner.
 
         Args:
@@ -62,7 +62,6 @@ class Preconditioner(ABC):
         Returns:
             torch.Tensor: The result of the matrix multiplication.
         """
-        pass
 
     @abstractmethod
     def _inverse_matmul_1d(self, x: torch.Tensor) -> torch.Tensor:
@@ -87,6 +86,18 @@ class Preconditioner(ABC):
             torch.Tensor: The result of the matrix multiplication.
         """
         pass
+
+    def __matmul__(self, x: torch.Tensor) -> torch.Tensor:
+        """Perform matrix multiplication with the preconditioner.
+
+        Args:
+            x (torch.Tensor): The tensor to multiply with.
+
+        Returns:
+            torch.Tensor: The result of the matrix multiplication.
+        """
+        _is_torch_tensor_1d_2d(x, "x")
+        return self._matmul(x)
 
     def _inverse_matmul(self, x: torch.Tensor) -> torch.Tensor:
         """Perform matrix multiplication with the inverse of the preconditioner.
