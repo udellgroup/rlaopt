@@ -6,7 +6,6 @@ import torch
 from .preconditioner import Preconditioner
 from .configs import SkPreConfig
 from rlaopt.sketches import get_sketch
-from rlaopt.utils import _is_torch_tensor_1d_2d  # noqa: F401
 
 
 class SkPre(Preconditioner):
@@ -125,14 +124,14 @@ class SkPre(Preconditioner):
         else:
             return self.Y.T @ (self.Y @ x) + self.config.rho * x
 
-    def _inverse_matmul_Y_none(self, x, squeeze):
+    def _inverse_matmul_Y_none(self, x: torch.Tensor, squeeze: bool) -> torch.Tensor:
         # Computation done by two triangular solves
         x_in = x.unsqueeze(-1) if not squeeze else x
         L_inv_x = torch.linalg.solve_triangular(self.L.T, x_in, upper=True)
         P_inv_x = torch.linalg.solve_triangular(self.L, L_inv_x, upper=False)
         return P_inv_x.squeeze() if squeeze else P_inv_x
 
-    def _inverse_matmul_Y_exists(self, x, squeeze):
+    def _inverse_matmul_Y_exists(self, x: torch.Tensor, squeeze: bool) -> torch.Tensor:
         # Computaiton uses Woodbury identity
         x_in = x.unsqueeze(-1) if not squeeze else x
         Yx = self.Y @ x_in
@@ -168,21 +167,6 @@ class SkPre(Preconditioner):
             return self._inverse_matmul_Y_none(x, squeeze=False)
         else:
             return self._inverse_matmul_Y_exists(x, squeeze=False)
-
-    def _inverse_matmul(self, x):
-        """Perform matrix multiplication with the inverse of the preconditioner.
-
-        Args:
-            x (torch.Tensor): The tensor to multiply with.
-
-        Returns:
-            torch.Tensor: The result of the inverse matrix multiplication.
-        """
-        _is_torch_tensor_1d_2d(x, "x")
-        if x.ndim == 1:
-            return self._inverse_matmul_1d(x)
-        else:
-            return self._inverse_matmul_2d(x)
 
     def _del_Y(self):
         """Delete the sketched matrix Y and free up memory.

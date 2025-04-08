@@ -11,7 +11,7 @@ import torch
 
 from .configs import PreconditionerConfig
 from rlaopt.linops import LinOpType
-
+from rlaopt.utils import _is_torch_tensor_1d_2d
 
 __all__ = ["Preconditioner"]
 
@@ -65,6 +65,29 @@ class Preconditioner(ABC):
         pass
 
     @abstractmethod
+    def _inverse_matmul_1d(self, x: torch.Tensor) -> torch.Tensor:
+        """Perform matrix multiplication with the preconditioner for 1D tensors.
+
+        Args:
+            x (torch.Tensor): The tensor to multiply with.
+
+        Returns:
+            torch.Tensor: The result of the matrix multiplication.
+        """
+        pass
+
+    @abstractmethod
+    def _inverse_matmul_2d(self, x: torch.Tensor) -> torch.Tensor:
+        """Perform matrix multiplication with the preconditioner for 2D tensors.
+
+        Args:
+            x (torch.Tensor): The tensor to multiply with.
+
+        Returns:
+            torch.Tensor: The result of the matrix multiplication.
+        """
+        pass
+
     def _inverse_matmul(self, x: torch.Tensor) -> torch.Tensor:
         """Perform matrix multiplication with the inverse of the preconditioner.
 
@@ -74,7 +97,11 @@ class Preconditioner(ABC):
         Returns:
             torch.Tensor: The result of the inverse matrix multiplication.
         """
-        pass
+        _is_torch_tensor_1d_2d(x, "x")
+        if x.ndim == 1:
+            return self._inverse_matmul_1d(x)
+        elif x.ndim == 2:
+            return self._inverse_matmul_2d(x)
 
     def _inverse_matmul_compose(self, fn: Callable) -> Callable:
         """Compose the inverse of the preconditioner with a function.

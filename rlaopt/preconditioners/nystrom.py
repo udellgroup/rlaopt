@@ -98,29 +98,23 @@ class Nystrom(Preconditioner):
         _is_torch_tensor_1d_2d(x, "x")
         return self.U @ (self.S[:, None] * (self.U.T @ x)) + self.config.rho * x
 
-    def _inverse_matmul(self, x: torch.Tensor) -> torch.Tensor:
-        """Perform matrix multiplication with the inverse of the preconditioner.
-
-        Args:
-            x (torch.Tensor): The tensor to multiply with.
-
-        Returns:
-            torch.Tensor: The result of the inverse matrix multiplication.
-        """
-        _is_torch_tensor_1d_2d(x, "x")
-        
+    def _inverse_matmul_general(self, x: torch.Tensor, unsqueeze: bool) -> torch.Tensor:
         UTx = self.U.T @ x
-       
-        if x.ndim == 2:
-            x = 1 / self.config.rho * (x - self.U @ UTx) + self.U @ torch.divide(
-                UTx, (self.S + self.config.rho).unsqueeze(-1)
-            )
-        else:
-            x = 1 / self.config.rho * (x - self.U @ UTx) + self.U @ torch.divide(
-                UTx, (self.S + self.config.rho)
-            )
-
+        damped_S = (
+            (self.S + self.config.rho).unsqueeze(-1)
+            if unsqueeze
+            else self.S + self.config.rho
+        )
+        x = 1 / self.config.rho * (x - self.U @ UTx) + self.U @ torch.divide(
+            UTx, damped_S
+        )
         return x
+
+    def _inverse_matmul_1d(self, x):
+        return self._inverse_matmul_general(x, unsqueeze=False)
+
+    def _inverse_matmul_2d(self, x):
+        return self._inverse_matmul_general(x, unsqueeze=True)
 
     def _update_damping(self, baseline_rho: float) -> None:
         """Update the damping parameter for the Nyström preconditioner.

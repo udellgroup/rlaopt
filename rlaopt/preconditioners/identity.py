@@ -1,5 +1,7 @@
 """This module implements the Identity preconditioner."""
 
+import torch
+
 from .preconditioner import Preconditioner
 from .configs import IdentityConfig
 
@@ -65,17 +67,8 @@ class Identity(Preconditioner):
         """
         return x
 
-    def _inverse_matmul(self, x):
-        """Perform matrix multiplication with the inverse of the preconditioner.
-
-        For the Identity preconditioner,
-        this operation is identical to the forward operation
-        and simply returns the input unchanged.
-
-        Args:
-            x (torch.Tensor): The tensor to multiply with.
-
-        Returns:
-            torch.Tensor: The input tensor x, unchanged.
-        """
+    def _inverse_matmul_1d(self, x: torch.Tensor) -> torch.Tensor:
         return x
+
+    def _inverse_matmul_2d(self, x: torch.Tensor) -> torch.Tensor:
+        return self._inverse_matmul_1d(x)

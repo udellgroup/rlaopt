@@ -3,7 +3,6 @@ import torch
 
 from .preconditioner import Preconditioner
 from .configs import NewtonConfig
-from rlaopt.utils import _is_torch_tensor_1d_2d
 
 
 class Newton(Preconditioner):
@@ -76,24 +75,14 @@ class Newton(Preconditioner):
         """
         return self.L @ (self.L.T @ x)
 
-    def _inverse_matmul(self, x):
-        """Perform matrix multiplication with the inverse of the preconditioner.
+    def _inverse_matmul_general(self, x: torch.Tensor, unsqueeze: bool) -> torch.Tensor:
+        x_in = x.unsqueeze(-1) if unsqueeze else x
+        x_in = torch.linalg.solve_triangular(self.L, x_in, upper=False)
+        x_out = torch.linalg.solve_triangular(self.L.T, x_in, upper=True)
+        return x_out.squeeze() if unsqueeze else x_out
 
-        This method solves the system P^(-1)x using forward and backward substitution,
-        where P is the preconditioner matrix.
+    def _inverse_matmul_1d(self, x):
+        return self._inverse_matmul_general(x, unsqueeze=True)
 
-        Args:
-            x (torch.Tensor): The tensor to multiply with.
-
-        Returns:
-            torch.Tensor: The result of the inverse matrix multiplication.
-        """
-        _is_torch_tensor_1d_2d(x, "x")
-        if x.ndim == 1:
-            x = torch.linalg.solve_triangular(self.L, x.unsqueeze(-1), upper=False)
-            x = torch.linalg.solve_triangular(self.L.T, x, upper=True)
-            return x.squeeze()
-        else:
-            x = torch.linalg.solve_triangular(self.L, x, upper=False)
-            x = torch.linalg.solve_triangular(self.L.T, x, upper=True)
-            return x
+    def _inverse_matmul_2d(self, x):
+        return self._inverse_matmul_general(x, unsqueeze=False)
