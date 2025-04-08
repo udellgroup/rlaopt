@@ -6,6 +6,7 @@ import torch
 from .preconditioner import Preconditioner
 from .configs import SkPreConfig
 from rlaopt.sketches import get_sketch
+from rlaopt.utils import _is_torch_tensor_1d_2d  # noqa: F401
 
 
 class SkPre(Preconditioner):
@@ -110,7 +111,7 @@ class SkPre(Preconditioner):
                 # Get lower Cholesky factor of G
                 self.L = torch.linalg.cholesky(G, upper=False)
 
-    def __matmul__(self, x: torch.Tensor) -> torch.Tensor:
+    def __matmul__(self, x):
         """Perform matrix multiplication with the preconditioner.
 
         Args:
@@ -124,7 +125,7 @@ class SkPre(Preconditioner):
         else:
             return self.Y.T @ (self.Y @ x) + self.config.rho * x
 
-    def _inverse_matmul(self, x: torch.Tensor) -> torch.Tensor:
+    def _inverse_matmul(self, x):
         """Perform matrix multiplication with the inverse of the preconditioner.
 
         Args:
