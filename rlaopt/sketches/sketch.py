@@ -26,12 +26,18 @@ class Sketch(ABC):
                             (_SketchSide.LEFT or _SketchSide.RIGHT).
         s (int): The sketch size.
         d (int): The dimension of the matrix to be sketched.
+        dtype (torch.dtype): The data type of the sketching matrix.
         device (torch.device): Device to be used for computations.
         Omega_mat (torch.device): A torch.Tensor representing the sketching matrix.
     """
 
     def __init__(
-        self, mode: str, sketch_size: int, matrix_dim: int, device: torch.device
+        self,
+        mode: str,
+        sketch_size: int,
+        matrix_dim: int,
+        dtype: torch.dtype,
+        device: torch.device,
     ):
         """Initializes the Sketch with given parameters.
 
@@ -39,6 +45,7 @@ class Sketch(ABC):
             mode: A string ('left' or 'right') specifying the sketching mode.
             sketch_size: An integer specifying the size of the sketch.
             matrix_dim: An integer specifying the dimension of the original matrix.
+            dtype: A torch.dtype specifying the data type of the sketching matrix.
             device: A torch.device object specifying the computation device.
 
         Raises:
@@ -47,6 +54,7 @@ class Sketch(ABC):
         self.mode = _SketchSide._from_str(mode, "mode")
         self.s = sketch_size
         self.d = matrix_dim
+        self.dtype = dtype
         self.device = device
 
         _is_pos_int(sketch_size, "sketch_size")

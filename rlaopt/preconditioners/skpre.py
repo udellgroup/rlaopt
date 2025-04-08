@@ -66,6 +66,7 @@ class SkPre(Preconditioner):
             "left",
             self.config.sketch_size,
             A.shape[0],
+            dtype=A.dtype,
             device=device,
         )
 
@@ -99,7 +100,7 @@ class SkPre(Preconditioner):
                 self.L = torch.linalg.cholesky(G, upper=False)
 
             else:
-                # Case 2: sketch_size<= number of columns of A
+                # Case 2: sketch_size <= number of columns of A
                 # Get lower Cholesky L of Y @ Y.T
                 # L will then be used with Woodbury matrix identity
 
@@ -120,7 +121,7 @@ class SkPre(Preconditioner):
             torch.Tensor: The result of the matrix multiplication.
         """
         if self.Y is None:
-            return self.L @ (self.L.T @ x)
+            return self.L.T @ (self.L @ x)
         else:
             return self.Y.T @ (self.Y @ x) + self.config.rho * x
 
@@ -134,7 +135,7 @@ class SkPre(Preconditioner):
     def _inverse_matmul_Y_exists(
         self, x: torch.Tensor, unsqueeze: bool
     ) -> torch.Tensor:
-        # Computaiton uses Woodbury identity
+        # Computation uses Woodbury identity
         x_in = x.unsqueeze(-1) if unsqueeze else x
         Yx = self.Y @ x_in
         L_inv_Yx = torch.linalg.solve_triangular(self.L, Yx, upper=False)

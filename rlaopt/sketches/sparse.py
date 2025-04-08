@@ -25,9 +25,9 @@ class Sparse(Sketch):
         Inherited from Sketch class.
     """
 
-    def __init__(self, mode, sketch_size, matrix_dim, device):
+    def __init__(self, mode, sketch_size, matrix_dim, dtype, device):
         """Initializes the Sparse Sign sketch with given parameters."""
-        super().__init__(mode, sketch_size, matrix_dim, device)
+        super().__init__(mode, sketch_size, matrix_dim, dtype, device)
 
     def _generate_embedding(self) -> torch.Tensor:
         """Generates the sparse sign embedding matrix for sketching.
@@ -52,11 +52,11 @@ class Sparse(Sketch):
         zeta = 8 if self.s >= 8 else self.s
 
         # Initialize S as a zero matrix
-        Omega_mat = torch.zeros((self.s, self.d), device=self.device)
+        Omega_mat = torch.zeros((self.s, self.d), dtype=self.dtype, device=self.device)
 
         # Generate random +1/-1 values for zeta entries in each column
         b = torch.bernoulli(
-            0.5 * torch.ones((zeta, self.d), device=self.device)
+            0.5 * torch.ones((zeta, self.d), dtype=self.dtype, device=self.device)
         )  # Bernoulli(0.5)
         z = 2 * b - 1  # Convert to +1/-1
 
@@ -69,9 +69,7 @@ class Sparse(Sketch):
         Omega_mat.scatter_(0, row_indices, z)  # In-place scatter
 
         # Scale S
-        Omega_mat = Omega_mat * torch.sqrt(
-            1 / torch.tensor(zeta, dtype=torch.float, device=self.device)
-        )
+        Omega_mat = Omega_mat * (zeta**-0.5)
         if self.mode == _SketchSide.RIGHT:
             Omega_mat = Omega_mat.T
 

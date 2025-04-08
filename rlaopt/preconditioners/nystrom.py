@@ -63,7 +63,12 @@ class Nystrom(Preconditioner):
         """
         # Get sketching matrix
         Omega = get_sketch(
-            self.config.sketch, "right", self.config.rank, A.shape[1], device=device
+            self.config.sketch,
+            "right",
+            self.config.rank,
+            A.shape[1],
+            dtype=A.dtype,
+            device=device,
         )
         # Compute sketch
         # Y = A @ Omega
