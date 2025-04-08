@@ -26,7 +26,7 @@ class SkPre(Preconditioner):
         >>> A = torch.randn(1000, 500)
         >>>
         >>> # Configure and initialize the SkPre preconditioner
-        >>> config = SkPreConfig(sketch='gaussian', sketch_size=200, rho=1e-4)
+        >>> config = SkPreConfig(sketch='gauss', sketch_size=200, rho=1e-4)
         >>> preconditioner = SkPre(config)
         >>>
         >>> # Update the preconditioner with the matrix
@@ -65,7 +65,7 @@ class SkPre(Preconditioner):
             self.config.sketch,
             "left",
             self.config.sketch_size,
-            A.shape[1],
+            A.shape[0],
             device=device,
         )
 
@@ -124,21 +124,23 @@ class SkPre(Preconditioner):
         else:
             return self.Y.T @ (self.Y @ x) + self.config.rho * x
 
-    def _inverse_matmul_Y_none(self, x: torch.Tensor, squeeze: bool) -> torch.Tensor:
+    def _inverse_matmul_Y_none(self, x: torch.Tensor, unsqueeze: bool) -> torch.Tensor:
         # Computation done by two triangular solves
-        x_in = x.unsqueeze(-1) if not squeeze else x
+        x_in = x.unsqueeze(-1) if unsqueeze else x
         L_inv_x = torch.linalg.solve_triangular(self.L.T, x_in, upper=True)
         P_inv_x = torch.linalg.solve_triangular(self.L, L_inv_x, upper=False)
-        return P_inv_x.squeeze() if squeeze else P_inv_x
+        return P_inv_x.squeeze() if unsqueeze else P_inv_x
 
-    def _inverse_matmul_Y_exists(self, x: torch.Tensor, squeeze: bool) -> torch.Tensor:
+    def _inverse_matmul_Y_exists(
+        self, x: torch.Tensor, unsqueeze: bool
+    ) -> torch.Tensor:
         # Computaiton uses Woodbury identity
-        x_in = x.unsqueeze(-1) if not squeeze else x
+        x_in = x.unsqueeze(-1) if unsqueeze else x
         Yx = self.Y @ x_in
         L_inv_Yx = torch.linalg.solve_triangular(self.L, Yx, upper=False)
         LT_inv_L_inv_Yx = torch.linalg.solve_triangular(self.L.T, L_inv_Yx, upper=True)
         P_inv_x = 1 / self.config.rho * (x_in - self.Y.T @ LT_inv_L_inv_Yx)
-        return P_inv_x.squeeze() if squeeze else P_inv_x
+        return P_inv_x.squeeze() if unsqueeze else P_inv_x
 
     def _inverse_matmul_1d(self, x):
         """Perform matrix multiplication with the inverse of the preconditioner.
@@ -150,9 +152,9 @@ class SkPre(Preconditioner):
             torch.Tensor: The result of the inverse matrix multiplication.
         """
         if self.Y is None:
-            return self._inverse_matmul_Y_none(x, squeeze=True)
+            return self._inverse_matmul_Y_none(x, unsqueeze=True)
         else:
-            return self._inverse_matmul_Y_exists(x, squeeze=True)
+            return self._inverse_matmul_Y_exists(x, unsqueeze=True)
 
     def _inverse_matmul_2d(self, x):
         """Perform matrix multiplication with the inverse of the preconditioner.
@@ -164,9 +166,9 @@ class SkPre(Preconditioner):
             torch.Tensor: The result of the inverse matrix multiplication.
         """
         if self.Y is None:
-            return self._inverse_matmul_Y_none(x, squeeze=False)
+            return self._inverse_matmul_Y_none(x, unsqueeze=False)
         else:
-            return self._inverse_matmul_Y_exists(x, squeeze=False)
+            return self._inverse_matmul_Y_exists(x, unsqueeze=False)
 
     def _del_Y(self):
         """Delete the sketched matrix Y and free up memory.
@@ -175,7 +177,8 @@ class SkPre(Preconditioner):
         important for GPU computations.
         """
         device = self.Y.device
-        del self.Y
+        self.Y = None
+        # Free up memory
         if device.type == "cuda":
             torch.cuda.empty_cache()
         gc.collect()

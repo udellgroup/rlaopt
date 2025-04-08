@@ -27,7 +27,7 @@ class Nystrom(Preconditioner):
         >>> A = torch.randn(1000, 1000)
         >>>
         >>> # Configure and initialize the Nyström preconditioner
-        >>> config = NystromConfig(rank=100, sketch='gaussian', rho=1e-4)
+        >>> config = NystromConfig(rank=100, sketch='gauss', rho=1e-4)
         >>> preconditioner = Nystrom(config)
         >>>
         >>> # Update the preconditioner with the matrix
