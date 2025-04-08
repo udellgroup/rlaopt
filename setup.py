@@ -1,7 +1,8 @@
-import os
-import torch
 import glob
+import os
+
 from setuptools import find_packages, setup
+import torch
 from torch.utils.cpp_extension import (
     CppExtension,
     CUDAExtension,
@@ -17,17 +18,41 @@ else:
     py_limited_api = False
 
 
+def find_sources(root_dir, file_ext):
+    """Find all files with the given extension recursively starting from root_dir."""
+    pattern = os.path.join(root_dir, f"**/*{file_ext}")
+    return glob.glob(pattern, recursive=True)
+
+
 def get_extensions():
-    debug_mode = os.getenv("DEBUG", "0") == "1"
-    use_cuda = os.getenv("USE_CUDA", "1") == "1"
-    use_openmp = os.getenv("USE_OPENMP", "1") == "1"
+    debug_mode = os.getenv("RLAOPT_DEBUG", "0") == "1"
+
+    # Check for CPU-only build
+    cpu_only_build = os.getenv("RLAOPT_CPU_ONLY", "0") == "1"
+
+    # Only enable CUDA if not in CPU-only mode
+    if cpu_only_build:
+        use_cuda = False
+        print("Building CPU-only version (CUDA disabled)")
+    else:
+        use_cuda = os.getenv("RLAOPT_USE_CUDA", "1") == "1"
+        use_cuda = use_cuda and torch.cuda.is_available() and CUDA_HOME is not None
+
+    use_openmp = os.getenv("RLAOPT_USE_OPENMP", "1") == "1"
+
     if debug_mode:
         print("Compiling in debug mode")
 
-    use_cuda = use_cuda and torch.cuda.is_available() and CUDA_HOME is not None
     extension = CUDAExtension if use_cuda else CppExtension
 
-    extra_link_args = []
+    # Get PyTorch library path for RPATH
+    torch_lib_path = os.path.join(os.path.dirname(torch.__file__), "lib")
+
+    extra_link_args = [
+        # Add RPATH to ensure PyTorch libraries can be found at runtime
+        f"-Wl,-rpath,{torch_lib_path}"
+    ]
+
     extra_compile_args = {
         "cxx": [
             "-O3" if not debug_mode else "-O0",
@@ -50,13 +75,12 @@ def get_extensions():
 
     this_dir = os.path.dirname(os.path.curdir)
     extensions_dir = os.path.join(this_dir, LIBRARY_NAME, "csrc")
-    sources = list(glob.glob(os.path.join(extensions_dir, "*.cpp")))
+    extensions_include_dirs = [os.path.join(extensions_dir, "cpp_include")]
 
-    extensions_cuda_dir = os.path.join(extensions_dir, "cuda")
-    cuda_sources = list(glob.glob(os.path.join(extensions_cuda_dir, "*.cu")))
-
+    sources = find_sources(extensions_dir, ".cpp")
     if use_cuda:
-        sources += cuda_sources
+        sources += find_sources(extensions_dir, ".cu")
+        extensions_include_dirs.append(os.path.join(extensions_dir, "cuda_include"))
 
     ext_modules = [
         extension(
@@ -64,6 +88,10 @@ def get_extensions():
             sources,
             extra_compile_args=extra_compile_args,
             extra_link_args=extra_link_args,
+            # Tells compiler where to find the header files
+            include_dirs=extensions_include_dirs,
+            library_dirs=[torch_lib_path],  # Add PyTorch library directory
+            runtime_library_dirs=[torch_lib_path],  # Add runtime path (RPATH)
             py_limited_api=py_limited_api,
         )
     ]
