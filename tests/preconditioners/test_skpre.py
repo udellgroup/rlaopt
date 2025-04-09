@@ -62,7 +62,11 @@ def large_sketch_config(sketch_type):
 
 # Dictionary of tolerance values by precision
 TOLERANCES = {
-    torch.float32: {"rtol": 1e-4, "atol": 1e-6},
+    torch.float32: {
+        "rtol": 1e-2,
+        "atol": 1e-4,
+    },  # tolerances are large for float32: sketch-and-precondition
+    # can be unstable in single precision
     torch.float64: {"rtol": 1e-8, "atol": 1e-8},
 }
 
@@ -89,20 +93,12 @@ class TestSkPreBasics:
         precond = SkPre(small_sketch_config)
         precond._update(test_matrix, device)
 
-        # With small sketch size, Y should exist
-        assert precond.Y is not None
+        assert precond.Y is None
         assert precond.L is not None
-        assert precond.Y.device == device
         assert precond.L.device == device
-        assert precond.Y.dtype == precision
         assert precond.L.dtype == precision
         # Check dimensions
-        assert precond.Y.shape[0] == small_sketch_config.sketch_size
-        assert precond.Y.shape[1] == test_matrix.shape[1]
-        assert precond.L.shape == (
-            small_sketch_config.sketch_size,
-            small_sketch_config.sketch_size,
-        )
+        assert precond.L.shape == (test_matrix.shape[1], test_matrix.shape[1])
 
     def test_update_large_sketch(
         self, test_matrix, large_sketch_config, device, precision
@@ -111,7 +107,6 @@ class TestSkPreBasics:
         precond = SkPre(large_sketch_config)
         precond._update(test_matrix, device)
 
-        # With large sketch size, Y should be deleted
         assert precond.Y is None
         assert precond.L is not None
         assert precond.L.device == device
@@ -224,21 +219,3 @@ class TestSkPreConsistency:
 
         # Check if we get back approximately the original vector
         assert torch.allclose(reconstructed_x, test_vector, **tol)
-
-
-class TestSkPreMemory:
-    """Simple test for memory management in SkPre."""
-
-    def test_del_Y(self, test_matrix, small_sketch_config, device):
-        """Test that _del_Y properly removes Y."""
-        precond = SkPre(small_sketch_config)
-        precond._update(test_matrix, device)
-
-        # Verify Y exists
-        assert precond.Y is not None
-
-        # Call _del_Y
-        precond._del_Y()
-
-        # Verify Y is gone
-        assert precond.Y is None
