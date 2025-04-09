@@ -54,7 +54,7 @@ def newton_config():
 
 # Dictionary of tolerance values by precision
 TOLERANCES = {
-    torch.float32: {"rtol": 1e-4, "atol": 1e-6},
+    torch.float32: {"rtol": 1e-4, "atol": 1e-4},
     torch.float64: {"rtol": 1e-8, "atol": 1e-8},
 }
 

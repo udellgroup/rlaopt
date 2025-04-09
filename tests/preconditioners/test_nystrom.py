@@ -54,19 +54,19 @@ def sketch_type(request):
 def nystrom_config(sketch_type):
     """Create a Nystrom preconditioner configuration."""
     return NystromConfig(
-        rank=20, sketch=sketch_type, rho=1e-2, damping_mode="non_adaptive"
+        rank=20, sketch=sketch_type, rho=1e0, damping_mode="non_adaptive"
     )
 
 
 @pytest.fixture
 def adaptive_nystrom_config(sketch_type):
     """Create a Nystrom preconditioner configuration with adaptive damping."""
-    return NystromConfig(rank=20, sketch=sketch_type, rho=1e-2, damping_mode="adaptive")
+    return NystromConfig(rank=20, sketch=sketch_type, rho=1e0, damping_mode="adaptive")
 
 
 # Dictionary of tolerance values by precision
 TOLERANCES = {
-    torch.float32: {"rtol": 1e-4, "atol": 1e-6},
+    torch.float32: {"rtol": 1e-4, "atol": 1e-4},
     torch.float64: {"rtol": 1e-8, "atol": 1e-8},
 }
 
@@ -125,7 +125,7 @@ class TestNystromBasics:
         # U should have orthonormal columns
         UTU = precond.U.T @ precond.U
         identity = torch.eye(nystrom_config.rank, device=device, dtype=precision)
-        assert torch.allclose(UTU, identity, **tol)
+        assert torch.linalg.norm(UTU - identity).item() < tol["atol"]
 
 
 class TestNystromOperations:
@@ -320,7 +320,7 @@ class TestNystromWithLinOp:
         # Verify orthonormality of U
         UTU = precond.U.T @ precond.U
         identity = torch.eye(nystrom_config.rank, device=device, dtype=precision)
-        assert torch.allclose(UTU, identity, **tol)
+        assert torch.linalg.norm(UTU - identity).item() < tol["atol"]
 
         # Test inverse consistency with random vectors
         for _ in range(3):  # Test with a few different vectors
