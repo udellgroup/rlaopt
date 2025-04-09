@@ -7,6 +7,7 @@ from .base import _BaseLinOp
 from rlaopt.utils.input_checkers import (
     _is_callable,
     _is_torch_device,
+    _is_torch_f32_f64,
 )
 
 __all__ = ["LinOp", "TwoSidedLinOp", "SymmetricLinOp"]
@@ -19,16 +20,19 @@ class LinOp(_BaseLinOp):
         shape: torch.Size,
         matvec: Callable,
         matmat: Optional[Callable] = None,
+        dtype: Optional[torch.dtype] = torch.get_default_dtype(),
     ):
         super().__init__(shape=shape)
         _is_torch_device(device, "device")
         _is_callable(matvec, "matvec")
         if matmat is not None:
             _is_callable(matmat, "matmat")
+        _is_torch_f32_f64(dtype, "dtype")
 
         self._device = device
         self._shape = shape
         self._matvec = matvec
+        self._dtype = dtype
 
         if matmat is None:
             self._matmat = vmap(self._matvec, in_dims=1, out_dims=1)
@@ -38,6 +42,10 @@ class LinOp(_BaseLinOp):
     @property
     def device(self):
         return self._device
+
+    @property
+    def dtype(self):
+        return self._dtype
 
     def __matmul__(self, x: torch.Tensor):
         if x.ndim == 1:
@@ -57,8 +65,9 @@ class TwoSidedLinOp(LinOp):
         rmatvec: Callable,
         matmat: Optional[Callable] = None,
         rmatmat: Optional[Callable] = None,
+        dtype: Optional[torch.dtype] = torch.get_default_dtype(),
     ):
-        super().__init__(device, shape, matvec, matmat)
+        super().__init__(device, shape, matvec, matmat, dtype)
 
         _is_callable(rmatvec, "rmatvec")
         if rmatmat is not None:
@@ -95,8 +104,9 @@ class SymmetricLinOp(TwoSidedLinOp):
         shape: torch.Size,
         matvec: Callable,
         matmat: Optional[Callable] = None,
+        dtype: Optional[torch.dtype] = torch.get_default_dtype(),
     ):
-        super().__init__(device, shape, matvec, matvec, matmat, matmat)
+        super().__init__(device, shape, matvec, matvec, matmat, matmat, dtype)
 
         if shape[0] != shape[1]:
             raise ValueError(

@@ -41,6 +41,12 @@ class _DistributedLinOp(_BaseLinOp):
             _is_list(A, "A")
             if not all(isinstance(A_i, LinOp) for A_i in A):
                 raise ValueError("All elements of A must be linear operators.")
+            # Check that all LinOps have the same dtype
+            if not all(A_i.dtype == A[0].dtype for A_i in A):
+                raise ValueError(
+                    "All linear operators must have the same dtype. "
+                    f"Received {', '.join(str(A_i.dtype) for A_i in A)}."
+                )
 
         self._A = A
 

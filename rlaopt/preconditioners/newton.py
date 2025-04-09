@@ -59,8 +59,8 @@ class Newton(Preconditioner):
         # Handle the tensor and linear operator cases
         if isinstance(A, torch.Tensor):
             A_true = A
-        else:
-            A_true = A @ torch.eye(A.shape[1], device=device)
+        else:  # A is a linear operator
+            A_true = A @ torch.eye(A.shape[1], dtype=A.dtype, device=device)
         A_true.diagonal().add_(self.config.rho)  # Add rho to the diagonal in-place
         self.L = torch.linalg.cholesky(A_true, upper=False)
 

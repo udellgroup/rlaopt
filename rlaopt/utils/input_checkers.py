@@ -13,6 +13,7 @@ __all__ = [
     "_is_set",
     "_is_str",
     "_is_torch_device",
+    "_is_torch_f32_f64",
     "_is_torch_size",
     "_is_torch_tensor",
     "_is_torch_tensor_1d_2d",
@@ -78,11 +79,28 @@ def _is_str(param: Any, param_name: str):
             f"{param_name} is of type {type(param).__name__}, but expected type str"
         )
 
+
 def _is_torch_device(param: Any, param_name: str):
     if not isinstance(param, torch.device):
         raise TypeError(
             f"{param_name} is of type {type(param).__name__}, "
             "but expected type torch.device"
+        )
+
+
+def _is_torch_dtype(param: Any, param_name: str):
+    if not isinstance(param, torch.dtype):
+        raise TypeError(
+            f"{param_name} is of type {type(param).__name__}, "
+            "but expected type torch.dtype"
+        )
+
+
+def _is_torch_f32_f64(param: Any, param_name: str):
+    _is_torch_dtype(param, param_name)
+    if param not in [torch.float32, torch.float64]:
+        raise ValueError(
+            f"{param_name} is {param}, but expected torch.float32 or torch.float64"
         )
 
 
@@ -101,10 +119,13 @@ def _is_torch_tensor(param: Any, param_name: str):
             "but expected type torch.Tensor"
         )
 
+
 def _is_torch_tensor_1d_2d(param: Any, param_name: str):
     _is_torch_tensor(param, param_name)
-    if param.ndim not in [1,2]:
-        raise ValueError(f"{param_name} must be a 1D or 2D tensor. Received {param.ndim}D tensor.")
+    if param.ndim not in [1, 2]:
+        raise ValueError(
+            f"{param_name} must be a 1D or 2D tensor. Received {param.ndim}D tensor."
+        )
 
 
 def _is_nonneg_float(param: Any, param_name: str):
