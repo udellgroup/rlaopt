@@ -115,7 +115,7 @@ class SkPre(Preconditioner):
         x_in = x.unsqueeze(-1) if unsqueeze else x
         L_inv_x = torch.linalg.solve_triangular(self.L.T, x_in, upper=True)
         P_inv_x = torch.linalg.solve_triangular(self.L, L_inv_x, upper=False)
-        return P_inv_x.squeeze() if unsqueeze else P_inv_x
+        return P_inv_x.squeeze(-1) if unsqueeze else P_inv_x
 
     def _inverse_matmul_1d(self, x):
         """Perform matrix multiplication with the inverse of the preconditioner.

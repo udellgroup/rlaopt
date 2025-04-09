@@ -79,7 +79,7 @@ class Newton(Preconditioner):
         x_in = x.unsqueeze(-1) if unsqueeze else x
         x_in = torch.linalg.solve_triangular(self.L, x_in, upper=False)
         x_out = torch.linalg.solve_triangular(self.L.T, x_in, upper=True)
-        return x_out.squeeze() if unsqueeze else x_out
+        return x_out.squeeze(-1) if unsqueeze else x_out
 
     def _inverse_matmul_1d(self, x):
         return self._inverse_matmul_general(x, unsqueeze=True)

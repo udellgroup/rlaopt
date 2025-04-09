@@ -66,7 +66,7 @@ def tol(precision):
 
 
 @pytest.fixture
-def symmetric_linop(test_matrix, precision):
+def symmetric_linop(test_matrix):
     """Create a symmetric linear operator."""
 
     def matvec(x):
@@ -78,7 +78,7 @@ def symmetric_linop(test_matrix, precision):
     shape = test_matrix.shape
     device = test_matrix.device
 
-    return SymmetricLinOp(device, shape, matvec, dtype=precision)
+    return SymmetricLinOp(device, shape, matvec, dtype=test_matrix.dtype)
 
 
 class TestNewtonBasics:

@@ -6,7 +6,6 @@ from .enums import _DampingMode
 from .preconditioner import Preconditioner
 from .configs import NystromConfig
 from rlaopt.sketches import get_sketch
-from rlaopt.utils import _is_torch_tensor_1d_2d
 
 
 class Nystrom(Preconditioner):
@@ -50,6 +49,8 @@ class Nystrom(Preconditioner):
         super().__init__(config)
         self.U = None
         self.S = None
+        self.low_precision = False
+        self.L = None
 
     def _update(self, A, device: torch.device) -> None:
         """Update the Nyström preconditioner.
@@ -61,6 +62,10 @@ class Nystrom(Preconditioner):
             for which we are constructing a preconditioner.
             device (torch.device): Device for performing computations.
         """
+        # Important signal for the preconditioner inverse
+        if A.dtype != torch.float64:
+            self.low_precision = True
+
         # Get sketching matrix
         Omega = get_sketch(
             self.config.sketch,
@@ -71,7 +76,6 @@ class Nystrom(Preconditioner):
             device=device,
         )
         # Compute sketch
-        # Y = A @ Omega
         Y = Omega._apply_right(A)
 
         # Compute core: Omega.T @ Y
@@ -100,26 +104,36 @@ class Nystrom(Preconditioner):
         Returns:
             torch.Tensor: The result of the matrix multiplication.
         """
-        _is_torch_tensor_1d_2d(x, "x")
-        return self.U @ (self.S[:, None] * (self.U.T @ x)) + self.config.rho * x
+        S_safe = self.S if x.ndim == 1 else self.S.unsqueeze(-1)
+        return self.U @ (S_safe * (self.U.T @ x)) + self.config.rho * x
 
     def _inverse_matmul_general(self, x: torch.Tensor, unsqueeze: bool) -> torch.Tensor:
-        UTx = self.U.T @ x
-        damped_S = (
-            (self.S + self.config.rho).unsqueeze(-1)
-            if unsqueeze
-            else self.S + self.config.rho
-        )
-        x = 1 / self.config.rho * (x - self.U @ UTx) + self.U @ torch.divide(
-            UTx, damped_S
-        )
-        return x
+        x_in = x.unsqueeze(-1) if unsqueeze else x
+        UTx = self.U.T @ x_in
+
+        # If we are in single precision, we take a more numerically stable approach
+        # that requires an additional Cholesky factorization
+        if self.low_precision:
+            if self.L is None:
+                self.L = torch.linalg.cholesky(
+                    self.config.rho * torch.diag(self.S**-1) + self.U.T @ self.U
+                )
+            L_inv_UTx = torch.linalg.solve_triangular(self.L, UTx, upper=False)
+            LT_inv_L_inv_UTx = torch.linalg.solve_triangular(
+                self.L.T, L_inv_UTx, upper=True
+            )
+            x_in = 1 / self.config.rho * (x_in - self.U @ LT_inv_L_inv_UTx)
+        else:
+            x_in = 1 / self.config.rho * (x_in - self.U @ UTx) + self.U @ torch.divide(
+                UTx, (self.S + self.config.rho).unsqueeze(-1)
+            )
+        return x_in.squeeze(-1) if unsqueeze else x_in
 
     def _inverse_matmul_1d(self, x):
-        return self._inverse_matmul_general(x, unsqueeze=False)
+        return self._inverse_matmul_general(x, unsqueeze=True)
 
     def _inverse_matmul_2d(self, x):
-        return self._inverse_matmul_general(x, unsqueeze=True)
+        return self._inverse_matmul_general(x, unsqueeze=False)
 
     def _update_damping(self, baseline_rho: float) -> None:
         """Update the damping parameter for the Nyström preconditioner.
