@@ -59,12 +59,12 @@ class Newton(Preconditioner):
         # Handle the tensor and linear operator cases
         if isinstance(A, torch.Tensor):
             A_true = A
-        else:
-            A_true = A @ torch.eye(A.shape[1], device=device)
+        else:  # A is a linear operator
+            A_true = A @ torch.eye(A.shape[1], dtype=A.dtype, device=device)
         A_true.diagonal().add_(self.config.rho)  # Add rho to the diagonal in-place
         self.L = torch.linalg.cholesky(A_true, upper=False)
 
-    def __matmul__(self, x):
+    def _matmul(self, x):
         """Perform matrix multiplication with the preconditioner.
 
         Args:
@@ -75,18 +75,14 @@ class Newton(Preconditioner):
         """
         return self.L @ (self.L.T @ x)
 
-    def _inverse_matmul(self, x):
-        """Perform matrix multiplication with the inverse of the preconditioner.
+    def _inverse_matmul_general(self, x: torch.Tensor, unsqueeze: bool) -> torch.Tensor:
+        x_in = x.unsqueeze(-1) if unsqueeze else x
+        x_in = torch.linalg.solve_triangular(self.L, x_in, upper=False)
+        x_out = torch.linalg.solve_triangular(self.L.T, x_in, upper=True)
+        return x_out.squeeze(-1) if unsqueeze else x_out
 
-        This method solves the system P^(-1)x using forward and backward substitution,
-        where P is the preconditioner matrix.
+    def _inverse_matmul_1d(self, x):
+        return self._inverse_matmul_general(x, unsqueeze=True)
 
-        Args:
-            x (torch.Tensor): The tensor to multiply with.
-
-        Returns:
-            torch.Tensor: The result of the inverse matrix multiplication.
-        """
-        x = torch.linalg.solve_triangular(self.L, x.unsqueeze(-1), upper=False)
-        x = torch.linalg.solve_triangular(self.L.T, x, upper=True)
-        return x.squeeze()
+    def _inverse_matmul_2d(self, x):
+        return self._inverse_matmul_general(x, unsqueeze=False)

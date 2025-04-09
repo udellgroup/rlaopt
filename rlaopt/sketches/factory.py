@@ -23,7 +23,12 @@ __all__ = ["get_sketch"]
 
 
 def get_sketch(
-    name: str, mode: str, sketch_size: int, matrix_dim: int, device: torch.device
+    name: str,
+    mode: str,
+    sketch_size: int,
+    matrix_dim: int,
+    dtype: torch.dtype,
+    device: torch.device,
 ) -> Sketch:
     """Factory function to create a Sketch object.
 
@@ -36,6 +41,7 @@ def get_sketch(
         mode (str): The sketching mode. Can be specified as "left" or "right".
         sketch_size (int): The target dimension of the sketch.
         matrix_dim (int): The dimension of the original matrix.
+        dtype (torch.dtype): The data type of the sketching matrix.
         device (torch.device): The device on which to perform computations.
 
     Returns:
@@ -45,8 +51,9 @@ def get_sketch(
         ValueError: If the provided name is not a valid sketching technique.
 
     Example:
-        >>> sketch = get_sketch("gauss", "left", 100, 1000, torch.device("cuda"))
+        >>> sketch = get_sketch("gauss", "left", 100, 1000,
+        torch.float32, torch.device("cuda"))
     """
     sketch_name = _SketchMode._from_str(name, "name")
     sketch_class = SKETCH_MODE_TO_CLASS[sketch_name]
-    return sketch_class(mode, sketch_size, matrix_dim, device)
+    return sketch_class(mode, sketch_size, matrix_dim, dtype, device)

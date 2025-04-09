@@ -1,6 +1,8 @@
 """This module implements the Sketch and Precondition Preconditioner."""
 
 import gc
+from warnings import warn
+
 import torch
 
 from .preconditioner import Preconditioner
@@ -26,7 +28,7 @@ class SkPre(Preconditioner):
         >>> A = torch.randn(1000, 500)
         >>>
         >>> # Configure and initialize the SkPre preconditioner
-        >>> config = SkPreConfig(sketch='gaussian', sketch_size=200, rho=1e-4)
+        >>> config = SkPreConfig(sketch='gauss', sketch_size=200, rho=1e-4)
         >>> preconditioner = SkPre(config)
         >>>
         >>> # Update the preconditioner with the matrix
@@ -60,12 +62,20 @@ class SkPre(Preconditioner):
             for which we are constructing a preconditioner.
             device (torch.device): The device on which to perform the computations.
         """
+        if self.config.sketch_size < A.shape[1]:
+            warn(
+                f"Sketch size ({self.config.sketch_size}) is smaller than "
+                f"the number of columns in input matrix A ({A.shape[1]}). "
+                "This may lead to a poor and/or unstable approximation."
+            )
+
         # Get sketching matrix
         Omega = get_sketch(
             self.config.sketch,
             "left",
             self.config.sketch_size,
-            A.shape[1],
+            A.shape[0],
+            dtype=A.dtype,
             device=device,
         )
 
@@ -73,44 +83,23 @@ class SkPre(Preconditioner):
         self.Y = Omega._apply_left(A)
 
         # Construct preconditioner
-        if self.config.rho == 0:
-            # No damping
-            # Get L from Cholesky of Y.T @ Y
+        # NOTE(pratik): When the sketch size is smaller than the number of columns of A,
+        # this could be more efficient if we take the Cholesky decomposition of
+        # Y @ Y.T + rho * I.
+        # However, inverting the preconditioner would require the Woodbury formula,
+        # which can be unstable in single precision.
 
-            # Compute gram matrix
-            G = self.Y.T @ self.Y
-            # Delete Y as it won't be needed
-            self._del_Y()
-            # Get lower Cholesky factor of G
-            self.L = torch.linalg.cholesky(G, upper=False)
+        # Compute Gram matrix
+        G = self.Y.T @ self.Y
+        if self.config.rho != 0:
+            # Add damping
+            G.diagonal().add_(self.config.rho)
+        # Get lower Cholesky factor of G
+        self.L = torch.linalg.cholesky(G, upper=False)
+        # Delete Y as it won't be needed
+        self._del_Y()
 
-        else:
-            # Damping
-            # Two cases based on sketch size
-            # Case 1: sketch_size >= number columns of A
-            if self.config.sketch_size >= A.shape[1]:
-                # Get Gram matrix
-                G = self.Y.T @ self.Y
-                # Delete Y as it won't be needed
-                self._del_Y()
-                # Add damping
-                G.diagonal().add_(self.config.rho)
-                # Get lower Cholesky factor of G
-                self.L = torch.linalg.cholesky(G, upper=False)
-
-            else:
-                # Case 2: sketch_size<= number of columns of A
-                # Get lower Cholesky L of Y @ Y.T
-                # L will then be used with Woodbury matrix identity
-
-                # Get Gram matrix
-                G = self.Y @ self.Y.T
-                # Add damping
-                G.diagonal().add_(self.config.rho)
-                # Get lower Cholesky factor of G
-                self.L = torch.linalg.cholesky(G, upper=False)
-
-    def __matmul__(self, x: torch.Tensor) -> torch.Tensor:
+    def _matmul(self, x):
         """Perform matrix multiplication with the preconditioner.
 
         Args:
@@ -119,42 +108,36 @@ class SkPre(Preconditioner):
         Returns:
             torch.Tensor: The result of the matrix multiplication.
         """
-        if self.Y is None:
-            return self.L @ (self.L.T @ x)
-        else:
-            return self.Y.T @ (self.Y @ x) + self.config.rho * x
+        return self.L.T @ (self.L @ x)
 
-    def _inverse_matmul(self, x: torch.Tensor) -> torch.Tensor:
+    def _inverse_matmul_general(self, x: torch.Tensor, unsqueeze: bool) -> torch.Tensor:
+        # Computation done by two triangular solves
+        x_in = x.unsqueeze(-1) if unsqueeze else x
+        L_inv_x = torch.linalg.solve_triangular(self.L.T, x_in, upper=True)
+        P_inv_x = torch.linalg.solve_triangular(self.L, L_inv_x, upper=False)
+        return P_inv_x.squeeze(-1) if unsqueeze else P_inv_x
+
+    def _inverse_matmul_1d(self, x):
         """Perform matrix multiplication with the inverse of the preconditioner.
 
         Args:
-            x (torch.Tensor): The tensor to multiply with.
+            x (torch.Tensor): The tensor to multiply with. Assumed to be 1D.
 
         Returns:
             torch.Tensor: The result of the inverse matrix multiplication.
         """
-        # Implementation d
-        if self.Y is None:
-            # Computes inv(P) @ x
-            # Computation done by two triangular solves
-            L_inv_x = torch.linalg.solve_triangular(
-                self.L.T, x.unsqueeze(-1), upper=True
-            )
-            P_inv_x = torch.linalg.solve_triangular(self.L, L_inv_x, upper=False)
-            return P_inv_x.squeeze()
-        else:
-            # inv(P) @ x
-            # Computation uses Woodbury identity
-            Yx = self.Y @ x
-            L_inv_Yx = torch.linalg.solve_triangular(
-                self.L, Yx.unsqueeze(-1), upper=False
-            )
-            LT_inv_L_inv_Yx = torch.linalg.solve_triangular(
-                self.L.T, L_inv_Yx, upper=True
-            )
-            LT_inv_L_inv_Yx = LT_inv_L_inv_Yx.squeeze()
-            P_inv_x = 1 / self.config.rho * (x - self.Y.T @ LT_inv_L_inv_Yx)
-            return P_inv_x
+        return self._inverse_matmul_general(x, unsqueeze=True)
+
+    def _inverse_matmul_2d(self, x):
+        """Perform matrix multiplication with the inverse of the preconditioner.
+
+        Args:
+            x (torch.Tensor): The tensor to multiply with. Assumed to be 2D.
+
+        Returns:
+            torch.Tensor: The result of the inverse matrix multiplication.
+        """
+        return self._inverse_matmul_general(x, unsqueeze=False)
 
     def _del_Y(self):
         """Delete the sketched matrix Y and free up memory.
@@ -163,7 +146,8 @@ class SkPre(Preconditioner):
         important for GPU computations.
         """
         device = self.Y.device
-        del self.Y
+        self.Y = None
+        # Free up memory
         if device.type == "cuda":
             torch.cuda.empty_cache()
         gc.collect()

@@ -96,14 +96,14 @@ class Model(ABC):
         log = {}
 
         # Get initial log and check for termination
-        log[0] = logger._compute_log(0, solver.w)
+        log[0] = logger._compute_log(0, solver.W)
         if termination_fn(log[0]["metrics"]["internal_metrics"]):
-            return solver.w, log
+            return solver.W, log
 
         # Training loop
         for i in range(1, max_iters + 1):
             solver._step()
-            log_i = logger._compute_log(i, solver.w)
+            log_i = logger._compute_log(i, solver.W)
             if log_i is not None:
                 log[i] = log_i
                 if termination_fn(log[i]["metrics"]["internal_metrics"]):
@@ -111,13 +111,13 @@ class Model(ABC):
 
         logger._terminate()
 
-        return solver.w, log
+        return solver.W, log
 
     @abstractmethod
     def solve(
         self,
         solver_config: SolverConfig,
-        w_init: torch.Tensor,
+        W_init: torch.Tensor,
         callback_fn: Optional[Callable] = None,
         callback_args: Optional[list] = [],
         callback_kwargs: Optional[dict] = {},
