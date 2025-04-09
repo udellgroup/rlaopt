@@ -1,8 +1,9 @@
 import pytest
 import torch
-from rlaopt.preconditioners.nystrom import Nystrom
-from rlaopt.preconditioners.configs import NystromConfig
+
+from rlaopt.preconditioners import NystromConfig
 from rlaopt.linops import SymmetricLinOp
+from rlaopt.preconditioners.nystrom import Nystrom
 
 
 def get_available_devices():
@@ -125,7 +126,7 @@ class TestNystromBasics:
         # U should have orthonormal columns
         UTU = precond.U.T @ precond.U
         identity = torch.eye(nystrom_config.rank, device=device, dtype=precision)
-        assert torch.linalg.norm(UTU - identity).item() < tol["atol"]
+        assert torch.allclose(UTU, identity, **tol)
 
 
 class TestNystromOperations:
@@ -320,7 +321,7 @@ class TestNystromWithLinOp:
         # Verify orthonormality of U
         UTU = precond.U.T @ precond.U
         identity = torch.eye(nystrom_config.rank, device=device, dtype=precision)
-        assert torch.linalg.norm(UTU - identity).item() < tol["atol"]
+        assert torch.allclose(UTU, identity, **tol)
 
         # Test inverse consistency with random vectors
         for _ in range(3):  # Test with a few different vectors

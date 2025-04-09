@@ -107,6 +107,8 @@ class Nystrom(Preconditioner):
         S_safe = self.S if x.ndim == 1 else self.S.unsqueeze(-1)
         return self.U @ (S_safe * (self.U.T @ x)) + self.config.rho * x
 
+    # TODO(pratik): Think about an even more stable way to
+    # deal with the inverse in low precision
     def _inverse_matmul_general(self, x: torch.Tensor, unsqueeze: bool) -> torch.Tensor:
         x_in = x.unsqueeze(-1) if unsqueeze else x
         UTx = self.U.T @ x_in

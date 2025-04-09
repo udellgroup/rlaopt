@@ -1,9 +1,9 @@
 import pytest
 import torch
 
-from rlaopt.preconditioners.newton import Newton
-from rlaopt.preconditioners.configs import NewtonConfig
+from rlaopt.preconditioners import NewtonConfig
 from rlaopt.linops import SymmetricLinOp
+from rlaopt.preconditioners.newton import Newton
 
 
 def get_available_devices():

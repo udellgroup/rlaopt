@@ -1,7 +1,8 @@
 import pytest
 import torch
+
+from rlaopt.preconditioners import SkPreConfig
 from rlaopt.preconditioners.skpre import SkPre
-from rlaopt.preconditioners.configs import SkPreConfig
 
 
 def get_available_devices():

@@ -1,7 +1,7 @@
 import pytest
 import torch
-from rlaopt.preconditioners import Preconditioner
-from rlaopt.preconditioners.configs import PreconditionerConfig
+
+from rlaopt.preconditioners import Preconditioner, PreconditionerConfig
 
 
 def get_available_devices():
