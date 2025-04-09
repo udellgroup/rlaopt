@@ -78,3 +78,11 @@ jobs:
         uses: SonarSource/sonarqube-scan-action@v5
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+
+  final-check:
+    name: Build
+    runs-on: ubuntu-latest
+    needs: [cpu-tests, cuda-tests]
+    steps:
+      - name: Success
+        run: echo "All tests passed!"
