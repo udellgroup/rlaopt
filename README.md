@@ -7,6 +7,9 @@
 
 A package containing implementations of randomized linear algebra-based optimization algorithms for scientific computing and optimization.
 
+> [!WARNING]
+> This repository is under active development. The API may change frequently, and the code may not be stable. Use at your own risk.
+
 ## Installation
 
 Please clone this repo. The package can be installed in a python environment in editable mode using the following command:
