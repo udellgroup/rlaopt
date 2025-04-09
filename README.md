@@ -8,7 +8,7 @@
 A package containing implementations of randomized linear algebra-based optimization algorithms for scientific computing and optimization.
 
 > [!WARNING]
-> This repository is under active development. The API may change frequently, and the code may not be stable. Use at your own risk.
+> This package is under active development. The API may change frequently, and the code may not be stable. Use at your own risk.
 
 ## Installation
 
