@@ -26,6 +26,6 @@ class _DampingMode(Enum):
 
         raise ValueError(
             f"Invalid value for {param_name}: {value}. "
-            "Expected 'adaptive', 'non_adaptive', DampingMode.ADAPTIVE, "
-            "or DampingMode.NON_ADAPTIVE."
+            "Expected 'adaptive', 'non_adaptive', _DampingMode.ADAPTIVE, "
+            "or _DampingMode.NON_ADAPTIVE."
         )
