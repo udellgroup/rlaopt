@@ -100,10 +100,10 @@ def lengthscale_param(request, device, precision):
         }
 
 
-# Helper functions to compute kernel matrices
-def compute_rbf_kernel_matrix(X, Y, lengthscale, device, dtype):
+# Define a single function to compute kernel matrices for any kernel type
+def compute_kernel_matrix(X, Y, lengthscale, device, dtype, kernel_func):
     """
-    Compute RBF kernel matrix between X and Y.
+    General function to compute kernel matrices between X and Y.
 
     Args:
         X: First set of points (n_x, d)
@@ -111,6 +111,7 @@ def compute_rbf_kernel_matrix(X, Y, lengthscale, device, dtype):
         lengthscale: Lengthscale parameter (scalar or tensor)
         device: Device for the output
         dtype: Data type for the output
+        kernel_func: Function that computes the kernel value between two vectors
 
     Returns:
         K: Kernel matrix (n_x, n_y)
@@ -118,29 +119,20 @@ def compute_rbf_kernel_matrix(X, Y, lengthscale, device, dtype):
     K = torch.zeros((X.shape[0], Y.shape[0]), device=device, dtype=dtype)
     for i in range(K.shape[0]):
         for j in range(K.shape[1]):
-            K[i, j] = torch.exp(-1 / 2 * torch.sum(((X[i] - Y[j]) / lengthscale) ** 2))
+            K[i, j] = kernel_func(X[i], Y[j], lengthscale)
     return K
 
 
-def compute_laplace_kernel_matrix(X, Y, lengthscale, device, dtype):
-    """
-    Compute Laplace kernel matrix between X and Y.
+# Define kernel-specific functions that just compute
+# the kernel value between two vectors
+def rbf_kernel(x, y, lengthscale):
+    """Compute RBF kernel between two vectors."""
+    return torch.exp(-1 / 2 * torch.sum(((x - y) / lengthscale) ** 2))
 
-    Args:
-        X: First set of points (n_x, d)
-        Y: Second set of points (n_y, d)
-        lengthscale: Lengthscale parameter (scalar or tensor)
-        device: Device for the output
-        dtype: Data type for the output
 
-    Returns:
-        K: Kernel matrix (n_x, n_y)
-    """
-    K = torch.zeros((X.shape[0], Y.shape[0]), device=device, dtype=dtype)
-    for i in range(K.shape[0]):
-        for j in range(K.shape[1]):
-            K[i, j] = torch.exp(-torch.sum(torch.abs(X[i] - Y[j]) / lengthscale))
-    return K
+def laplace_kernel(x, y, lengthscale):
+    """Compute Laplace kernel between two vectors."""
+    return torch.exp(-torch.sum(torch.abs(x - y) / lengthscale))
 
 
 # Define kernel configurations for parameterized testing
@@ -148,12 +140,12 @@ KERNEL_CONFIGS = [
     {
         "class": RBFLinOp,
         "name": "rbf",
-        "compute_kernel": compute_rbf_kernel_matrix,
+        "kernel_func": rbf_kernel,
     },
     {
         "class": LaplaceLinOp,
         "name": "laplace",
-        "compute_kernel": compute_laplace_kernel_matrix,
+        "kernel_func": laplace_kernel,
     },
 ]
 
@@ -188,7 +180,7 @@ class TestKernelLinOps:
     ):
         """Test row and block oracles of kernel linear operators."""
         kernel_class = kernel_config["class"]
-        compute_kernel = kernel_config["compute_kernel"]
+        kernel_func = kernel_config["kernel_func"]
         lengthscale = lengthscale_param["lengthscale"]
 
         kernel = kernel_class(test_matrix, kernel_params=lengthscale_param)
@@ -196,8 +188,8 @@ class TestKernelLinOps:
         # Test row oracle
         X_row = test_matrix[test_blk]
         Y_row = test_matrix
-        K_row_looped = compute_kernel(
-            X_row, Y_row, lengthscale, kernel.device, kernel.dtype
+        K_row_looped = compute_kernel_matrix(
+            X_row, Y_row, lengthscale, kernel.device, kernel.dtype, kernel_func
         )
 
         row_lin_op = kernel.row_oracle(test_blk)
@@ -215,8 +207,8 @@ class TestKernelLinOps:
         # Test block oracle
         X_blk = test_matrix[test_blk]
         Y_blk = test_matrix[test_blk]
-        K_blk_looped = compute_kernel(
-            X_blk, Y_blk, lengthscale, kernel.device, kernel.dtype
+        K_blk_looped = compute_kernel_matrix(
+            X_blk, Y_blk, lengthscale, kernel.device, kernel.dtype, kernel_func
         )
 
         block_lin_op = kernel.blk_oracle(test_blk)
@@ -246,14 +238,19 @@ class TestKernelLinOps:
     ):
         """Test matmul of kernel linear operators."""
         kernel_class = kernel_config["class"]
-        compute_kernel = kernel_config["compute_kernel"]
+        kernel_func = kernel_config["kernel_func"]
         lengthscale = lengthscale_param["lengthscale"]
 
         kernel = kernel_class(test_matrix, kernel_params=lengthscale_param)
 
         # Compute full kernel matrix using helper function
-        K_looped = compute_kernel(
-            test_matrix, test_matrix, lengthscale, kernel.device, kernel.dtype
+        K_looped = compute_kernel_matrix(
+            test_matrix,
+            test_matrix,
+            lengthscale,
+            kernel.device,
+            kernel.dtype,
+            kernel_func,
         )
 
         assert torch.allclose(
