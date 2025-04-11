@@ -2,7 +2,7 @@ import pytest
 import torch
 
 from rlaopt.linops import LinOp, SymmetricLinOp
-from rlaopt.kernels import RBFLinOp
+from rlaopt.kernels import RBFLinOp, LaplaceLinOp
 
 
 def get_available_devices():
@@ -100,7 +100,7 @@ def lengthscale_param(request, device, precision):
         }
 
 
-# Helper function to compute RBF kernel matrices
+# Helper functions to compute kernel matrices
 def compute_rbf_kernel_matrix(X, Y, lengthscale, device, dtype):
     """
     Compute RBF kernel matrix between X and Y.
@@ -122,10 +122,55 @@ def compute_rbf_kernel_matrix(X, Y, lengthscale, device, dtype):
     return K
 
 
-class TestRBFLinOp:
-    def test_initialization(self, test_matrix, lengthscale_param):
-        """Test initialization of RBFLinOp with different lengthscale types."""
-        kernel = RBFLinOp(test_matrix, kernel_params=lengthscale_param)
+def compute_laplace_kernel_matrix(X, Y, lengthscale, device, dtype):
+    """
+    Compute Laplace kernel matrix between X and Y.
+
+    Args:
+        X: First set of points (n_x, d)
+        Y: Second set of points (n_y, d)
+        lengthscale: Lengthscale parameter (scalar or tensor)
+        device: Device for the output
+        dtype: Data type for the output
+
+    Returns:
+        K: Kernel matrix (n_x, n_y)
+    """
+    K = torch.zeros((X.shape[0], Y.shape[0]), device=device, dtype=dtype)
+    for i in range(K.shape[0]):
+        for j in range(K.shape[1]):
+            K[i, j] = torch.exp(-torch.sum(torch.abs(X[i] - Y[j]) / lengthscale))
+    return K
+
+
+# Define kernel configurations for parameterized testing
+KERNEL_CONFIGS = [
+    {
+        "class": RBFLinOp,
+        "name": "rbf",
+        "compute_kernel": compute_rbf_kernel_matrix,
+    },
+    {
+        "class": LaplaceLinOp,
+        "name": "laplace",
+        "compute_kernel": compute_laplace_kernel_matrix,
+    },
+]
+
+
+@pytest.fixture(
+    params=KERNEL_CONFIGS, ids=[config["name"] for config in KERNEL_CONFIGS]
+)
+def kernel_config(request):
+    """Parameterized fixture for different kernel types."""
+    return request.param
+
+
+class TestKernelLinOps:
+    def test_initialization(self, test_matrix, lengthscale_param, kernel_config):
+        """Test initialization of kernel linear operators."""
+        kernel_class = kernel_config["class"]
+        kernel = kernel_class(test_matrix, kernel_params=lengthscale_param)
         assert kernel.A.shape == test_matrix.shape
         assert kernel.kernel_params == lengthscale_param
 
@@ -139,15 +184,19 @@ class TestRBFLinOp:
         test_blk_matmul_vector,
         test_blk_matmul_matrix,
         tol,
+        kernel_config,
     ):
-        """Test row and block oracles of RBFLinOp with different lengthscale types."""
+        """Test row and block oracles of kernel linear operators."""
+        kernel_class = kernel_config["class"]
+        compute_kernel = kernel_config["compute_kernel"]
         lengthscale = lengthscale_param["lengthscale"]
-        kernel = RBFLinOp(test_matrix, kernel_params=lengthscale_param)
+
+        kernel = kernel_class(test_matrix, kernel_params=lengthscale_param)
 
         # Test row oracle
         X_row = test_matrix[test_blk]
         Y_row = test_matrix
-        K_row_looped = compute_rbf_kernel_matrix(
+        K_row_looped = compute_kernel(
             X_row, Y_row, lengthscale, kernel.device, kernel.dtype
         )
 
@@ -166,7 +215,7 @@ class TestRBFLinOp:
         # Test block oracle
         X_blk = test_matrix[test_blk]
         Y_blk = test_matrix[test_blk]
-        K_blk_looped = compute_rbf_kernel_matrix(
+        K_blk_looped = compute_kernel(
             X_blk, Y_blk, lengthscale, kernel.device, kernel.dtype
         )
 
@@ -193,13 +242,17 @@ class TestRBFLinOp:
         test_matmul_vector,
         test_matmul_matrix,
         tol,
+        kernel_config,
     ):
-        """Test matmul of RBFLinOp with different lengthscale types."""
-        kernel = RBFLinOp(test_matrix, kernel_params=lengthscale_param)
+        """Test matmul of kernel linear operators."""
+        kernel_class = kernel_config["class"]
+        compute_kernel = kernel_config["compute_kernel"]
         lengthscale = lengthscale_param["lengthscale"]
 
+        kernel = kernel_class(test_matrix, kernel_params=lengthscale_param)
+
         # Compute full kernel matrix using helper function
-        K_looped = compute_rbf_kernel_matrix(
+        K_looped = compute_kernel(
             test_matrix, test_matrix, lengthscale, kernel.device, kernel.dtype
         )
 
