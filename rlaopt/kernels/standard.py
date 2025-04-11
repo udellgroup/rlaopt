@@ -34,34 +34,34 @@ def _get_scaled_diff_matern(Ai_lazy, Aj_lazy, kernel_params):
 
 
 def _kernel_computation_rbf(Ai_lazy, Aj_lazy, kernel_params):
-    """Compute RBF kernel matrix."""
+    """Compute RBF kernel."""
     D = _get_scaled_diff(Ai_lazy, Aj_lazy, kernel_params)
     D = (D**2).sum(dim=2)
     return (-D / 2).exp()
 
 
 def _kernel_computation_laplace(Ai_lazy, Aj_lazy, kernel_params):
-    """Compute Laplace kernel matrix."""
+    """Compute Laplace kernel."""
     D = _get_scaled_diff(Ai_lazy, Aj_lazy, kernel_params)
     D = D.abs().sum(dim=2)
     return (-D).exp()
 
 
 def _kernel_computation_matern12(Ai_lazy, Aj_lazy, kernel_params):
-    """Compute Matern-1/2 kernel matrix."""
+    """Compute Matern-1/2 kernel."""
     D = _get_scaled_diff_matern(Ai_lazy, Aj_lazy, kernel_params)
     return (-D).exp()
 
 
 def _kernel_computation_matern32(Ai_lazy, Aj_lazy, kernel_params):
-    """Compute Matern-3/2 kernel matrix."""
+    """Compute Matern-3/2 kernel."""
     D = _get_scaled_diff_matern(Ai_lazy, Aj_lazy, kernel_params)
     D_adj = (3**0.5) * D
     return (1 + D_adj) * (-D_adj).exp()
 
 
 def _kernel_computation_matern52(Ai_lazy, Aj_lazy, kernel_params):
-    """Compute Matern-5/2 kernel matrix."""
+    """Compute Matern-5/2 kernel."""
     D = _get_scaled_diff_matern(Ai_lazy, Aj_lazy, kernel_params)
     D_adj = (5**0.5) * D
     return (1 + D_adj + (D_adj**2) / 3) * (-D_adj).exp()
