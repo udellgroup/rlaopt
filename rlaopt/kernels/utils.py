@@ -4,14 +4,14 @@ import torch
 from pykeops.torch import LazyTensor
 
 from .base import _get_cached_lazy_tensor
-from rlaopt.utils import _is_pos_float
+from rlaopt.utils import _is_pos_float  # noqa: F401
 
 
 def _check_kernel_params(kernel_params: Dict[str, Any]):
     """Check kernel parameters."""
-    if "sigma" not in kernel_params:
-        raise ValueError("Kernel parameters must include 'sigma'.")
-    _is_pos_float(kernel_params["sigma"], 'kernel_params["sigma"]')
+    if "lengthscale" not in kernel_params:
+        raise ValueError("Kernel parameters must include 'lengthscale'.")
+    # _is_pos_float(kernel_params["sigma"], 'kernel_params["sigma"]')
 
 
 def _row_oracle_matvec(

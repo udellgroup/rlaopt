@@ -22,48 +22,46 @@ _MATERN32_NAME = "Matern32"
 _MATERN52_NAME = "Matern52"
 
 
-def _get_D_matern(Ai_lazy, Aj_lazy):
+def _get_D_matern(Ai_lazy, Aj_lazy, kernel_params):
     """Compute distance matrix for Matern kernels."""
-    D = ((Ai_lazy - Aj_lazy) ** 2).sum(dim=2).sqrt()
+    D = (((Ai_lazy - Aj_lazy) / kernel_params["lengthscale"]) ** 2).sum(dim=2).sqrt()
     return D
 
 
 def _kernel_computation_rbf(Ai_lazy, Aj_lazy, kernel_params):
     """Compute RBF kernel matrix."""
-    D = ((Ai_lazy - Aj_lazy) ** 2).sum(dim=2)
-    K_lazy = (-D / (2 * kernel_params["sigma"] ** 2)).exp()
+    D = (((Ai_lazy - Aj_lazy) / kernel_params["lengthscale"]) ** 2).sum(dim=2)
+    K_lazy = (-D / 2).exp()
     return K_lazy
 
 
 def _kernel_computation_laplace(Ai_lazy, Aj_lazy, kernel_params):
     """Compute Laplace kernel matrix."""
-    D = (Ai_lazy - Aj_lazy).abs().sum(dim=2)
-    K_lazy = (-D / kernel_params["sigma"]).exp()
+    D = (((Ai_lazy - Aj_lazy) / kernel_params["lengthscale"])).abs().sum(dim=2)
+    K_lazy = (-D).exp()
     return K_lazy
 
 
 def _kernel_computation_matern12(Ai_lazy, Aj_lazy, kernel_params):
     """Compute Matern-1/2 kernel matrix."""
-    D = _get_D_matern(Ai_lazy, Aj_lazy)
-    K_lazy = (-D / kernel_params["sigma"]).exp()
+    D = _get_D_matern(Ai_lazy, Aj_lazy, kernel_params)
+    K_lazy = (-D).exp()
     return K_lazy
 
 
 def _kernel_computation_matern32(Ai_lazy, Aj_lazy, kernel_params):
     """Compute Matern-3/2 kernel matrix."""
-    D = _get_D_matern(Ai_lazy, Aj_lazy)
-    D_adj = (3**0.5) * D / kernel_params["sigma"]
+    D = _get_D_matern(Ai_lazy, Aj_lazy, kernel_params)
+    D_adj = (3**0.5) * D
     K_lazy = (1 + D_adj) * (-D_adj).exp()
     return K_lazy
 
 
 def _kernel_computation_matern52(Ai_lazy, Aj_lazy, kernel_params):
     """Compute Matern-5/2 kernel matrix."""
-    D = _get_D_matern(Ai_lazy, Aj_lazy)
-    D_adj = (5**0.5) * D / kernel_params["sigma"]
-    K_lazy = (1 + D_adj + 5 * D**2 / (3 * kernel_params["sigma"] ** 2)) * (
-        -D_adj
-    ).exp()
+    D = _get_D_matern(Ai_lazy, Aj_lazy, kernel_params)
+    D_adj = (5**0.5) * D
+    K_lazy = (1 + D_adj + (D_adj**2) / 3) * (-D_adj).exp()
     return K_lazy
 
 
