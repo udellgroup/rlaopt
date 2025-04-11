@@ -30,7 +30,7 @@ def main():
     # get linear operator for kernel matrix
     lin_op = DistributedRBFLinOp(
         A=A,
-        kernel_params={"sigma": sigma},
+        kernel_params={"lengthscale": sigma},
         devices=set([torch.device(f"cuda:{i}") for i in range(n_chunks)]),
     )
 
