@@ -35,10 +35,11 @@ class _KernelLinOp(SymmetricLinOp):
         self._kernel_computation = _kernel_computation_fn
         self._K_lazy = self._get_kernel()
         super().__init__(
-            device=A.device,
-            shape=torch.Size((A.shape[0], A.shape[0])),
+            device=self._A.device,
+            shape=torch.Size((self._A.shape[0], self._A.shape[0])),
             matvec=lambda x: self._K_lazy @ x,
             matmat=lambda x: self._K_lazy @ x,
+            dtype=self._A.dtype,
         )
 
     @property
@@ -85,6 +86,7 @@ class _KernelLinOp(SymmetricLinOp):
             shape=torch.Size(K.shape),
             matvec=lambda x: K @ x,
             matmat=lambda x: K @ x,
+            dtype=self.dtype,
         )
 
     def row_oracle(self, blk: torch.Tensor):
@@ -121,6 +123,7 @@ class _CacheableKernelLinOp(TwoSidedLinOp):
             rmatvec=self._rmatvec,
             matmat=self._matvec,
             rmatmat=self._rmatvec,
+            dtype=self._A.dtype,
         )
 
     @property
@@ -399,6 +402,7 @@ class _DistributedKernelLinOp(DistributedSymmetricLinOp):
             shape=torch.Size((blk.shape[0], blk.shape[0])),
             matvec=blk_matvec,
             matmat=blk_matvec,
+            dtype=self.A_mat.dtype,
         )
 
     def shutdown(self):

@@ -6,13 +6,13 @@ from rlaopt.preconditioners import NystromConfig
 from rlaopt.solvers import SAPConfig, SAPAccelConfig
 
 
-def callback_fn(w, linsys):
-    res = torch.linalg.norm(linsys.b - (linsys.A @ w + linsys.reg * w))
+def callback_fn(W, linsys):
+    res = torch.linalg.norm(linsys.B - (linsys.A @ W + linsys.reg * W), dim=0, ord=2)
     return {"res": res.item()}
 
 
 def main():
-    torch.set_default_dtype(torch.float32)
+    torch.set_default_dtype(torch.float64)
     torch.manual_seed(0)
 
     loading_device = torch.device("cpu")
@@ -37,12 +37,12 @@ def main():
     # setup linear system and solver
     system = LinSys(
         A=lin_op,
-        b=b.to(compute_device),
+        B=b.to(compute_device),
         reg=reg,
         A_row_oracle=lin_op.row_oracle,
         A_blk_oracle=lin_op.blk_oracle,
     )
-    nystrom_config = NystromConfig(rank=100, rho=reg)
+    nystrom_config = NystromConfig(rank=1000, rho=reg)
     accel_config = SAPAccelConfig(mu=reg, nu=100.0)
     solver_config = SAPConfig(
         precond_config=nystrom_config,
@@ -57,9 +57,9 @@ def main():
     # solve the system
     system.solve(
         solver_config=solver_config,
-        w_init=torch.zeros(n, device=compute_device),
+        W_init=torch.zeros(n, 1, device=compute_device),
         callback_fn=callback_fn,
-        callback_freq=10,
+        callback_freq=100,
         log_in_wandb=True,
         wandb_init_kwargs={"project": "test_distributed_krr_linsys_askotch_solve"},
     )
