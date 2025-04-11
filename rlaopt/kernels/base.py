@@ -254,6 +254,7 @@ class _DistributedKernelLinOp(DistributedSymmetricLinOp):
         self._kernel_params = kernel_params
         self.devices = list(devices)
         self.compute_device = compute_device or self.devices[0]
+        self._kernel_params_devices = self._get_kernel_params_devices()
 
         # Create row partitioning
         self.A_row_chunks = torch.chunk(
@@ -309,6 +310,22 @@ class _DistributedKernelLinOp(DistributedSymmetricLinOp):
             if compute_device not in devices:
                 raise ValueError("compute_device must be in the set of devices.")
 
+    def _get_kernel_params_devices(self):
+        """Move kernel parameters to the devices.
+
+        Returns:
+            Dictionary of kernel parameters moved to the devices
+        """
+        kernel_params_devices = {}
+        for device in self.devices:
+            kernel_params_devices[device] = self._kernel_params.copy()
+            for key, value in self._kernel_params.items():
+                if isinstance(value, torch.Tensor):
+                    kernel_params_devices[device][key] = value.to(device)
+                else:
+                    kernel_params_devices[device][key] = value
+        return kernel_params_devices
+
     def _create_kernel_operators(self):
         """Create the kernel operators for each chunk.
 
@@ -320,7 +337,7 @@ class _DistributedKernelLinOp(DistributedSymmetricLinOp):
             ops.append(
                 _CacheableKernelLinOp(
                     A=self.A_mat,
-                    kernel_params=self.kernel_params,
+                    kernel_params=self._kernel_params_devices[device],
                     chunk_idx=chunk_idx,
                     device=device,
                     _kernel_computation_fn=self._kernel_computation,
@@ -340,7 +357,7 @@ class _DistributedKernelLinOp(DistributedSymmetricLinOp):
                 A_mat=self.A_mat,
                 row_idx=blk,
                 A_chunk=A_chunk,
-                kernel_params=self.kernel_params,
+                kernel_params=self._kernel_params_devices[device],
                 kernel_computation=self._kernel_computation,
             )
 
