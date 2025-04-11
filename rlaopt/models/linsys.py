@@ -12,7 +12,7 @@ __all__ = ["LinSys"]
 
 
 class LinSys(Model):
-    """Model for solving positive-definite linear systems (A + reg * I)w = b."""
+    """Model for solving positive-definite linear systems (A + reg * I)w = B."""
 
     def __init__(
         self,
@@ -26,7 +26,7 @@ class LinSys(Model):
 
         Args:
             A (Union[LinOpType, torch.Tensor]): Linear operator or matrix A.
-            b (torch.Tensor): Right-hand side b.
+            B (torch.Tensor): Right-hand side B.
             reg (Optional[float], optional): Regularization parameter. Defaults to 0.0.
             A_row_oracle (Optional[Callable], optional): Oracle for row-wise operations.
               Defaults to None.
