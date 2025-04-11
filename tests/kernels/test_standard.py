@@ -53,6 +53,22 @@ def test_matmul_matrix(test_matrix):
     )
 
 
+@pytest.fixture
+def test_blk_matmul_vector(test_blk, test_matrix):
+    """Create a test vector for block matmul."""
+    return torch.randn(
+        test_blk.shape[0], device=test_matrix.device, dtype=test_matrix.dtype
+    )
+
+
+@pytest.fixture
+def test_blk_matmul_matrix(test_blk, test_matrix):
+    """Create a test matrix for block matmul."""
+    return torch.randn(
+        test_blk.shape[0], 2, device=test_matrix.device, dtype=test_matrix.dtype
+    )
+
+
 # Dictionary of tolerance values by precision
 TOLERANCES = {
     torch.float32: {"rtol": 1e-4, "atol": 1e-4},
@@ -91,21 +107,84 @@ class TestRBFLinOp:
         assert kernel.A.shape == test_matrix.shape
         assert kernel.kernel_params == lengthscale_param
 
-    def test_row_and_block_oracle(self, test_matrix, lengthscale_param, test_blk):
+    def test_row_and_block_oracle(
+        self,
+        test_matrix,
+        lengthscale_param,
+        test_matmul_vector,
+        test_matmul_matrix,
+        test_blk,
+        test_blk_matmul_vector,
+        test_blk_matmul_matrix,
+        tol,
+    ):
         """Test row and block oracles of RBFLinOp with different lengthscale types."""
+        lengthscale = lengthscale_param["lengthscale"]
+
         kernel = RBFLinOp(test_matrix, kernel_params=lengthscale_param)
 
+        # Test row oracle
+        K_row_looped = torch.zeros(
+            (test_blk.shape[0], test_matrix.shape[0]),
+            device=kernel.device,
+            dtype=kernel.dtype,
+        )
+        for i in range(K_row_looped.shape[0]):
+            for j in range(K_row_looped.shape[1]):
+                K_row_looped[i, j] = torch.exp(
+                    -1
+                    / 2
+                    * torch.sum(
+                        ((test_matrix[test_blk[i]] - test_matrix[j]) / lengthscale) ** 2
+                    )
+                )
         row_lin_op = kernel.row_oracle(test_blk)
+
         assert isinstance(row_lin_op, LinOp)
         assert row_lin_op.shape == (test_blk.shape[0], test_matrix.shape[0])
         assert row_lin_op.device == kernel.device
         assert row_lin_op.dtype == kernel.dtype
+        assert torch.allclose(
+            row_lin_op @ test_matmul_vector, K_row_looped @ test_matmul_vector, **tol
+        )
+        assert torch.allclose(
+            row_lin_op @ test_matmul_matrix, K_row_looped @ test_matmul_matrix, **tol
+        )
 
+        # Test block oracle
+        K_blk_looped = torch.zeros(
+            (test_blk.shape[0], test_blk.shape[0]),
+            device=kernel.device,
+            dtype=kernel.dtype,
+        )
+        for i in range(K_blk_looped.shape[0]):
+            for j in range(K_blk_looped.shape[1]):
+                K_blk_looped[i, j] = torch.exp(
+                    -1
+                    / 2
+                    * torch.sum(
+                        (
+                            (test_matrix[test_blk[i]] - test_matrix[test_blk[j]])
+                            / lengthscale
+                        )
+                        ** 2
+                    )
+                )
         block_lin_op = kernel.blk_oracle(test_blk)
         assert isinstance(block_lin_op, SymmetricLinOp)
         assert block_lin_op.shape == (test_blk.shape[0], test_blk.shape[0])
         assert block_lin_op.device == kernel.device
         assert block_lin_op.dtype == kernel.dtype
+        assert torch.allclose(
+            block_lin_op @ test_blk_matmul_vector,
+            K_blk_looped @ test_blk_matmul_vector,
+            **tol
+        )
+        assert torch.allclose(
+            block_lin_op @ test_blk_matmul_matrix,
+            K_blk_looped @ test_blk_matmul_matrix,
+            **tol
+        )
 
     def test_matmul(
         self,
@@ -116,23 +195,28 @@ class TestRBFLinOp:
         tol,
     ):
         """Test matmul of RBFLinOp with different lengthscale types."""
-        lengthscale = lengthscale_param["lengthscale"]
+        kernel = RBFLinOp(test_matrix, kernel_params=lengthscale_param)
 
         # Form the kernel matrix manually
         K_looped = torch.zeros(
             (test_matrix.shape[0], test_matrix.shape[0]),
-            device=test_matrix.device,
-            dtype=test_matrix.dtype,
+            device=kernel.device,
+            dtype=kernel.dtype,
         )
         for i in range(K_looped.shape[0]):
             for j in range(K_looped.shape[1]):
                 K_looped[i, j] = torch.exp(
                     -1
                     / 2
-                    * torch.sum(((test_matrix[i] - test_matrix[j]) / lengthscale) ** 2)
+                    * torch.sum(
+                        (
+                            (test_matrix[i] - test_matrix[j])
+                            / lengthscale_param["lengthscale"]
+                        )
+                        ** 2
+                    )
                 )
 
-        kernel = RBFLinOp(test_matrix, kernel_params=lengthscale_param)
         assert torch.allclose(
             kernel @ test_matmul_vector, K_looped @ test_matmul_vector, **tol
         )
