@@ -21,6 +21,9 @@ _MATERN12_NAME = "Matern12"
 _MATERN32_NAME = "Matern32"
 _MATERN52_NAME = "Matern52"
 
+_SQRT3 = 3**0.5
+_SQRT5 = 5**0.5
+
 
 def _get_scaled_diff(Ai_lazy, Aj_lazy, kernel_params):
     """Compute scaled difference for kernels."""
@@ -56,15 +59,13 @@ def _kernel_computation_matern12(Ai_lazy, Aj_lazy, kernel_params):
 def _kernel_computation_matern32(Ai_lazy, Aj_lazy, kernel_params):
     """Compute Matern-3/2 kernel."""
     D = _get_scaled_diff_matern(Ai_lazy, Aj_lazy, kernel_params)
-    D_adj = (3**0.5) * D
-    return (1 + D_adj) * (-D_adj).exp()
+    return (1 + _SQRT3 * D) * (-_SQRT3 * D).exp()
 
 
 def _kernel_computation_matern52(Ai_lazy, Aj_lazy, kernel_params):
     """Compute Matern-5/2 kernel."""
     D = _get_scaled_diff_matern(Ai_lazy, Aj_lazy, kernel_params)
-    D_adj = (5**0.5) * D
-    return (1 + D_adj + (D_adj**2) / 3) * (-D_adj).exp()
+    return (1 + _SQRT5 * D + 5 / 3 * D**2) * (-_SQRT5 * D).exp()
 
 
 RBFLinOp, DistributedRBFLinOp = _create_kernel_classes(

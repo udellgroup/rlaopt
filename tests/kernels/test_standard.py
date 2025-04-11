@@ -2,7 +2,13 @@ import pytest
 import torch
 
 from rlaopt.linops import LinOp, SymmetricLinOp
-from rlaopt.kernels import RBFLinOp, LaplaceLinOp
+from rlaopt.kernels import (
+    RBFLinOp,
+    LaplaceLinOp,
+    Matern12LinOp,
+    Matern32LinOp,
+    Matern52LinOp,
+)
 
 
 def get_available_devices():
@@ -135,6 +141,31 @@ def laplace_kernel(x, y, lengthscale):
     return torch.exp(-torch.sum(torch.abs(x - y) / lengthscale))
 
 
+def _distance_matrix_matern(x, y, lengthscale):
+    """Compute scaled distance matrix for Matern kernels."""
+    return torch.sum(((x - y) / lengthscale) ** 2) ** 0.5
+
+
+def matern12_kernel(x, y, lengthscale):
+    """Compute Matern-1/2 kernel between two vectors."""
+    d = _distance_matrix_matern(x, y, lengthscale)
+    return torch.exp(-d)
+
+
+def matern32_kernel(x, y, lengthscale):
+    """Compute Matern-3/2 kernel between two vectors."""
+    d = _distance_matrix_matern(x, y, lengthscale)
+    sqrt3 = 3**0.5
+    return (1 + sqrt3 * d) * torch.exp(-sqrt3 * d)
+
+
+def matern52_kernel(x, y, lengthscale):
+    """Compute Matern-5/2 kernel between two vectors."""
+    d = _distance_matrix_matern(x, y, lengthscale)
+    sqrt5 = 5**0.5
+    return (1 + sqrt5 * d + 5 / 3 * d**2) * torch.exp(-sqrt5 * d)
+
+
 # Define kernel configurations for parameterized testing
 KERNEL_CONFIGS = [
     {
@@ -146,6 +177,21 @@ KERNEL_CONFIGS = [
         "class": LaplaceLinOp,
         "name": "laplace",
         "kernel_func": laplace_kernel,
+    },
+    {
+        "class": Matern12LinOp,
+        "name": "matern12",
+        "kernel_func": matern12_kernel,
+    },
+    {
+        "class": Matern32LinOp,
+        "name": "matern32",
+        "kernel_func": matern32_kernel,
+    },
+    {
+        "class": Matern52LinOp,
+        "name": "matern52",
+        "kernel_func": matern52_kernel,
     },
 ]
 
