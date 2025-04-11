@@ -12,7 +12,7 @@ def callback_fn(W, linsys):
 
 
 def main():
-    torch.set_default_dtype(torch.float64)
+    torch.set_default_dtype(torch.float32)
     torch.manual_seed(0)
 
     loading_device = torch.device("cpu")
@@ -30,7 +30,8 @@ def main():
     # get linear operator for kernel matrix
     lin_op = DistributedRBFLinOp(
         A=A,
-        kernel_params={"lengthscale": sigma},
+        # kernel_params={"lengthscale": sigma},
+        kernel_params={"lengthscale": sigma * torch.ones(d, device=compute_device)},
         devices=set([torch.device(f"cuda:{i}") for i in range(n_chunks)]),
     )
 
