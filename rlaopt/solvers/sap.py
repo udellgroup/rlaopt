@@ -107,7 +107,7 @@ class SAP(Solver):
                 matvec=blk_precond._inverse_matmul_compose(blk_matvec),
             )
 
-        max_eig, _ = randomized_powering(S)
+        max_eig, _ = randomized_powering(S, max_iters=self.power_iters)
         return max_eig ** (-1.0)
 
     def _get_block_update(

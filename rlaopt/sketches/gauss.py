@@ -49,5 +49,4 @@ class Gauss(Sketch):
 
         if self.mode == _SketchSide.RIGHT:
             Omega_mat = Omega_mat.T
-
-        return Omega_mat
+        return Omega_mat.contiguous()  # contiguous is to avoid KeOps contiguity warning
