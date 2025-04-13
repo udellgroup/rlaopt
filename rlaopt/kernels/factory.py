@@ -1,4 +1,4 @@
-from typing import Dict, Callable, Set, Optional, Tuple
+from typing import Dict, Callable, Set, Tuple
 import torch
 
 from .base import _KernelLinOp, _DistributedKernelLinOp
@@ -33,14 +33,14 @@ def _create_kernel_classes(
         A: torch.Tensor,
         kernel_params: Dict,
         devices: Set[torch.device],
-        compute_device: Optional[torch.device] = None,
+        # compute_device: Optional[torch.device] = None,
     ):
         _DistributedKernelLinOp.__init__(
             self,
             A=A,
             kernel_params=kernel_params,
             devices=devices,
-            compute_device=compute_device,
+            # compute_device=compute_device,
             _check_kernel_params_fn=_check_kernel_params,
             _kernel_computation_fn=kernel_computation_fn,
             _row_oracle_matvec_fn=_row_oracle_matvec,

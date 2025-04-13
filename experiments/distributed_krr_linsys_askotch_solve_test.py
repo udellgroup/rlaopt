@@ -12,13 +12,15 @@ def main():
     torch.manual_seed(0)
 
     # experiment parameters
-    n = 1000000
-    d = 300
+    n = 10000000
+    d = 50
     k = 10
     sigma = 1.0
-    reg = 1e-8 * n
-    # devices = [torch.device("cuda:2")]
-    devices = [torch.device("cuda:3"), torch.device("cuda:4")]
+    reg = 1e-2
+    # devices = [torch.device("cuda:0")]
+    devices = [torch.device("cuda:2"), torch.device("cuda:3"), torch.device("cuda:4")]
+    # devices = [torch.device("cuda:0"), torch.device("cuda:2"), torch.device("cuda:3"),
+    #  torch.device("cuda:4")]
 
     # generate synthetic data
     A = torch.randn(n, d, device=devices[0]) / (d**0.5)
