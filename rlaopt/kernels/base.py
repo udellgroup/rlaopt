@@ -215,230 +215,43 @@ def _get_cached_lazy_tensor(A: torch.Tensor) -> LazyTensor:
     return _LAZY_TENSOR_CACHE[cache_key]
 
 
-# class _DistributedKernelLinOp(DistributedSymmetricLinOp):
-#     """Abstract base class for distributed kernel linear operators."""
+def _block_chunk_matvec(
+    x: torch.Tensor,
+    device: torch.device,
+    A_mat: torch.Tensor,
+    blk_chunk: torch.Tensor,
+    blk: torch.Tensor,
+    kernel_params: Dict[str, Any],
+    kernel_computation: Callable,
+) -> torch.Tensor:
+    """Compute the matrix-vector product for a chunk of the block kernel matrix.
 
-#     def __init__(
-#         self,
-#         A: torch.Tensor,
-#         kernel_params: Dict[str, Any],
-#         devices: Set[torch.device],
-#         compute_device: Optional[torch.device],
-#         _check_kernel_params_fn: Callable,
-#         _kernel_computation_fn: Callable,
-#         _row_oracle_matvec_fn: Callable,
-#         _cacheable_kernel_name: str,
-#     ):
-#         """Initialize the distributed kernel linear operator.
+    Args:
+        x: Input vector
+        device: Device to perform computation on
+        A_mat: The full data matrix
+        blk_chunk: Indices for this chunk of the block
+        blk: All indices for the full block
+        kernel_params: Kernel parameters for this device
+        kernel_computation: Function to compute the kernel
 
-#         Args:
-#             A: Input data tensor
-#             kernel_params: Dictionary of kernel parameters
-#             devices: Set of devices to distribute computation across
-#             compute_device: Device to use for block computation
-#             (default: first device in devices)
-#         """
-#         # Clean the global caches at initialization
-#         global _KERNEL_CACHE, _LAZY_TENSOR_CACHE
-#         _KERNEL_CACHE.clear()
-#         _LAZY_TENSOR_CACHE.clear()
-#         print(f"Initialized with clean caches. PID: {os.getpid()}")
+    Returns:
+        Result of matrix-vector product for this chunk
+    """
+    # Move input to the device
+    x = x.to(device)
 
-#         # Save parameters
-#         self._check_kernel_params = _check_kernel_params_fn
-#         self._check_inputs(A, kernel_params, devices, compute_device)
-#         self._kernel_computation = _kernel_computation_fn
-#         self._row_oracle_matvec = _row_oracle_matvec_fn
-#         self._cacheable_kernel_name = _cacheable_kernel_name
-#         self._A_mat = A  # Keep original tensor for oracles
-#         self._kernel_params = kernel_params
-#         self.devices = list(devices)
-#         self.compute_device = compute_device or self.devices[0]
-#         self._kernel_params_devices = self._get_kernel_params_devices()
+    # Get the data for this chunk
+    A_blk_chunk = A_mat[blk_chunk].to(device)
+    A_blk_full = A_mat[blk].to(device)
 
-#         # Create row partitioning
-#         self.A_row_chunks = torch.chunk(
-#             torch.arange(self._A_mat.shape[0]), len(self.devices), dim=0
-#         )
+    # Create LazyTensors
+    Abi_lazy = LazyTensor(A_blk_chunk[:, None, :])
+    Abj_lazy = LazyTensor(A_blk_full[None, :, :])
 
-#         # Create chunks of data for each device
-#         self.A_chunks = []
-#         for device, chunk_idx in zip(self.devices, self.A_row_chunks):
-#             # We keep chunks on each device for row_oracle
-#             self.A_chunks.append(self._A_mat[chunk_idx].to(device))
-
-#         # Create cacheable kernel operators for each chunk
-#         kernel_ops = self._create_kernel_operators()
-
-#         # Initialize the distributed operator
-#         super().__init__(
-#             shape=torch.Size((self._A_mat.shape[0], self._A_mat.shape[0])),
-#             A=kernel_ops,
-#             distribution_mode="row",
-#         )
-
-#         # Store references for cleanup
-#         self.kernel_ops = kernel_ops
-
-#     @property
-#     def A_mat(self) -> torch.Tensor:
-#         return self._A_mat
-
-#     @property
-#     def kernel_params(self) -> Dict[str, Any]:
-#         return self._kernel_params
-
-#     def _check_inputs(
-#         self,
-#         A: Any,
-#         kernel_params: Any,
-#         devices: Any,
-#         compute_device: Any,
-#     ):
-#         _is_torch_tensor(A, "A")
-#         if A.ndim != 2:
-#             raise ValueError(f"A must be a 2D tensor, got {A.ndim}D tensor.")
-#         _is_dict(kernel_params, "kernel_params")
-#         self._check_kernel_params(kernel_params)
-#         _is_set(devices, "devices")
-#         if len(devices) == 0:
-#             raise ValueError("devices must be a non-empty set.")
-#         if not all(isinstance(d, torch.device) for d in devices):
-#             raise ValueError("All elements in devices "
-#                               "must be torch.device instances.")
-#         if compute_device is not None:
-#             _is_torch_device(compute_device, "compute_device")
-#             if compute_device not in devices:
-#                 raise ValueError("compute_device must be in the set of devices.")
-
-#     def _get_kernel_params_devices(self):
-#         """Move kernel parameters to the devices.
-
-#         Returns:
-#             Dictionary of kernel parameters moved to the devices
-#         """
-#         kernel_params_devices = {}
-#         for device in self.devices:
-#             kernel_params_devices[device] = self._kernel_params.copy()
-#             for key, value in self._kernel_params.items():
-#                 if isinstance(value, torch.Tensor):
-#                     kernel_params_devices[device][key] = value.to(device)
-#                 else:
-#                     kernel_params_devices[device][key] = value
-#         return kernel_params_devices
-
-#     def _create_kernel_operators(self):
-#         """Create the kernel operators for each chunk.
-
-#         Returns:
-#             List of kernel operators, one for each device/chunk
-#         """
-#         ops = []
-#         for device, chunk_idx in zip(self.devices, self.A_row_chunks):
-#             ops.append(
-#                 _CacheableKernelLinOp(
-#                     A=self.A_mat,
-#                     kernel_params=self._kernel_params_devices[device],
-#                     chunk_idx=chunk_idx,
-#                     device=device,
-#                     _kernel_computation_fn=self._kernel_computation,
-#                     _kernel_name=self._cacheable_kernel_name,
-#                 )
-#             )
-#         return ops
-
-#     def row_oracle(self, blk: torch.Tensor) -> DistributedLinOp:
-#         """Generic implementation of row oracle for all kernel types."""
-#         # Create operators for each device
-#         row_ops = []
-#         for device, A_chunk in zip(self.devices, self.A_chunks):
-#             # Create matvec function with kernel-specific implementation
-#             matvec_fn = partial(
-#                 self._row_oracle_matvec,
-#                 A_mat=self.A_mat,
-#                 row_idx=blk,
-#                 A_chunk=A_chunk,
-#                 kernel_params=self._kernel_params_devices[device],
-#                 kernel_computation=self._kernel_computation,
-#             )
-
-#             # Create a LinOp with the matvec function
-#             row_ops.append(
-#                 LinOp(
-#                     device=device,
-#                     shape=torch.Size((blk.shape[0], A_chunk.shape[0])),
-#                     matvec=matvec_fn,
-#                     matmat=matvec_fn,
-#                 )
-#             )
-
-#         # Create a distributed operator that reuses our workers
-#         return _DistributedLinOp(
-#             shape=torch.Size((blk.shape[0], self.A_mat.shape[0])),
-#             A=row_ops,
-#             distribution_mode="column",
-#             manager=self._manager,
-#             result_queue=self._result_queue,
-#             task_queues=self._task_queues,
-#             workers=self._workers,
-#             is_new=False,
-#         )
-
-#     def _get_blk_lazy_tensors(self, blk: torch.Tensor)
-# -> tuple[LazyTensor, LazyTensor]:
-#         """Get LazyTensor representations for the block.
-
-#         Args:
-#             blk: Indices defining the block
-#         Returns:
-#             Tuple of LazyTensors for the block
-#         """
-#         A_blk = self.A_mat[blk].to(self.compute_device)
-#         Abi_lazy = LazyTensor(A_blk[:, None, :])
-#         Abj_lazy = LazyTensor(A_blk[None, :, :])
-#         return Abi_lazy, Abj_lazy
-
-#     def _blk_oracle_matvec(self, x: torch.Tensor, blk: torch.Tensor) -> torch.Tensor:
-#         """Compute kernel matrix-vector product for block oracle."""
-#         Abi_lazy, Abj_lazy = self._get_blk_lazy_tensors(blk)
-#         K_lazy = self._kernel_computation(Abi_lazy, Abj_lazy, self.kernel_params)
-#         return K_lazy @ x
-
-#     def blk_oracle(self, blk: torch.Tensor) -> SymmetricLinOp:
-#         """Get a symmetric operator for a block.
-
-#         Args:
-#             blk: Indices defining the block
-
-#         Returns:
-#             A symmetric linear operator for the specified block
-#         """
-#         # Get the lazy tensors for the block
-#         blk_matvec = partial(self._blk_oracle_matvec, blk=blk)
-
-#         return SymmetricLinOp(
-#             device=self.compute_device,
-#             shape=torch.Size((blk.shape[0], blk.shape[0])),
-#             matvec=blk_matvec,
-#             matmat=blk_matvec,
-#             dtype=self.A_mat.dtype,
-#         )
-
-#     def shutdown(self):
-#         """Extend shutdown to clear caches."""
-#         # Clear kernel caches to free memory
-#         for op in self.kernel_ops:
-#             if hasattr(op, "_clear_cache"):
-#                 op._clear_cache()
-
-#         # Clear the global caches
-#         global _KERNEL_CACHE, _LAZY_TENSOR_CACHE
-#         _KERNEL_CACHE.clear()
-#         _LAZY_TENSOR_CACHE.clear()
-#         print(f"Cleared global caches on shutdown. PID: {os.getpid()}")
-
-#         # Call parent shutdown
-#         super().shutdown()
+    # Compute kernel and matrix-vector product
+    K_lazy = kernel_computation(Abi_lazy, Abj_lazy, kernel_params)
+    return K_lazy @ x
 
 
 class _DistributedKernelLinOp(DistributedSymmetricLinOp):
@@ -620,32 +433,24 @@ class _DistributedKernelLinOp(DistributedSymmetricLinOp):
             # Get the actual indices for this chunk
             blk_chunk = blk[blk_chunk_idx]
 
-            # Create a matvec function for this chunk
-            def chunk_matvec(x, _device=device, _blk_chunk=blk_chunk, _blk=blk):
-                # Move input to the device
-                x = x.to(_device)
-
-                # Get the data for this chunk
-                A_blk_chunk = self.A_mat[_blk_chunk].to(_device)
-                A_blk_full = self.A_mat[_blk].to(_device)
-
-                # Create LazyTensors
-                Abi_lazy = LazyTensor(A_blk_chunk[:, None, :])
-                Abj_lazy = LazyTensor(A_blk_full[None, :, :])
-
-                # Compute kernel and matrix-vector product
-                K_lazy = self._kernel_computation(
-                    Abi_lazy, Abj_lazy, self._kernel_params_devices[_device]
-                )
-                return K_lazy @ x
+            # Create a matvec function for this chunk using partial
+            matvec_fn = partial(
+                _block_chunk_matvec,
+                device=device,
+                A_mat=self.A_mat,
+                blk_chunk=blk_chunk,
+                blk=blk,
+                kernel_params=self._kernel_params_devices[device],
+                kernel_computation=self._kernel_computation,
+            )
 
             # Create a linear operator for this chunk
             block_ops.append(
                 LinOp(
                     device=device,
                     shape=torch.Size((blk_chunk_idx.shape[0], blk.shape[0])),
-                    matvec=chunk_matvec,
-                    matmat=chunk_matvec,
+                    matvec=matvec_fn,
+                    matmat=matvec_fn,
                     dtype=self.A_mat.dtype,
                 )
             )
