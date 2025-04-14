@@ -2,7 +2,7 @@ from typing import Dict, Callable, Set, Tuple
 import torch
 
 from .base import _KernelLinOp, _DistributedKernelLinOp
-from .utils import _check_kernel_params, _row_oracle_matvec
+from .utils import _check_kernel_params, _row_oracle_matvec, _block_chunk_matvec
 
 
 def _create_kernel_classes(
@@ -42,6 +42,7 @@ def _create_kernel_classes(
             _check_kernel_params_fn=_check_kernel_params,
             _kernel_computation_fn=kernel_computation_fn,
             _row_oracle_matvec_fn=_row_oracle_matvec,
+            _block_chunk_matvec_fn=_block_chunk_matvec,
             _cacheable_kernel_name=kernel_name,
         )
 

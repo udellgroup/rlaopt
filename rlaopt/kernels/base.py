@@ -201,57 +201,10 @@ def _get_cached_lazy_tensor(A: torch.Tensor) -> LazyTensor:
     # A.shape and A.device are also added for safety
     cache_key = f"{pid}_lazy_{A.data_ptr()}_{A.shape}_{A.device}"
 
-    # print(f"[PID {pid}] Cache key: {cache_key}")
-
-    # if cache_key not in _LAZY_TENSOR_CACHE:
-    #     _LAZY_TENSOR_CACHE[cache_key] = LazyTensor(A[None, :, :])
-    #     print(f"[PID {pid}] Created new LazyTensor for device {A.device}")
-    # else:
-    #     print(f"[PID {pid}] Using cached LazyTensor for device {A.device}")
-
     if cache_key not in _LAZY_TENSOR_CACHE:
         _LAZY_TENSOR_CACHE[cache_key] = LazyTensor(A[None, :, :])
 
     return _LAZY_TENSOR_CACHE[cache_key]
-
-
-def _block_chunk_matvec(
-    x: torch.Tensor,
-    device: torch.device,
-    A_mat: torch.Tensor,
-    blk_chunk: torch.Tensor,
-    blk: torch.Tensor,
-    kernel_params: Dict[str, Any],
-    kernel_computation: Callable,
-) -> torch.Tensor:
-    """Compute the matrix-vector product for a chunk of the block kernel matrix.
-
-    Args:
-        x: Input vector
-        device: Device to perform computation on
-        A_mat: The full data matrix
-        blk_chunk: Indices for this chunk of the block
-        blk: All indices for the full block
-        kernel_params: Kernel parameters for this device
-        kernel_computation: Function to compute the kernel
-
-    Returns:
-        Result of matrix-vector product for this chunk
-    """
-    # Move input to the device
-    x = x.to(device)
-
-    # Get the data for this chunk
-    A_blk_chunk = A_mat[blk_chunk].to(device)
-    A_blk_full = A_mat[blk].to(device)
-
-    # Create LazyTensors
-    Abi_lazy = LazyTensor(A_blk_chunk[:, None, :])
-    Abj_lazy = LazyTensor(A_blk_full[None, :, :])
-
-    # Compute kernel and matrix-vector product
-    K_lazy = kernel_computation(Abi_lazy, Abj_lazy, kernel_params)
-    return K_lazy @ x
 
 
 class _DistributedKernelLinOp(DistributedSymmetricLinOp):
@@ -265,6 +218,7 @@ class _DistributedKernelLinOp(DistributedSymmetricLinOp):
         _check_kernel_params_fn: Callable,
         _kernel_computation_fn: Callable,
         _row_oracle_matvec_fn: Callable,
+        _block_chunk_matvec_fn: Callable,
         _cacheable_kernel_name: str,
     ):
         """Initialize the distributed kernel linear operator.
@@ -285,6 +239,7 @@ class _DistributedKernelLinOp(DistributedSymmetricLinOp):
         self._check_inputs(A, kernel_params, devices)
         self._kernel_computation = _kernel_computation_fn
         self._row_oracle_matvec = _row_oracle_matvec_fn
+        self._block_chunk_matvec = _block_chunk_matvec_fn
         self._cacheable_kernel_name = _cacheable_kernel_name
         self._A_mat = A  # Keep original tensor for oracles
         self._kernel_params = kernel_params
@@ -435,7 +390,7 @@ class _DistributedKernelLinOp(DistributedSymmetricLinOp):
 
             # Create a matvec function for this chunk using partial
             matvec_fn = partial(
-                _block_chunk_matvec,
+                self._block_chunk_matvec,
                 device=device,
                 A_mat=self.A_mat,
                 blk_chunk=blk_chunk,
