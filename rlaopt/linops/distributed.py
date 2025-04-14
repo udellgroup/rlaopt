@@ -30,13 +30,8 @@ class _DistributedLinOp(_BaseLinOp):
         is_new=True,
         distribution_mode="row",
     ):
-        super().__init__(shape=shape)
+        # Initialize the superclass
         self._is_new = is_new
-        self._distribution_mode = _DistributionMode._from_str(
-            distribution_mode, "distribution_mode"
-        )
-
-        # Validate input
         if self._is_new:
             _is_list(A, "A")
             if not all(isinstance(A_i, LinOp) for A_i in A):
@@ -47,8 +42,14 @@ class _DistributedLinOp(_BaseLinOp):
                     "All linear operators must have the same dtype. "
                     f"Received {', '.join(str(A_i.dtype) for A_i in A)}."
                 )
+        super().__init__(shape=shape, dtype=A[0].dtype)
 
         self._A = A
+
+        # Set up the distribution processes
+        self._distribution_mode = _DistributionMode._from_str(
+            distribution_mode, "distribution_mode"
+        )
 
         if self._is_new:
             # Set the start method for multiprocessing

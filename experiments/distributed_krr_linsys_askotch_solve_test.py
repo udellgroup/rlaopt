@@ -6,63 +6,72 @@ from rlaopt.preconditioners import NystromConfig
 from rlaopt.solvers import SAPConfig, SAPAccelConfig
 
 
-def callback_fn(W, linsys):
-    res = torch.linalg.norm(linsys.B - (linsys.A @ W + linsys.reg * W), dim=0, ord=2)
-    return {"res": res.item()}
-
-
 def main():
-    torch.set_default_dtype(torch.float32)
+    dtype = torch.float32
+    torch.set_default_dtype(dtype)
     torch.manual_seed(0)
 
-    loading_device = torch.device("cpu")
-    compute_device = torch.device("cuda:0")
-    n = 1000000
-    d = 100
+    # experiment parameters
+    n = 10000000
+    d = 50
+    k = 10
     sigma = 1.0
-    reg = 1e-8 * n
-    n_chunks = 5
+    reg = 1e-2
+    # devices = [torch.device("cuda:0")]
+    devices = [torch.device("cuda:2"), torch.device("cuda:3"), torch.device("cuda:4")]
+    # devices = [torch.device("cuda:0"), torch.device("cuda:2"), torch.device("cuda:3"),
+    #  torch.device("cuda:4")]
 
     # generate synthetic data
-    A = torch.randn(n, d, device=loading_device) / (n**0.5)
-    b = torch.randn(n, device=loading_device)
+    A = torch.randn(n, d, device=devices[0]) / (d**0.5)
+    b = torch.randn(n, k, device=devices[0])
 
     # get linear operator for kernel matrix
     lin_op = DistributedRBFLinOp(
         A=A,
         # kernel_params={"lengthscale": sigma},
-        kernel_params={"lengthscale": sigma * torch.ones(d, device=compute_device)},
-        devices=set([torch.device(f"cuda:{i}") for i in range(n_chunks)]),
+        kernel_params={"lengthscale": sigma * torch.ones(d, device=devices[0])},
+        devices=set(devices),
     )
 
     # setup linear system and solver
     system = LinSys(
         A=lin_op,
-        B=b.to(compute_device),
+        B=b.to(devices[0]),
         reg=reg,
         A_row_oracle=lin_op.row_oracle,
         A_blk_oracle=lin_op.blk_oracle,
     )
-    nystrom_config = NystromConfig(rank=1000, rho=reg)
+    nystrom_config = NystromConfig(rank=100, rho=reg)
     accel_config = SAPAccelConfig(mu=reg, nu=100.0)
     solver_config = SAPConfig(
         precond_config=nystrom_config,
-        max_iters=1000,
+        max_iters=300,
         atol=1e-6,
         rtol=1e-6,
         blk_sz=n // 100,
         accel_config=accel_config,
-        device=compute_device,
+        device=devices[0],
     )
 
     # solve the system
     system.solve(
         solver_config=solver_config,
-        W_init=torch.zeros(n, 1, device=compute_device),
-        callback_fn=callback_fn,
+        W_init=torch.zeros(n, k, device=devices[0]),
         callback_freq=100,
         log_in_wandb=True,
-        wandb_init_kwargs={"project": "test_distributed_krr_linsys_askotch_solve"},
+        wandb_init_kwargs={
+            "project": "test_distributed_krr_linsys_askotch_solve_v2",
+            "config": {
+                "n": n,
+                "d": d,
+                "k": k,
+                "reg": reg,
+                "sigma": sigma,
+                "devices": devices,
+                "dtype": dtype,
+            },
+        },
     )
 
 

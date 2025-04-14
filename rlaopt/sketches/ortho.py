@@ -53,4 +53,4 @@ class Ortho(Sketch):
         )[0]
         if self.mode == _SketchSide.LEFT:
             Omega_mat = Omega_mat.T
-        return Omega_mat
+        return Omega_mat.contiguous()  # contiguous is to avoid KeOps contiguity warning

@@ -211,6 +211,7 @@ class TestKernelLinOps:
         kernel = kernel_class(test_matrix, kernel_params=lengthscale_param)
         assert kernel.A.shape == test_matrix.shape
         assert kernel.kernel_params == lengthscale_param
+        assert kernel.dtype == test_matrix.dtype
 
     def test_row_and_block_oracle(
         self,
