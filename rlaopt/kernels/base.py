@@ -113,34 +113,40 @@ class _CacheableKernelLinOp(TwoSidedLinOp):
 
     def __init__(
         self,
-        A: torch.Tensor,
+        A1: torch.Tensor,
+        A2: torch.Tensor,
         kernel_params: Dict[str, Any],
         chunk_idx: torch.Tensor,
         device: torch.device,
         _kernel_computation_fn: Callable,
         _kernel_name: str,
     ):
-        self._A = A.to(device)
+        self._A1 = A1.to(device)
+        self._A2 = A2.to(device)
         self._kernel_params = kernel_params
         self._chunk_idx = chunk_idx
         self._kernel_computation = _kernel_computation_fn
         self._unique_id = (
-            f"{_kernel_name}_{id(self)}_{len(A)}_{kernel_params}_{A.device}"
+            f"{_kernel_name}_{id(self)}_{len(self._A1)}_{len(self._A2)}_"
+            f"{kernel_params}_{self._A1.device}"
         )
-
         super().__init__(
             device=device,
-            shape=torch.Size((self._chunk_idx.shape[0], self._A.shape[0])),
+            shape=torch.Size((self._chunk_idx.shape[0], self._A2.shape[0])),
             matvec=self._matvec,
             rmatvec=self._rmatvec,
             matmat=self._matvec,
             rmatmat=self._rmatvec,
-            dtype=self._A.dtype,
+            dtype=self._A1.dtype,
         )
 
     @property
-    def A(self) -> torch.Tensor:
-        return self._A
+    def A1(self) -> torch.Tensor:
+        return self._A1
+
+    @property
+    def A2(self) -> torch.Tensor:
+        return self._A2
 
     @property
     def kernel_params(self) -> Dict[str, Any]:
@@ -151,9 +157,9 @@ class _CacheableKernelLinOp(TwoSidedLinOp):
         return self._chunk_idx
 
     def _get_lazy_tensors(self):
-        Ab_lazy = LazyTensor(self.A[self.chunk_idx][:, None, :])
-        A_lazy = LazyTensor(self.A[None, :, :])
-        return Ab_lazy, A_lazy
+        A1b_lazy = LazyTensor(self.A1[self.chunk_idx][:, None, :])
+        A2_lazy = LazyTensor(self.A2[None, :, :])
+        return A1b_lazy, A2_lazy
 
     def _get_kernel(self):
         """Get the cached kernel or compute it if not present."""
@@ -167,9 +173,9 @@ class _CacheableKernelLinOp(TwoSidedLinOp):
             print(f"[PID {pid}] Computing kernel for device {self.device}...")
 
             # Compute kernel and store in the global cache
-            Ab_lazy, A_lazy = self._get_lazy_tensors()
+            A1b_lazy, A2_lazy = self._get_lazy_tensors()
             _KERNEL_CACHE[cache_key] = self._kernel_computation(
-                Ab_lazy, A_lazy, self.kernel_params
+                A1b_lazy, A2_lazy, self.kernel_params
             )
 
             print(f"[PID {pid}] Kernel cached. Cache size: {len(_KERNEL_CACHE)}")
