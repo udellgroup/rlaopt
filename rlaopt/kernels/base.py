@@ -8,7 +8,6 @@ import torch
 from rlaopt.linops import (
     LinOp,
     TwoSidedLinOp,
-    SymmetricLinOp,
     DistributedLinOp,
     DistributedSymmetricLinOp,
 )
@@ -20,68 +19,81 @@ _KERNEL_CACHE: Dict[str, LazyTensor] = {}
 _LAZY_TENSOR_CACHE: Dict[str, LazyTensor] = {}
 
 
-class _KernelLinOp(SymmetricLinOp):
+class _KernelLinOp(TwoSidedLinOp):
     def __init__(
         self,
-        A: torch.Tensor,
+        A1: torch.Tensor,
+        A2: torch.Tensor,
         kernel_params: Dict[str, Any],
         _check_kernel_params_fn: Callable,
         _kernel_computation_fn: Callable,
     ):
         self._check_kernel_params = _check_kernel_params_fn
-        self._check_inputs(A, kernel_params)
-        self._A = A
+        self._check_inputs(A1, A2, kernel_params)
+        self._A1 = A1
+        self._A2 = A2
         self._kernel_params = kernel_params
         self._kernel_computation = _kernel_computation_fn
         self._K_lazy = self._get_kernel()
         super().__init__(
-            device=self._A.device,
-            shape=torch.Size((self._A.shape[0], self._A.shape[0])),
+            device=self._A1.device,
+            shape=torch.Size((self._A1.shape[0], self._A2.shape[0])),
             matvec=lambda x: self._K_lazy @ x,
+            rmatvec=lambda x: self._K_lazy.T @ x,
             matmat=lambda x: self._K_lazy @ x,
-            dtype=self._A.dtype,
+            rmatmat=lambda x: self._K_lazy.T @ x,
+            dtype=self._A1.dtype,
         )
 
     @property
-    def A(self) -> torch.Tensor:
-        return self._A
+    def A1(self) -> torch.Tensor:
+        return self._A1
+
+    @property
+    def A2(self) -> torch.Tensor:
+        return self._A2
 
     @property
     def kernel_params(self) -> Dict[str, Any]:
         return self._kernel_params
 
-    def _check_inputs(self, A: Any, kernel_params: Any):
-        _is_torch_tensor(A, "A")
-        if A.ndim != 2:
-            raise ValueError(f"A must be a 2D tensor, got {A.ndim}D tensor.")
+    def _check_inputs(self, A1: Any, A2, kernel_params: Any):
+        _is_torch_tensor(A1, "A1")
+        _is_torch_tensor(A2, "A2")
+        if A1.ndim != 2:
+            raise ValueError(f"A1 must be a 2D tensor, got {A1.ndim}D tensor.")
+        if A2.ndim != 2:
+            raise ValueError(f"A2 must be a 2D tensor, got {A2.ndim}D tensor.")
+        if A1.device != A2.device:
+            raise ValueError("A1 and A2 must be on the same device.")
+        if A1.dtype != A2.dtype:
+            raise ValueError("A1 and A2 must have the same dtype.")
         _is_dict(kernel_params, "kernel_params")
         self._check_kernel_params(kernel_params)
 
     def _get_kernel(
         self, idx1: Optional[torch.Tensor] = None, idx2: Optional[torch.Tensor] = None
-    ):
+    ) -> LazyTensor:
         if idx1 is None:
-            Ai_lazy = LazyTensor(self.A[:, None, :])
+            A1_lazy = LazyTensor(self.A1[:, None, :])
         else:
-            Ai_lazy = LazyTensor(self.A[idx1][:, None, :])
+            A1_lazy = LazyTensor(self.A1[idx1][:, None, :])
 
         if idx2 is None:
-            Aj_lazy = LazyTensor(self.A[None, :, :])
+            A2_lazy = LazyTensor(self.A2[None, :, :])
         else:
-            Aj_lazy = LazyTensor(self.A[idx2][None, :, :])
+            A2_lazy = LazyTensor(self.A2[idx2][None, :, :])
 
-        K_lazy = self._kernel_computation(Ai_lazy, Aj_lazy, self.kernel_params)
+        K_lazy = self._kernel_computation(A1_lazy, A2_lazy, self.kernel_params)
         return K_lazy
 
     def _get_kernel_linop(
         self,
         idx1: Optional[torch.Tensor] = None,
         idx2: Optional[torch.Tensor] = None,
-        symmetric: bool = False,
-    ):
+    ) -> LinOp:
         K = self._get_kernel(idx1, idx2)
-        linop_class = SymmetricLinOp if symmetric else LinOp
-        return linop_class(
+        return LinOp(
             device=self.device,
             shape=torch.Size(K.shape),
             matvec=lambda x: K @ x,
@@ -89,11 +101,11 @@ class _KernelLinOp(SymmetricLinOp):
             dtype=self.dtype,
         )
 
-    def row_oracle(self, blk: torch.Tensor):
-        return self._get_kernel_linop(idx1=blk, symmetric=False)
+    def row_oracle(self, blk: torch.Tensor) -> LinOp:
+        return self._get_kernel_linop(idx1=blk)
 
-    def blk_oracle(self, blk: torch.Tensor):
-        return self._get_kernel_linop(idx1=blk, idx2=blk, symmetric=True)
+    def blk_oracle(self, blk: torch.Tensor) -> LinOp:
+        return self._get_kernel_linop(idx1=blk, idx2=blk)
 
 
 class _CacheableKernelLinOp(TwoSidedLinOp):
