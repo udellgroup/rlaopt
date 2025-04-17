@@ -116,7 +116,6 @@ class _CacheableKernelLinOp(TwoSidedLinOp):
         A1: torch.Tensor,
         A2: torch.Tensor,
         kernel_params: Dict[str, Any],
-        chunk_idx: torch.Tensor,
         device: torch.device,
         _kernel_computation_fn: Callable,
         _kernel_name: str,
@@ -124,7 +123,6 @@ class _CacheableKernelLinOp(TwoSidedLinOp):
         self._A1 = A1.to(device)
         self._A2 = A2.to(device)
         self._kernel_params = kernel_params
-        self._chunk_idx = chunk_idx
         self._kernel_computation = _kernel_computation_fn
         self._unique_id = (
             f"{_kernel_name}_{id(self)}_{len(self._A1)}_{len(self._A2)}_"
@@ -132,7 +130,7 @@ class _CacheableKernelLinOp(TwoSidedLinOp):
         )
         super().__init__(
             device=device,
-            shape=torch.Size((self._chunk_idx.shape[0], self._A2.shape[0])),
+            shape=torch.Size((self._A1.shape[0], self._A2.shape[0])),
             matvec=self._matvec,
             rmatvec=self._rmatvec,
             matmat=self._matvec,
@@ -152,14 +150,10 @@ class _CacheableKernelLinOp(TwoSidedLinOp):
     def kernel_params(self) -> Dict[str, Any]:
         return self._kernel_params
 
-    @property
-    def chunk_idx(self) -> torch.Tensor:
-        return self._chunk_idx
-
     def _get_lazy_tensors(self):
-        A1b_lazy = LazyTensor(self.A1[self.chunk_idx][:, None, :])
+        A1_lazy = LazyTensor(self.A1[:, None, :])
         A2_lazy = LazyTensor(self.A2[None, :, :])
-        return A1b_lazy, A2_lazy
+        return A1_lazy, A2_lazy
 
     def _get_kernel(self):
         """Get the cached kernel or compute it if not present."""
@@ -173,9 +167,9 @@ class _CacheableKernelLinOp(TwoSidedLinOp):
             print(f"[PID {pid}] Computing kernel for device {self.device}...")
 
             # Compute kernel and store in the global cache
-            A1b_lazy, A2_lazy = self._get_lazy_tensors()
+            A1_lazy, A2_lazy = self._get_lazy_tensors()
             _KERNEL_CACHE[cache_key] = self._kernel_computation(
-                A1b_lazy, A2_lazy, self.kernel_params
+                A1_lazy, A2_lazy, self.kernel_params
             )
 
             print(f"[PID {pid}] Kernel cached. Cache size: {len(_KERNEL_CACHE)}")
@@ -359,10 +353,9 @@ class _DistributedKernelLinOp(DistributedTwoSidedLinOp):
         for device, chunk_idx in zip(self.devices, self.A1_row_chunks):
             ops.append(
                 _CacheableKernelLinOp(
-                    A1=self.A1,
+                    A1=self.A1[chunk_idx],
                     A2=self.A2,
                     kernel_params=self._kernel_params_devices[device],
-                    chunk_idx=chunk_idx,
                     device=device,
                     _kernel_computation_fn=self._kernel_computation,
                     _kernel_name=self._cacheable_kernel_name,
