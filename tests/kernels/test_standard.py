@@ -1,7 +1,7 @@
 import pytest
 import torch
 
-from rlaopt.linops import LinOp, SymmetricLinOp
+from rlaopt.linops import LinOp
 from rlaopt.kernels import (
     RBFLinOp,
     LaplaceLinOp,
@@ -208,8 +208,9 @@ class TestKernelLinOps:
     def test_initialization(self, test_matrix, lengthscale_param, kernel_config):
         """Test initialization of kernel linear operators."""
         kernel_class = kernel_config["class"]
-        kernel = kernel_class(test_matrix, kernel_params=lengthscale_param)
-        assert kernel.A.shape == test_matrix.shape
+        kernel = kernel_class(test_matrix, test_matrix, kernel_params=lengthscale_param)
+        assert kernel.A1.shape == test_matrix.shape
+        assert kernel.A2.shape == test_matrix.shape
         assert kernel.kernel_params == lengthscale_param
         assert kernel.dtype == test_matrix.dtype
 
@@ -230,7 +231,7 @@ class TestKernelLinOps:
         kernel_func = kernel_config["kernel_func"]
         lengthscale = lengthscale_param["lengthscale"]
 
-        kernel = kernel_class(test_matrix, kernel_params=lengthscale_param)
+        kernel = kernel_class(test_matrix, test_matrix, kernel_params=lengthscale_param)
 
         # Test row oracle
         X_row = test_matrix[test_blk]
@@ -259,7 +260,7 @@ class TestKernelLinOps:
         )
 
         block_lin_op = kernel.blk_oracle(test_blk)
-        assert isinstance(block_lin_op, SymmetricLinOp)
+        assert isinstance(block_lin_op, LinOp)
         assert block_lin_op.shape == (test_blk.shape[0], test_blk.shape[0])
         assert block_lin_op.device == kernel.device
         assert block_lin_op.dtype == kernel.dtype
@@ -288,7 +289,7 @@ class TestKernelLinOps:
         kernel_func = kernel_config["kernel_func"]
         lengthscale = lengthscale_param["lengthscale"]
 
-        kernel = kernel_class(test_matrix, kernel_params=lengthscale_param)
+        kernel = kernel_class(test_matrix, test_matrix, kernel_params=lengthscale_param)
 
         # Compute full kernel matrix using helper function
         K_looped = compute_kernel_matrix(
