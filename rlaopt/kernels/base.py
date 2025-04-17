@@ -118,7 +118,6 @@ class _CacheableKernelLinOp(TwoSidedLinOp):
         kernel_params: Dict[str, Any],
         chunk_idx: torch.Tensor,
         device: torch.device,
-        dtype: torch.dtype,
         _kernel_computation_fn: Callable,
         _kernel_name: str,
     ):
@@ -138,7 +137,7 @@ class _CacheableKernelLinOp(TwoSidedLinOp):
             rmatvec=self._rmatvec,
             matmat=self._matvec,
             rmatmat=self._rmatvec,
-            dtype=dtype,
+            dtype=self._A1.dtype,
         )
 
     @property
@@ -244,7 +243,8 @@ class _DistributedKernelLinOp(DistributedTwoSidedLinOp):
         """Initialize the distributed kernel linear operator.
 
         Args:
-            A: Input data tensor
+            A1: Input data tensor
+            A2: Input data tensor
             kernel_params: Dictionary of kernel parameters
             devices: Set of devices to distribute computation across
         """
@@ -268,7 +268,7 @@ class _DistributedKernelLinOp(DistributedTwoSidedLinOp):
         self._kernel_params_devices = self._get_kernel_params_devices()
 
         # Create row partitioning
-        # A1_row_chunks is useful for the linop,
+        # A1_row_chunks is useful for the linop and block oracle,
         # A2_row_chunks is useful for the row oracle
         self.A1_row_chunks = torch.chunk(
             torch.arange(self._A1.shape[0]), len(self.devices), dim=0
@@ -356,7 +356,7 @@ class _DistributedKernelLinOp(DistributedTwoSidedLinOp):
             List of kernel operators, one for each device/chunk
         """
         ops = []
-        for device, chunk_idx in zip(self.devices, self.A_row_chunks):
+        for device, chunk_idx in zip(self.devices, self.A1_row_chunks):
             ops.append(
                 _CacheableKernelLinOp(
                     A1=self.A1,
@@ -364,7 +364,6 @@ class _DistributedKernelLinOp(DistributedTwoSidedLinOp):
                     kernel_params=self._kernel_params_devices[device],
                     chunk_idx=chunk_idx,
                     device=device,
-                    dtype=self.dtype,
                     _kernel_computation_fn=self._kernel_computation,
                     _kernel_name=self._cacheable_kernel_name,
                 )
