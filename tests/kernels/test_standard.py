@@ -1,7 +1,7 @@
 import pytest
 import torch
 
-from rlaopt.linops import LinOp, SymmetricLinOp
+from rlaopt.linops import LinOp
 from rlaopt.kernels import (
     RBFLinOp,
     LaplaceLinOp,
@@ -32,9 +32,12 @@ def precision(request):
 
 
 @pytest.fixture
-def test_matrix(device, precision):
+def test_matrices(device, precision):
     """Create a test matrix."""
-    return torch.randn(10, 3, device=device, dtype=precision)
+    return {
+        "A1": torch.randn(10, 3, device=device, dtype=precision),
+        "A2": torch.randn(5, 3, device=device, dtype=precision),
+    }
 
 
 @pytest.fixture
@@ -44,34 +47,44 @@ def test_blk():
 
 
 @pytest.fixture
-def test_matmul_vector(test_matrix):
+def test_matmul_vector(test_matrices):
     """Create a test vector for matmul."""
     return torch.randn(
-        test_matrix.shape[0], device=test_matrix.device, dtype=test_matrix.dtype
+        test_matrices["A2"].shape[0],
+        device=test_matrices["A2"].device,
+        dtype=test_matrices["A2"].dtype,
     )
 
 
 @pytest.fixture
-def test_matmul_matrix(test_matrix):
+def test_matmul_matrix(test_matrices):
     """Create a test matrix for matmul."""
     return torch.randn(
-        test_matrix.shape[0], 2, device=test_matrix.device, dtype=test_matrix.dtype
+        test_matrices["A2"].shape[0],
+        2,
+        device=test_matrices["A2"].device,
+        dtype=test_matrices["A2"].dtype,
     )
 
 
 @pytest.fixture
-def test_blk_matmul_vector(test_blk, test_matrix):
+def test_blk_matmul_vector(test_blk, test_matrices):
     """Create a test vector for block matmul."""
     return torch.randn(
-        test_blk.shape[0], device=test_matrix.device, dtype=test_matrix.dtype
+        test_blk.shape[0],
+        device=test_matrices["A2"].device,
+        dtype=test_matrices["A2"].dtype,
     )
 
 
 @pytest.fixture
-def test_blk_matmul_matrix(test_blk, test_matrix):
+def test_blk_matmul_matrix(test_blk, test_matrices):
     """Create a test matrix for block matmul."""
     return torch.randn(
-        test_blk.shape[0], 2, device=test_matrix.device, dtype=test_matrix.dtype
+        test_blk.shape[0],
+        2,
+        device=test_matrices["A2"].device,
+        dtype=test_matrices["A2"].dtype,
     )
 
 
@@ -205,17 +218,20 @@ def kernel_config(request):
 
 
 class TestKernelLinOps:
-    def test_initialization(self, test_matrix, lengthscale_param, kernel_config):
+    def test_initialization(self, test_matrices, lengthscale_param, kernel_config):
         """Test initialization of kernel linear operators."""
         kernel_class = kernel_config["class"]
-        kernel = kernel_class(test_matrix, kernel_params=lengthscale_param)
-        assert kernel.A.shape == test_matrix.shape
+        kernel = kernel_class(
+            test_matrices["A1"], test_matrices["A2"], kernel_params=lengthscale_param
+        )
+        assert kernel.A1.shape == test_matrices["A1"].shape
+        assert kernel.A2.shape == test_matrices["A2"].shape
         assert kernel.kernel_params == lengthscale_param
-        assert kernel.dtype == test_matrix.dtype
+        assert kernel.dtype == test_matrices["A1"].dtype
 
     def test_row_and_block_oracle(
         self,
-        test_matrix,
+        test_matrices,
         lengthscale_param,
         test_matmul_vector,
         test_matmul_matrix,
@@ -230,18 +246,20 @@ class TestKernelLinOps:
         kernel_func = kernel_config["kernel_func"]
         lengthscale = lengthscale_param["lengthscale"]
 
-        kernel = kernel_class(test_matrix, kernel_params=lengthscale_param)
+        kernel = kernel_class(
+            test_matrices["A1"], test_matrices["A2"], kernel_params=lengthscale_param
+        )
 
         # Test row oracle
-        X_row = test_matrix[test_blk]
-        Y_row = test_matrix
+        X_row = test_matrices["A1"][test_blk]
+        Y_row = test_matrices["A2"]
         K_row_looped = compute_kernel_matrix(
             X_row, Y_row, lengthscale, kernel.device, kernel.dtype, kernel_func
         )
 
         row_lin_op = kernel.row_oracle(test_blk)
         assert isinstance(row_lin_op, LinOp)
-        assert row_lin_op.shape == (test_blk.shape[0], test_matrix.shape[0])
+        assert row_lin_op.shape == (test_blk.shape[0], test_matrices["A2"].shape[0])
         assert row_lin_op.device == kernel.device
         assert row_lin_op.dtype == kernel.dtype
         assert torch.allclose(
@@ -252,14 +270,19 @@ class TestKernelLinOps:
         )
 
         # Test block oracle
-        X_blk = test_matrix[test_blk]
-        Y_blk = test_matrix[test_blk]
+        X_blk = test_matrices["A1"][test_blk]
+        Y_blk = test_matrices["A2"][test_blk]
         K_blk_looped = compute_kernel_matrix(
-            X_blk, Y_blk, lengthscale, kernel.device, kernel.dtype, kernel_func
+            X_blk,
+            Y_blk,
+            lengthscale,
+            test_matrices["A1"].device,
+            test_matrices["A1"].dtype,
+            kernel_func,
         )
 
         block_lin_op = kernel.blk_oracle(test_blk)
-        assert isinstance(block_lin_op, SymmetricLinOp)
+        assert isinstance(block_lin_op, LinOp)
         assert block_lin_op.shape == (test_blk.shape[0], test_blk.shape[0])
         assert block_lin_op.device == kernel.device
         assert block_lin_op.dtype == kernel.dtype
@@ -276,7 +299,7 @@ class TestKernelLinOps:
 
     def test_matmul(
         self,
-        test_matrix,
+        test_matrices,
         lengthscale_param,
         test_matmul_vector,
         test_matmul_matrix,
@@ -288,15 +311,17 @@ class TestKernelLinOps:
         kernel_func = kernel_config["kernel_func"]
         lengthscale = lengthscale_param["lengthscale"]
 
-        kernel = kernel_class(test_matrix, kernel_params=lengthscale_param)
+        kernel = kernel_class(
+            test_matrices["A1"], test_matrices["A2"], kernel_params=lengthscale_param
+        )
 
         # Compute full kernel matrix using helper function
         K_looped = compute_kernel_matrix(
-            test_matrix,
-            test_matrix,
+            test_matrices["A1"],
+            test_matrices["A2"],
             lengthscale,
-            kernel.device,
-            kernel.dtype,
+            test_matrices["A1"].device,
+            test_matrices["A2"].dtype,
             kernel_func,
         )
 

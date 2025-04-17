@@ -8,9 +8,8 @@ import torch
 from rlaopt.linops import (
     LinOp,
     TwoSidedLinOp,
-    SymmetricLinOp,
     DistributedLinOp,
-    DistributedSymmetricLinOp,
+    DistributedTwoSidedLinOp,
 )
 from rlaopt.linops.distributed import _DistributedLinOp
 from rlaopt.utils import _is_torch_tensor, _is_dict, _is_set
@@ -20,68 +19,81 @@ _KERNEL_CACHE: Dict[str, LazyTensor] = {}
 _LAZY_TENSOR_CACHE: Dict[str, LazyTensor] = {}
 
 
-class _KernelLinOp(SymmetricLinOp):
+class _KernelLinOp(TwoSidedLinOp):
     def __init__(
         self,
-        A: torch.Tensor,
+        A1: torch.Tensor,
+        A2: torch.Tensor,
         kernel_params: Dict[str, Any],
         _check_kernel_params_fn: Callable,
         _kernel_computation_fn: Callable,
     ):
         self._check_kernel_params = _check_kernel_params_fn
-        self._check_inputs(A, kernel_params)
-        self._A = A
+        self._check_inputs(A1, A2, kernel_params)
+        self._A1 = A1
+        self._A2 = A2
         self._kernel_params = kernel_params
         self._kernel_computation = _kernel_computation_fn
         self._K_lazy = self._get_kernel()
         super().__init__(
-            device=self._A.device,
-            shape=torch.Size((self._A.shape[0], self._A.shape[0])),
+            device=self._A1.device,
+            shape=torch.Size((self._A1.shape[0], self._A2.shape[0])),
             matvec=lambda x: self._K_lazy @ x,
+            rmatvec=lambda x: self._K_lazy.T @ x,
             matmat=lambda x: self._K_lazy @ x,
-            dtype=self._A.dtype,
+            rmatmat=lambda x: self._K_lazy.T @ x,
+            dtype=self._A1.dtype,
         )
 
     @property
-    def A(self) -> torch.Tensor:
-        return self._A
+    def A1(self) -> torch.Tensor:
+        return self._A1
+
+    @property
+    def A2(self) -> torch.Tensor:
+        return self._A2
 
     @property
     def kernel_params(self) -> Dict[str, Any]:
         return self._kernel_params
 
-    def _check_inputs(self, A: Any, kernel_params: Any):
-        _is_torch_tensor(A, "A")
-        if A.ndim != 2:
-            raise ValueError(f"A must be a 2D tensor, got {A.ndim}D tensor.")
+    def _check_inputs(self, A1: Any, A2, kernel_params: Any):
+        _is_torch_tensor(A1, "A1")
+        _is_torch_tensor(A2, "A2")
+        if A1.ndim != 2:
+            raise ValueError(f"A1 must be a 2D tensor, got {A1.ndim}D tensor.")
+        if A2.ndim != 2:
+            raise ValueError(f"A2 must be a 2D tensor, got {A2.ndim}D tensor.")
+        if A1.device != A2.device:
+            raise ValueError("A1 and A2 must be on the same device.")
+        if A1.dtype != A2.dtype:
+            raise ValueError("A1 and A2 must have the same dtype.")
         _is_dict(kernel_params, "kernel_params")
         self._check_kernel_params(kernel_params)
 
     def _get_kernel(
         self, idx1: Optional[torch.Tensor] = None, idx2: Optional[torch.Tensor] = None
-    ):
+    ) -> LazyTensor:
         if idx1 is None:
-            Ai_lazy = LazyTensor(self.A[:, None, :])
+            A1_lazy = LazyTensor(self.A1[:, None, :])
         else:
-            Ai_lazy = LazyTensor(self.A[idx1][:, None, :])
+            A1_lazy = LazyTensor(self.A1[idx1][:, None, :])
 
         if idx2 is None:
-            Aj_lazy = LazyTensor(self.A[None, :, :])
+            A2_lazy = LazyTensor(self.A2[None, :, :])
         else:
-            Aj_lazy = LazyTensor(self.A[idx2][None, :, :])
+            A2_lazy = LazyTensor(self.A2[idx2][None, :, :])
 
-        K_lazy = self._kernel_computation(Ai_lazy, Aj_lazy, self.kernel_params)
+        K_lazy = self._kernel_computation(A1_lazy, A2_lazy, self.kernel_params)
         return K_lazy
 
     def _get_kernel_linop(
         self,
         idx1: Optional[torch.Tensor] = None,
         idx2: Optional[torch.Tensor] = None,
-        symmetric: bool = False,
-    ):
+    ) -> LinOp:
         K = self._get_kernel(idx1, idx2)
-        linop_class = SymmetricLinOp if symmetric else LinOp
-        return linop_class(
+        return LinOp(
             device=self.device,
             shape=torch.Size(K.shape),
             matvec=lambda x: K @ x,
@@ -89,11 +101,11 @@ class _KernelLinOp(SymmetricLinOp):
             dtype=self.dtype,
         )
 
-    def row_oracle(self, blk: torch.Tensor):
-        return self._get_kernel_linop(idx1=blk, symmetric=False)
+    def row_oracle(self, blk: torch.Tensor) -> LinOp:
+        return self._get_kernel_linop(idx1=blk)
 
-    def blk_oracle(self, blk: torch.Tensor):
-        return self._get_kernel_linop(idx1=blk, idx2=blk, symmetric=True)
+    def blk_oracle(self, blk: torch.Tensor) -> LinOp:
+        return self._get_kernel_linop(idx1=blk, idx2=blk)
 
 
 class _CacheableKernelLinOp(TwoSidedLinOp):
@@ -101,47 +113,47 @@ class _CacheableKernelLinOp(TwoSidedLinOp):
 
     def __init__(
         self,
-        A: torch.Tensor,
+        A1: torch.Tensor,
+        A2: torch.Tensor,
         kernel_params: Dict[str, Any],
-        chunk_idx: torch.Tensor,
         device: torch.device,
         _kernel_computation_fn: Callable,
         _kernel_name: str,
     ):
-        self._A = A.to(device)
+        self._A1 = A1.to(device)
+        self._A2 = A2.to(device)
         self._kernel_params = kernel_params
-        self._chunk_idx = chunk_idx
         self._kernel_computation = _kernel_computation_fn
         self._unique_id = (
-            f"{_kernel_name}_{id(self)}_{len(A)}_{kernel_params}_{A.device}"
+            f"{_kernel_name}_{id(self)}_{len(self._A1)}_{len(self._A2)}_"
+            f"{kernel_params}_{self._A1.device}"
         )
-
         super().__init__(
             device=device,
-            shape=torch.Size((self._chunk_idx.shape[0], self._A.shape[0])),
+            shape=torch.Size((self._A1.shape[0], self._A2.shape[0])),
             matvec=self._matvec,
             rmatvec=self._rmatvec,
             matmat=self._matvec,
             rmatmat=self._rmatvec,
-            dtype=self._A.dtype,
+            dtype=self._A1.dtype,
         )
 
     @property
-    def A(self) -> torch.Tensor:
-        return self._A
+    def A1(self) -> torch.Tensor:
+        return self._A1
+
+    @property
+    def A2(self) -> torch.Tensor:
+        return self._A2
 
     @property
     def kernel_params(self) -> Dict[str, Any]:
         return self._kernel_params
 
-    @property
-    def chunk_idx(self) -> torch.Tensor:
-        return self._chunk_idx
-
     def _get_lazy_tensors(self):
-        Ab_lazy = LazyTensor(self.A[self.chunk_idx][:, None, :])
-        A_lazy = LazyTensor(self.A[None, :, :])
-        return Ab_lazy, A_lazy
+        A1_lazy = LazyTensor(self.A1[:, None, :])
+        A2_lazy = LazyTensor(self.A2[None, :, :])
+        return A1_lazy, A2_lazy
 
     def _get_kernel(self):
         """Get the cached kernel or compute it if not present."""
@@ -155,9 +167,9 @@ class _CacheableKernelLinOp(TwoSidedLinOp):
             print(f"[PID {pid}] Computing kernel for device {self.device}...")
 
             # Compute kernel and store in the global cache
-            Ab_lazy, A_lazy = self._get_lazy_tensors()
+            A1_lazy, A2_lazy = self._get_lazy_tensors()
             _KERNEL_CACHE[cache_key] = self._kernel_computation(
-                Ab_lazy, A_lazy, self.kernel_params
+                A1_lazy, A2_lazy, self.kernel_params
             )
 
             print(f"[PID {pid}] Kernel cached. Cache size: {len(_KERNEL_CACHE)}")
@@ -207,12 +219,13 @@ def _get_cached_lazy_tensor(A: torch.Tensor) -> LazyTensor:
     return _LAZY_TENSOR_CACHE[cache_key]
 
 
-class _DistributedKernelLinOp(DistributedSymmetricLinOp):
+class _DistributedKernelLinOp(DistributedTwoSidedLinOp):
     """Abstract base class for distributed kernel linear operators."""
 
     def __init__(
         self,
-        A: torch.Tensor,
+        A1: torch.Tensor,
+        A2: torch.Tensor,
         kernel_params: Dict[str, Any],
         devices: Set[torch.device],
         _check_kernel_params_fn: Callable,
@@ -224,7 +237,8 @@ class _DistributedKernelLinOp(DistributedSymmetricLinOp):
         """Initialize the distributed kernel linear operator.
 
         Args:
-            A: Input data tensor
+            A1: Input data tensor
+            A2: Input data tensor
             kernel_params: Dictionary of kernel parameters
             devices: Set of devices to distribute computation across
         """
@@ -236,33 +250,41 @@ class _DistributedKernelLinOp(DistributedSymmetricLinOp):
 
         # Save parameters
         self._check_kernel_params = _check_kernel_params_fn
-        self._check_inputs(A, kernel_params, devices)
+        self._check_inputs(A1, A2, kernel_params, devices)
         self._kernel_computation = _kernel_computation_fn
         self._row_oracle_matvec = _row_oracle_matvec_fn
         self._block_chunk_matvec = _block_chunk_matvec_fn
         self._cacheable_kernel_name = _cacheable_kernel_name
-        self._A_mat = A  # Keep original tensor for oracles
+        self._A1 = A1  # Keep original tensor for oracles
+        self._A2 = A2  # Keep original tensor for oracles
         self._kernel_params = kernel_params
         self.devices = list(devices)
         self._kernel_params_devices = self._get_kernel_params_devices()
 
         # Create row partitioning
-        self.A_row_chunks = torch.chunk(
-            torch.arange(self._A_mat.shape[0]), len(self.devices), dim=0
+        # A1_row_chunks is useful for the linop and block oracle,
+        # A2_row_chunks is useful for the row oracle
+        self.A1_row_chunks = torch.chunk(
+            torch.arange(self._A1.shape[0]), len(self.devices), dim=0
+        )
+        self.A2_row_chunks = torch.chunk(
+            torch.arange(self._A2.shape[0]), len(self.devices), dim=0
         )
 
         # Create chunks of data for each device
-        self.A_chunks = []
-        for device, chunk_idx in zip(self.devices, self.A_row_chunks):
-            # We keep chunks on each device for row_oracle
-            self.A_chunks.append(self._A_mat[chunk_idx].to(device))
+        self.A1_chunks = []
+        self.A2_chunks = []
+        for device, chunk_idx in zip(self.devices, self.A1_row_chunks):
+            self.A1_chunks.append(self._A1[chunk_idx].to(device))
+        for device, chunk_idx in zip(self.devices, self.A2_row_chunks):
+            self.A2_chunks.append(self._A2[chunk_idx].to(device))
 
         # Create cacheable kernel operators for each chunk
         kernel_ops = self._create_kernel_operators()
 
         # Initialize the distributed operator
         super().__init__(
-            shape=torch.Size((self._A_mat.shape[0], self._A_mat.shape[0])),
+            shape=torch.Size((self._A1.shape[0], self._A2.shape[0])),
             A=kernel_ops,
             distribution_mode="row",
         )
@@ -271,8 +293,12 @@ class _DistributedKernelLinOp(DistributedSymmetricLinOp):
         self.kernel_ops = kernel_ops
 
     @property
-    def A_mat(self) -> torch.Tensor:
-        return self._A_mat
+    def A1(self) -> torch.Tensor:
+        return self._A1
+
+    @property
+    def A2(self) -> torch.Tensor:
+        return self._A2
 
     @property
     def kernel_params(self) -> Dict[str, Any]:
@@ -280,13 +306,19 @@ class _DistributedKernelLinOp(DistributedSymmetricLinOp):
 
     def _check_inputs(
         self,
-        A: Any,
+        A1: Any,
+        A2: Any,
         kernel_params: Any,
         devices: Any,
     ):
-        _is_torch_tensor(A, "A")
-        if A.ndim != 2:
-            raise ValueError(f"A must be a 2D tensor, got {A.ndim}D tensor.")
+        _is_torch_tensor(A1, "A1")
+        _is_torch_tensor(A2, "A2")
+        if A1.ndim != 2:
+            raise ValueError(f"A must be a 2D tensor, got {A1.ndim}D tensor.")
+        if A2.ndim != 2:
+            raise ValueError(f"A must be a 2D tensor, got {A2.ndim}D tensor.")
+        if A1.dtype != A2.dtype:
+            raise ValueError("A1 and A2 must have the same dtype.")
         _is_dict(kernel_params, "kernel_params")
         self._check_kernel_params(kernel_params)
         _is_set(devices, "devices")
@@ -318,12 +350,12 @@ class _DistributedKernelLinOp(DistributedSymmetricLinOp):
             List of kernel operators, one for each device/chunk
         """
         ops = []
-        for device, chunk_idx in zip(self.devices, self.A_row_chunks):
+        for device, chunk_idx in zip(self.devices, self.A1_row_chunks):
             ops.append(
                 _CacheableKernelLinOp(
-                    A=self.A_mat,
+                    A1=self.A1[chunk_idx],
+                    A2=self.A2,
                     kernel_params=self._kernel_params_devices[device],
-                    chunk_idx=chunk_idx,
                     device=device,
                     _kernel_computation_fn=self._kernel_computation,
                     _kernel_name=self._cacheable_kernel_name,
@@ -335,13 +367,13 @@ class _DistributedKernelLinOp(DistributedSymmetricLinOp):
         """Generic implementation of row oracle for all kernel types."""
         # Create operators for each device
         row_ops = []
-        for device, A_chunk in zip(self.devices, self.A_chunks):
+        for device, A2_chunk in zip(self.devices, self.A2_chunks):
             # Create matvec function with kernel-specific implementation
             matvec_fn = partial(
                 self._row_oracle_matvec,
-                A_mat=self.A_mat,
-                row_idx=blk,
-                A_chunk=A_chunk,
+                A1=self.A1,
+                A2_chunk=A2_chunk,
+                blk=blk,
                 kernel_params=self._kernel_params_devices[device],
                 kernel_computation=self._kernel_computation,
             )
@@ -350,15 +382,16 @@ class _DistributedKernelLinOp(DistributedSymmetricLinOp):
             row_ops.append(
                 LinOp(
                     device=device,
-                    shape=torch.Size((blk.shape[0], A_chunk.shape[0])),
+                    shape=torch.Size((blk.shape[0], A2_chunk.shape[0])),
                     matvec=matvec_fn,
                     matmat=matvec_fn,
+                    dtype=self.dtype,
                 )
             )
 
         # Create a distributed operator that reuses our workers
         return _DistributedLinOp(
-            shape=torch.Size((blk.shape[0], self.A_mat.shape[0])),
+            shape=torch.Size((blk.shape[0], self.A2.shape[0])),
             A=row_ops,
             distribution_mode="column",
             manager=self._manager,
@@ -368,14 +401,14 @@ class _DistributedKernelLinOp(DistributedSymmetricLinOp):
             is_new=False,
         )
 
-    def blk_oracle(self, blk: torch.Tensor) -> DistributedSymmetricLinOp:
-        """Get a distributed symmetric operator for a block.
+    def blk_oracle(self, blk: torch.Tensor) -> DistributedLinOp:
+        """Get a distributed linear operator for a block.
 
         Args:
             blk: Indices defining the block
 
         Returns:
-            A distributed symmetric linear operator for the specified block
+            A distributed linear operator for the specified block
         """
         # Create a list of operators, one for each device
         block_ops = []
@@ -392,7 +425,8 @@ class _DistributedKernelLinOp(DistributedSymmetricLinOp):
             matvec_fn = partial(
                 self._block_chunk_matvec,
                 device=device,
-                A_mat=self.A_mat,
+                A1=self.A1,
+                A2=self.A2,
                 blk_chunk=blk_chunk,
                 blk=blk,
                 kernel_params=self._kernel_params_devices[device],
@@ -406,7 +440,7 @@ class _DistributedKernelLinOp(DistributedSymmetricLinOp):
                     shape=torch.Size((blk_chunk_idx.shape[0], blk.shape[0])),
                     matvec=matvec_fn,
                     matmat=matvec_fn,
-                    dtype=self.A_mat.dtype,
+                    dtype=self.dtype,
                 )
             )
 

@@ -18,10 +18,11 @@ def _create_kernel_classes(
         A tuple of (_KernelLinOp, _DistributedKernelLinOp) classes
     """
     # Define the class initialization method that will be used
-    def kernel_init(self, A: torch.Tensor, kernel_params: Dict):
+    def kernel_init(self, A1: torch.Tensor, A2: torch.Tensor, kernel_params: Dict):
         _KernelLinOp.__init__(
             self,
-            A=A,
+            A1=A1,
+            A2=A2,
             kernel_params=kernel_params,
             _check_kernel_params_fn=_check_kernel_params,
             _kernel_computation_fn=kernel_computation_fn,
@@ -30,13 +31,15 @@ def _create_kernel_classes(
     # Define the distributed class initialization method
     def distributed_kernel_init(
         self,
-        A: torch.Tensor,
+        A1: torch.Tensor,
+        A2: torch.Tensor,
         kernel_params: Dict,
         devices: Set[torch.device],
     ):
         _DistributedKernelLinOp.__init__(
             self,
-            A=A,
+            A1=A1,
+            A2=A2,
             kernel_params=kernel_params,
             devices=devices,
             _check_kernel_params_fn=_check_kernel_params,
