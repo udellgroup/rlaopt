@@ -14,9 +14,9 @@ def _check_kernel_params(kernel_params: Dict[str, Any]):
 
 def _row_oracle_matvec(
     x: torch.Tensor,
-    A_mat: torch.Tensor,
-    row_idx: torch.Tensor,
-    A_chunk: torch.Tensor,
+    A1: torch.Tensor,
+    A2_chunk: torch.Tensor,
+    blk: torch.Tensor,
     kernel_params: Dict[str, Any],
     kernel_computation: Callable,
 ) -> torch.Tensor:
@@ -25,19 +25,20 @@ def _row_oracle_matvec(
     Necessary for distributed kernel linear operator due to multiprocessing issues.
     """
     # Get cached tensors
-    Ab = A_mat[row_idx].to(A_chunk.device)
-    Ab_lazy = LazyTensor(Ab[:, None, :])
-    A_chunk_lazy = _get_cached_lazy_tensor(A_chunk)
+    A1b = A1[blk].to(A2_chunk.device)
+    A1b_lazy = LazyTensor(A1b[:, None, :])
+    A2_chunk_lazy = _get_cached_lazy_tensor(A2_chunk)
 
     # Compute kernel and apply
-    K_lazy = kernel_computation(Ab_lazy, A_chunk_lazy, kernel_params)
+    K_lazy = kernel_computation(A1b_lazy, A2_chunk_lazy, kernel_params)
     return K_lazy @ x
 
 
 def _block_chunk_matvec(
     x: torch.Tensor,
     device: torch.device,
-    A_mat: torch.Tensor,
+    A1: torch.Tensor,
+    A2: torch.Tensor,
     blk_chunk: torch.Tensor,
     blk: torch.Tensor,
     kernel_params: Dict[str, Any],
@@ -48,13 +49,13 @@ def _block_chunk_matvec(
     Necessary for distributed kernel linear operator due to multiprocessing issues.
     """
     # Get the data for this chunk
-    A_blk_chunk = A_mat[blk_chunk].to(device)
-    A_blk_full = A_mat[blk].to(device)
+    A1_blk_chunk = A1[blk_chunk].to(device)
+    A2_blk_full = A2[blk].to(device)
 
     # Create LazyTensors
-    Abi_lazy = LazyTensor(A_blk_chunk[:, None, :])
-    Abj_lazy = LazyTensor(A_blk_full[None, :, :])
+    A1b_lazy = LazyTensor(A1_blk_chunk[:, None, :])
+    A2b_lazy = LazyTensor(A2_blk_full[None, :, :])
 
     # Compute kernel and matrix-vector product
-    K_lazy = kernel_computation(Abi_lazy, Abj_lazy, kernel_params)
+    K_lazy = kernel_computation(A1b_lazy, A2b_lazy, kernel_params)
     return K_lazy @ x
