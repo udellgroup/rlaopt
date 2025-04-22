@@ -43,13 +43,18 @@ def _get_scaled_diff_matern(
     return (D**2).sum(dim=2).sqrt()
 
 
+def _apply_const_scaling(K_lazy: LazyTensor, kernel_config: KernelConfig):
+    """Apply constant scaling to the kernel matrix."""
+    return kernel_config.const_scaling * K_lazy
+
+
 def _kernel_computation_rbf(
     Ai_lazy: LazyTensor, Aj_lazy: LazyTensor, kernel_config: KernelConfig
 ):
     """Compute RBF kernel."""
     D = _get_scaled_diff(Ai_lazy, Aj_lazy, kernel_config)
     D = (D**2).sum(dim=2)
-    return (-D / 2).exp()
+    return _apply_const_scaling((-D / 2).exp(), kernel_config)
 
 
 def _kernel_computation_laplace(
@@ -58,7 +63,7 @@ def _kernel_computation_laplace(
     """Compute Laplace kernel."""
     D = _get_scaled_diff(Ai_lazy, Aj_lazy, kernel_config)
     D = D.abs().sum(dim=2)
-    return (-D).exp()
+    return _apply_const_scaling((-D).exp(), kernel_config)
 
 
 def _kernel_computation_matern12(
@@ -66,7 +71,7 @@ def _kernel_computation_matern12(
 ):
     """Compute Matern-1/2 kernel."""
     D = _get_scaled_diff_matern(Ai_lazy, Aj_lazy, kernel_config)
-    return (-D).exp()
+    return _apply_const_scaling((-D).exp(), kernel_config)
 
 
 def _kernel_computation_matern32(
@@ -74,7 +79,7 @@ def _kernel_computation_matern32(
 ):
     """Compute Matern-3/2 kernel."""
     D = _get_scaled_diff_matern(Ai_lazy, Aj_lazy, kernel_config)
-    return (1 + _SQRT3 * D) * (-_SQRT3 * D).exp()
+    return _apply_const_scaling((1 + _SQRT3 * D) * (-_SQRT3 * D).exp(), kernel_config)
 
 
 def _kernel_computation_matern52(
@@ -82,7 +87,9 @@ def _kernel_computation_matern52(
 ):
     """Compute Matern-5/2 kernel."""
     D = _get_scaled_diff_matern(Ai_lazy, Aj_lazy, kernel_config)
-    return (1 + _SQRT5 * D + 5 / 3 * D**2) * (-_SQRT5 * D).exp()
+    return _apply_const_scaling(
+        (1 + _SQRT5 * D + 5 / 3 * D**2) * (-_SQRT5 * D).exp(), kernel_config
+    )
 
 
 RBFLinOp, DistributedRBFLinOp = _create_kernel_classes(
