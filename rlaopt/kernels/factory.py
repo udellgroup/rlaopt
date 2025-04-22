@@ -1,4 +1,4 @@
-from typing import Dict, Callable, Set, Tuple
+from typing import Callable, Set, Tuple
 import torch
 
 from .base import _KernelLinOp, _DistributedKernelLinOp
@@ -18,7 +18,7 @@ def _create_kernel_classes(
         A tuple of (_KernelLinOp, _DistributedKernelLinOp) classes
     """
     # Define the class initialization method that will be used
-    def kernel_init(self, A1: torch.Tensor, A2: torch.Tensor, kernel_params: Dict):
+    def kernel_init(self, A1: torch.Tensor, A2: torch.Tensor, kernel_params: dict):
         _KernelLinOp.__init__(
             self,
             A1=A1,
@@ -33,7 +33,7 @@ def _create_kernel_classes(
         self,
         A1: torch.Tensor,
         A2: torch.Tensor,
-        kernel_params: Dict,
+        kernel_params: dict,
         devices: Set[torch.device],
     ):
         _DistributedKernelLinOp.__init__(

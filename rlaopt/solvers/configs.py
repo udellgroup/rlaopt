@@ -1,6 +1,6 @@
 from abc import ABC
 from dataclasses import dataclass, asdict
-from typing import Any, Dict
+from typing import Any, dict
 
 import torch
 
@@ -52,7 +52,7 @@ def _is_sap_accel_config(param: Any, param_name: str):
 
 @dataclass(kw_only=True, frozen=False)
 class SolverConfig(ABC):
-    def to_dict(self) -> Dict:
+    def to_dict(self) -> dict:
         data_dict = asdict(self)
         for key, value in data_dict.items():
             if isinstance(value, torch.device):

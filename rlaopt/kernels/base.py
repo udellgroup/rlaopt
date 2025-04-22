@@ -1,6 +1,6 @@
 from functools import partial
 import os
-from typing import Any, Callable, Dict, Optional, Set
+from typing import Any, Callable, Optional, Set
 
 from pykeops.torch import LazyTensor
 import torch
@@ -15,8 +15,8 @@ from rlaopt.linops.distributed import _DistributedLinOp
 from rlaopt.utils import _is_torch_tensor, _is_dict, _is_set
 
 # Global, module-level cache to persist across worker calls
-_KERNEL_CACHE: Dict[str, LazyTensor] = {}
-_LAZY_TENSOR_CACHE: Dict[str, LazyTensor] = {}
+_KERNEL_CACHE: dict[str, LazyTensor] = {}
+_LAZY_TENSOR_CACHE: dict[str, LazyTensor] = {}
 
 
 class _KernelLinOp(TwoSidedLinOp):
@@ -24,7 +24,7 @@ class _KernelLinOp(TwoSidedLinOp):
         self,
         A1: torch.Tensor,
         A2: torch.Tensor,
-        kernel_params: Dict[str, Any],
+        kernel_params: dict[str, Any],
         _check_kernel_params_fn: Callable,
         _kernel_computation_fn: Callable,
     ):
@@ -54,7 +54,7 @@ class _KernelLinOp(TwoSidedLinOp):
         return self._A2
 
     @property
-    def kernel_params(self) -> Dict[str, Any]:
+    def kernel_params(self) -> dict[str, Any]:
         return self._kernel_params
 
     def _check_inputs(self, A1: Any, A2, kernel_params: Any):
@@ -115,7 +115,7 @@ class _CacheableKernelLinOp(TwoSidedLinOp):
         self,
         A1: torch.Tensor,
         A2: torch.Tensor,
-        kernel_params: Dict[str, Any],
+        kernel_params: dict[str, Any],
         device: torch.device,
         _kernel_computation_fn: Callable,
         _kernel_name: str,
@@ -147,7 +147,7 @@ class _CacheableKernelLinOp(TwoSidedLinOp):
         return self._A2
 
     @property
-    def kernel_params(self) -> Dict[str, Any]:
+    def kernel_params(self) -> dict[str, Any]:
         return self._kernel_params
 
     def _get_lazy_tensors(self):
@@ -226,7 +226,7 @@ class _DistributedKernelLinOp(DistributedTwoSidedLinOp):
         self,
         A1: torch.Tensor,
         A2: torch.Tensor,
-        kernel_params: Dict[str, Any],
+        kernel_params: dict[str, Any],
         devices: Set[torch.device],
         _check_kernel_params_fn: Callable,
         _kernel_computation_fn: Callable,
@@ -301,7 +301,7 @@ class _DistributedKernelLinOp(DistributedTwoSidedLinOp):
         return self._A2
 
     @property
-    def kernel_params(self) -> Dict[str, Any]:
+    def kernel_params(self) -> dict[str, Any]:
         return self._kernel_params
 
     def _check_inputs(

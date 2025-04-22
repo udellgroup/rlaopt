@@ -1,4 +1,4 @@
-from typing import Any, Callable, Dict
+from typing import Any, Callable
 
 import torch
 from pykeops.torch import LazyTensor
@@ -6,7 +6,7 @@ from pykeops.torch import LazyTensor
 from .base import _get_cached_lazy_tensor
 
 
-def _check_kernel_params(kernel_params: Dict[str, Any]):
+def _check_kernel_params(kernel_params: dict[str, Any]):
     """Check kernel parameters."""
     if "lengthscale" not in kernel_params:
         raise ValueError("Kernel parameters must include 'lengthscale'.")
@@ -17,7 +17,7 @@ def _row_oracle_matvec(
     A1: torch.Tensor,
     A2_chunk: torch.Tensor,
     blk: torch.Tensor,
-    kernel_params: Dict[str, Any],
+    kernel_params: dict[str, Any],
     kernel_computation: Callable,
 ) -> torch.Tensor:
     """Compute kernel matrix-vector product for row oracle.
@@ -41,7 +41,7 @@ def _block_chunk_matvec(
     A2: torch.Tensor,
     blk_chunk: torch.Tensor,
     blk: torch.Tensor,
-    kernel_params: Dict[str, Any],
+    kernel_params: dict[str, Any],
     kernel_computation: Callable,
 ) -> torch.Tensor:
     """Compute the matrix-vector product for a chunk of the block kernel matrix.
