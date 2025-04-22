@@ -110,12 +110,15 @@ def tol(precision):
     ids=["scalar", "tensor"],
 )
 def kernel_config(request, device, precision):
+    const_scaling = 2.0
     """Parameterized fixture for different lengthscale types."""
     if request.param["name"] == "scalar":
-        return KernelConfig(const_scaling=2.0, lengthscale=request.param["value"])
+        return KernelConfig(
+            const_scaling=const_scaling, lengthscale=request.param["value"]
+        )
     else:
         lengthscale = torch.tensor([1.0, 2.0, 3.0], device=device, dtype=precision)
-        return KernelConfig(const_scaling=2.0, lengthscale=lengthscale)
+        return KernelConfig(const_scaling=const_scaling, lengthscale=lengthscale)
 
 
 # Define a single function to compute kernel matrices for any kernel type
