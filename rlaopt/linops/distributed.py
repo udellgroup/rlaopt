@@ -1,5 +1,3 @@
-from typing import List
-
 import torch
 from torch.multiprocessing import Manager, Process, Queue, set_start_method
 
@@ -22,7 +20,7 @@ class _DistributedLinOp(_BaseLinOp):
     def __init__(
         self,
         shape: torch.Size,
-        A: List[LinOp],
+        A: list[LinOp],
         manager=None,
         result_queue=None,
         task_queues=None,
@@ -207,7 +205,7 @@ class _DistributedTwoSidedLinOp(_DistributedLinOp):
     def __init__(
         self,
         shape: torch.Size,
-        A: List[TwoSidedLinOp],
+        A: list[TwoSidedLinOp],
         manager=None,
         result_queue=None,
         task_queues=None,
@@ -279,7 +277,7 @@ class _DistributedSymmetricLinOp(_DistributedTwoSidedLinOp):
     def __init__(
         self,
         shape: torch.Size,
-        A: List[TwoSidedLinOp],
+        A: list[TwoSidedLinOp],
         manager=None,
         result_queue=None,
         task_queues=None,
@@ -322,7 +320,7 @@ class DistributedLinOp(_DistributedLinOp):
     """Distributed linear operator that performs operations across multiple devices."""
 
     def __init__(
-        self, shape: torch.Size, A: List[LinOp], distribution_mode=_DistributionMode.ROW
+        self, shape: torch.Size, A: list[LinOp], distribution_mode=_DistributionMode.ROW
     ):
         super().__init__(
             shape=shape, A=A, is_new=True, distribution_mode=distribution_mode
@@ -336,7 +334,7 @@ class DistributedTwoSidedLinOp(_DistributedTwoSidedLinOp):
     def __init__(
         self,
         shape: torch.Size,
-        A: List[TwoSidedLinOp],
+        A: list[TwoSidedLinOp],
         distribution_mode=_DistributionMode.ROW,
     ):
         super().__init__(
@@ -351,7 +349,7 @@ class DistributedSymmetricLinOp(_DistributedSymmetricLinOp):
     def __init__(
         self,
         shape: torch.Size,
-        A: List[TwoSidedLinOp],
+        A: list[TwoSidedLinOp],
         distribution_mode=_DistributionMode.ROW,
     ):
         super().__init__(

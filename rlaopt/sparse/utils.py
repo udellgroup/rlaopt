@@ -1,9 +1,9 @@
-from typing import Union, List
+from typing import Union
 import torch
 
 
 def _convert_indices_to_tensor(
-    indices: Union[torch.Tensor, slice, int, List[int]], num_rows: int
+    indices: Union[torch.Tensor, slice, int, list[int]], num_rows: int
 ) -> torch.Tensor:
     """Convert various index types to a PyTorch tensor of indices.
 

@@ -1,4 +1,4 @@
-from typing import List, Optional, Union
+from typing import Optional, Union
 
 from scipy.sparse import csr_matrix, csr_array, csc_array
 import torch
@@ -88,7 +88,7 @@ class _SparseTensor:
             raise ValueError("Unsupported sparse matrix layout.")
 
     def __getitem__(
-        self, indices: Union[torch.Tensor, slice, int, List[int]]
+        self, indices: Union[torch.Tensor, slice, int, list[int]]
     ) -> "_SparseTensor":
         """Get rows from a sparse tensor using indices.
 
