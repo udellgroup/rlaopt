@@ -58,7 +58,7 @@ class SkPre(Preconditioner):
         This method computes the sketched matrix and constructs the preconditioner.
 
         Args:
-            A (Union[torch.Tensor, LinOpType]): The matrix or linear operator
+            A (torch.Tensor | LinOpType): The matrix or linear operator
             for which we are constructing a preconditioner.
             device (torch.device): The device on which to perform the computations.
         """

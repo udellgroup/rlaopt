@@ -53,7 +53,7 @@ class Newton(Preconditioner):
         with added regularization.
 
         Args:
-            A (Union[torch.Tensor, LinOpType]): The matrix or linear operator
+            A (torch.Tensor | LinOpType): The matrix or linear operator
             device (torch.device): The device on which to perform the computations.
         """
         # Handle the tensor and linear operator cases

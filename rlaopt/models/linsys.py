@@ -1,4 +1,4 @@
-from typing import Any, Callable, Union, Optional
+from typing import Any, Callable, Optional
 
 import torch
 
@@ -16,7 +16,7 @@ class LinSys(Model):
 
     def __init__(
         self,
-        A: Union[LinOpType, torch.Tensor],
+        A: LinOpType | torch.Tensor,
         B: torch.Tensor,
         reg: Optional[float] = 0.0,
         A_row_oracle: Optional[Callable] = None,
@@ -25,7 +25,7 @@ class LinSys(Model):
         """Initialize LinSys model.
 
         Args:
-            A (Union[LinOpType, torch.Tensor]): Linear operator or matrix A.
+            A (LinOpType | torch.Tensor): Linear operator or matrix A.
             B (torch.Tensor): Right-hand side B.
             reg (Optional[float], optional): Regularization parameter. Defaults to 0.0.
             A_row_oracle (Optional[Callable], optional): Oracle for row-wise operations.

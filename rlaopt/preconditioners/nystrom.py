@@ -52,13 +52,13 @@ class Nystrom(Preconditioner):
         self.low_precision = False
         self.L = None
 
-    def _update(self, A, device: torch.device) -> None:
+    def _update(self, A, device):
         """Update the Nyström preconditioner.
 
         This method computes the Nyström approximation of the input matrix A.
 
         Args:
-            A (Union[torch.Tensor, LinOpType]): The matrix or linear operator
+            A (torch.Tensor | LinOpType): The matrix or linear operator
             for which we are constructing a preconditioner.
             device (torch.device): Device for performing computations.
         """

@@ -1,4 +1,4 @@
-from typing import Any, Union
+from typing import Any
 from dataclasses import dataclass, asdict
 
 import torch
@@ -11,7 +11,7 @@ __all__ = ["KernelConfig"]
 @dataclass(kw_only=True, frozen=False)
 class KernelConfig:
     const_scaling: float = 1.0
-    lengthscale: Union[float, torch.Tensor]
+    lengthscale: float | torch.Tensor
 
     def to_dict(self) -> dict:
         """Convert the configuration to a dictionary.

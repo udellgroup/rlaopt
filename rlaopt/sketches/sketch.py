@@ -5,7 +5,6 @@ techniques used in randomized linear algebra.
 """
 
 from abc import ABC, abstractmethod
-from typing import Union
 
 import torch
 
@@ -73,7 +72,7 @@ class Sketch(ABC):
         """
         pass
 
-    def _apply_left(self, x: Union[torch.Tensor, LinOpType]) -> torch.Tensor:
+    def _apply_left(self, x: torch.Tensor | LinOpType) -> torch.Tensor:
         """Left multiplies input by the sketching matrix: Omega @ x.
 
         Args:
@@ -84,7 +83,7 @@ class Sketch(ABC):
         """
         return self.Omega_mat @ x
 
-    def _apply_right(self, x: Union[torch.Tensor, LinOpType]) -> torch.Tensor:
+    def _apply_right(self, x: torch.Tensor | LinOpType) -> torch.Tensor:
         """Right multiplies input by the sketching matrix: x @ Omega.
 
         Args:
@@ -95,7 +94,7 @@ class Sketch(ABC):
         """
         return x @ self.Omega_mat
 
-    def _apply_left_trans(self, x: Union[torch.Tensor, LinOpType]) -> torch.Tensor:
+    def _apply_left_trans(self, x: torch.Tensor | LinOpType) -> torch.Tensor:
         """Left multiplies input by the transposed sketching matrix: Omega.T @ x.
 
         Args:
@@ -106,7 +105,7 @@ class Sketch(ABC):
         """
         return self.Omega_mat.T @ x
 
-    def _apply_right_trans(self, x: Union[torch.Tensor, LinOpType]) -> torch.Tensor:
+    def _apply_right_trans(self, x: torch.Tensor | LinOpType) -> torch.Tensor:
         """Right multiplies the input by the transposed sketching matrix: x @ Omega.T.
 
         Args:

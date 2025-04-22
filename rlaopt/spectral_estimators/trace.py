@@ -1,7 +1,5 @@
 """Module containing Hutchinson-type methods for trace estimation."""
 
-from typing import Union
-
 import torch
 
 from rlaopt.linops import SymmetricLinOp
@@ -22,7 +20,5 @@ def hutchinson(A: SymmetricLinOp, k: int, sketch: str) -> tuple[float, float]:
     return trace, var
 
 
-def hutch_plus_plus(
-    A: Union[SymmetricLinOp, torch.Tensor], k: int, sketch: str
-) -> float:
+def hutch_plus_plus(A: SymmetricLinOp | torch.Tensor, k: int, sketch: str) -> float:
     pass
