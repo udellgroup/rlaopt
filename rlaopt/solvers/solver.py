@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import List, dict
+from typing import List
 
 __all__ = ["Solver"]
 

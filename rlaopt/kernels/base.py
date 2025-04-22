@@ -255,9 +255,9 @@ class _DistributedKernelLinOp(DistributedTwoSidedLinOp):
         self._A2 = A2  # Keep original tensor for oracles
         self._kernel_config = kernel_config
         self.devices = list(devices)
-        self._kernel_config_devices = [
-            self._kernel_config.to(device) for device in devices
-        ]
+        self._kernel_config_devices = {
+            device: self._kernel_config.to(device) for device in devices
+        }
 
         # Create row partitioning
         # A1_row_chunks is useful for the linop and block oracle,
