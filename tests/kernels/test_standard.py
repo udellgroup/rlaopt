@@ -8,6 +8,7 @@ from rlaopt.kernels import (
     Matern12LinOp,
     Matern32LinOp,
     Matern52LinOp,
+    KernelConfig,
 )
 
 
@@ -108,26 +109,24 @@ def tol(precision):
     ],
     ids=["scalar", "tensor"],
 )
-def lengthscale_param(request, device, precision):
+def kernel_config(request, device, precision):
     """Parameterized fixture for different lengthscale types."""
     if request.param["name"] == "scalar":
-        return {"lengthscale": request.param["value"]}
+        return KernelConfig(const_scaling=2.0, lengthscale=request.param["value"])
     else:
-        # Create tensor lengthscale with correct device and precision
-        return {
-            "lengthscale": torch.tensor([1.0, 2.0, 3.0], device=device, dtype=precision)
-        }
+        lengthscale = torch.tensor([1.0, 2.0, 3.0], device=device, dtype=precision)
+        return KernelConfig(const_scaling=2.0, lengthscale=lengthscale)
 
 
 # Define a single function to compute kernel matrices for any kernel type
-def compute_kernel_matrix(X, Y, lengthscale, device, dtype, kernel_func):
+def compute_kernel_matrix(X, Y, kernel_config, device, dtype, kernel_func):
     """
     General function to compute kernel matrices between X and Y.
 
     Args:
         X: First set of points (n_x, d)
         Y: Second set of points (n_y, d)
-        lengthscale: Lengthscale parameter (scalar or tensor)
+        kernel_config: Kernel configuration containing lengthscale and const_scaling
         device: Device for the output
         dtype: Data type for the output
         kernel_func: Function that computes the kernel value between two vectors
@@ -138,7 +137,9 @@ def compute_kernel_matrix(X, Y, lengthscale, device, dtype, kernel_func):
     K = torch.zeros((X.shape[0], Y.shape[0]), device=device, dtype=dtype)
     for i in range(K.shape[0]):
         for j in range(K.shape[1]):
-            K[i, j] = kernel_func(X[i], Y[j], lengthscale)
+            K[i, j] = kernel_config.const_scaling * kernel_func(
+                X[i], Y[j], kernel_config.lengthscale
+            )
     return K
 
 
@@ -180,7 +181,7 @@ def matern52_kernel(x, y, lengthscale):
 
 
 # Define kernel configurations for parameterized testing
-KERNEL_CONFIGS = [
+KERNEL_PARAMETERS = [
     {
         "class": RBFLinOp,
         "name": "rbf",
@@ -210,51 +211,50 @@ KERNEL_CONFIGS = [
 
 
 @pytest.fixture(
-    params=KERNEL_CONFIGS, ids=[config["name"] for config in KERNEL_CONFIGS]
+    params=KERNEL_PARAMETERS, ids=[config["name"] for config in KERNEL_PARAMETERS]
 )
-def kernel_config(request):
+def kernel_parameter(request):
     """Parameterized fixture for different kernel types."""
     return request.param
 
 
 class TestKernelLinOps:
-    def test_initialization(self, test_matrices, lengthscale_param, kernel_config):
+    def test_initialization(self, test_matrices, kernel_config, kernel_parameter):
         """Test initialization of kernel linear operators."""
-        kernel_class = kernel_config["class"]
+        kernel_class = kernel_parameter["class"]
         kernel = kernel_class(
-            test_matrices["A1"], test_matrices["A2"], kernel_params=lengthscale_param
+            test_matrices["A1"], test_matrices["A2"], kernel_config=kernel_config
         )
         assert kernel.A1.shape == test_matrices["A1"].shape
         assert kernel.A2.shape == test_matrices["A2"].shape
-        assert kernel.kernel_params == lengthscale_param
+        assert kernel.kernel_config == kernel_config
         assert kernel.dtype == test_matrices["A1"].dtype
 
     def test_row_and_block_oracle(
         self,
         test_matrices,
-        lengthscale_param,
+        kernel_config,
         test_matmul_vector,
         test_matmul_matrix,
         test_blk,
         test_blk_matmul_vector,
         test_blk_matmul_matrix,
         tol,
-        kernel_config,
+        kernel_parameter,
     ):
         """Test row and block oracles of kernel linear operators."""
-        kernel_class = kernel_config["class"]
-        kernel_func = kernel_config["kernel_func"]
-        lengthscale = lengthscale_param["lengthscale"]
+        kernel_class = kernel_parameter["class"]
+        kernel_func = kernel_parameter["kernel_func"]
 
         kernel = kernel_class(
-            test_matrices["A1"], test_matrices["A2"], kernel_params=lengthscale_param
+            test_matrices["A1"], test_matrices["A2"], kernel_config=kernel_config
         )
 
         # Test row oracle
         X_row = test_matrices["A1"][test_blk]
         Y_row = test_matrices["A2"]
         K_row_looped = compute_kernel_matrix(
-            X_row, Y_row, lengthscale, kernel.device, kernel.dtype, kernel_func
+            X_row, Y_row, kernel_config, kernel.device, kernel.dtype, kernel_func
         )
 
         row_lin_op = kernel.row_oracle(test_blk)
@@ -275,7 +275,7 @@ class TestKernelLinOps:
         K_blk_looped = compute_kernel_matrix(
             X_blk,
             Y_blk,
-            lengthscale,
+            kernel_config,
             test_matrices["A1"].device,
             test_matrices["A1"].dtype,
             kernel_func,
@@ -300,26 +300,25 @@ class TestKernelLinOps:
     def test_matmul(
         self,
         test_matrices,
-        lengthscale_param,
+        kernel_config,
         test_matmul_vector,
         test_matmul_matrix,
         tol,
-        kernel_config,
+        kernel_parameter,
     ):
         """Test matmul of kernel linear operators."""
-        kernel_class = kernel_config["class"]
-        kernel_func = kernel_config["kernel_func"]
-        lengthscale = lengthscale_param["lengthscale"]
+        kernel_class = kernel_parameter["class"]
+        kernel_func = kernel_parameter["kernel_func"]
 
         kernel = kernel_class(
-            test_matrices["A1"], test_matrices["A2"], kernel_params=lengthscale_param
+            test_matrices["A1"], test_matrices["A2"], kernel_config=kernel_config
         )
 
         # Compute full kernel matrix using helper function
         K_looped = compute_kernel_matrix(
             test_matrices["A1"],
             test_matrices["A2"],
-            lengthscale,
+            kernel_config,
             test_matrices["A1"].device,
             test_matrices["A2"].dtype,
             kernel_func,
