@@ -1,6 +1,6 @@
-"""Module containing Hutchinson type methods for trace estimation."""
+"""Module containing Hutchinson-type methods for trace estimation."""
 
-from typing import Tuple, Union
+from typing import Union
 
 import torch
 
@@ -11,7 +11,7 @@ from rlaopt.sketches import get_sketch
 __all__ = ["hutchinson", "hutch_plus_plus"]
 
 
-def hutchinson(A: SymmetricLinOp, k: int, sketch: str) -> Tuple[float, float]:
+def hutchinson(A: SymmetricLinOp, k: int, sketch: str) -> tuple[float, float]:
 
     Omega = get_sketch(sketch, "left", k, A.shape[0], A.device)
     Omega_A = Omega._apply_left(A)
