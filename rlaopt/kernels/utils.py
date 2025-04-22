@@ -6,12 +6,6 @@ from pykeops.torch import LazyTensor
 from .base import _get_cached_lazy_tensor
 
 
-def _check_kernel_params(kernel_params: dict[str, Any]):
-    """Check kernel parameters."""
-    if "lengthscale" not in kernel_params:
-        raise ValueError("Kernel parameters must include 'lengthscale'.")
-
-
 def _row_oracle_matvec(
     x: torch.Tensor,
     A1: torch.Tensor,
