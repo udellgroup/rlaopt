@@ -12,7 +12,8 @@ from rlaopt.linops import (
     DistributedTwoSidedLinOp,
 )
 from rlaopt.linops.distributed import _DistributedLinOp
-from rlaopt.utils import _is_torch_tensor, _is_dict, _is_set
+from rlaopt.utils import _is_torch_tensor, _is_set
+from .configs import KernelConfig, _is_kernel_config
 
 # Global, module-level cache to persist across worker calls
 _KERNEL_CACHE: dict[str, LazyTensor] = {}
@@ -24,15 +25,13 @@ class _KernelLinOp(TwoSidedLinOp):
         self,
         A1: torch.Tensor,
         A2: torch.Tensor,
-        kernel_params: dict[str, Any],
-        _check_kernel_params_fn: Callable,
+        kernel_config: KernelConfig,
         _kernel_computation_fn: Callable,
     ):
-        self._check_kernel_params = _check_kernel_params_fn
-        self._check_inputs(A1, A2, kernel_params)
+        self._check_inputs(A1, A2, kernel_config)
         self._A1 = A1
         self._A2 = A2
-        self._kernel_params = kernel_params
+        self._kernel_config = kernel_config
         self._kernel_computation = _kernel_computation_fn
         self._K_lazy = self._get_kernel()
         super().__init__(
@@ -54,10 +53,10 @@ class _KernelLinOp(TwoSidedLinOp):
         return self._A2
 
     @property
-    def kernel_params(self) -> dict[str, Any]:
-        return self._kernel_params
+    def kernel_config(self) -> KernelConfig:
+        return self._kernel_config
 
-    def _check_inputs(self, A1: Any, A2, kernel_params: Any):
+    def _check_inputs(self, A1: Any, A2, kernel_config: Any):
         _is_torch_tensor(A1, "A1")
         _is_torch_tensor(A2, "A2")
         if A1.ndim != 2:
@@ -68,8 +67,7 @@ class _KernelLinOp(TwoSidedLinOp):
             raise ValueError("A1 and A2 must be on the same device.")
         if A1.dtype != A2.dtype:
             raise ValueError("A1 and A2 must have the same dtype.")
-        _is_dict(kernel_params, "kernel_params")
-        self._check_kernel_params(kernel_params)
+        _is_kernel_config(kernel_config, "kernel_config")
 
     def _get_kernel(
         self, idx1: Optional[torch.Tensor] = None, idx2: Optional[torch.Tensor] = None
@@ -84,7 +82,7 @@ class _KernelLinOp(TwoSidedLinOp):
         else:
             A2_lazy = LazyTensor(self.A2[idx2][None, :, :])
 
-        K_lazy = self._kernel_computation(A1_lazy, A2_lazy, self.kernel_params)
+        K_lazy = self._kernel_computation(A1_lazy, A2_lazy, self.kernel_config)
         return K_lazy
 
     def _get_kernel_linop(
@@ -115,18 +113,18 @@ class _CacheableKernelLinOp(TwoSidedLinOp):
         self,
         A1: torch.Tensor,
         A2: torch.Tensor,
-        kernel_params: dict[str, Any],
+        kernel_config: KernelConfig,
         device: torch.device,
         _kernel_computation_fn: Callable,
         _kernel_name: str,
     ):
         self._A1 = A1.to(device)
         self._A2 = A2.to(device)
-        self._kernel_params = kernel_params
+        self._kernel_config = kernel_config
         self._kernel_computation = _kernel_computation_fn
         self._unique_id = (
             f"{_kernel_name}_{id(self)}_{len(self._A1)}_{len(self._A2)}_"
-            f"{kernel_params}_{self._A1.device}"
+            f"{self._A1.device}"
         )
         super().__init__(
             device=device,
@@ -147,8 +145,8 @@ class _CacheableKernelLinOp(TwoSidedLinOp):
         return self._A2
 
     @property
-    def kernel_params(self) -> dict[str, Any]:
-        return self._kernel_params
+    def kernel_config(self) -> KernelConfig:
+        return self._kernel_config
 
     def _get_lazy_tensors(self):
         A1_lazy = LazyTensor(self.A1[:, None, :])
@@ -169,7 +167,7 @@ class _CacheableKernelLinOp(TwoSidedLinOp):
             # Compute kernel and store in the global cache
             A1_lazy, A2_lazy = self._get_lazy_tensors()
             _KERNEL_CACHE[cache_key] = self._kernel_computation(
-                A1_lazy, A2_lazy, self.kernel_params
+                A1_lazy, A2_lazy, self.kernel_config
             )
 
             print(f"[PID {pid}] Kernel cached. Cache size: {len(_KERNEL_CACHE)}")
@@ -226,9 +224,8 @@ class _DistributedKernelLinOp(DistributedTwoSidedLinOp):
         self,
         A1: torch.Tensor,
         A2: torch.Tensor,
-        kernel_params: dict[str, Any],
+        kernel_config: KernelConfig,
         devices: Set[torch.device],
-        _check_kernel_params_fn: Callable,
         _kernel_computation_fn: Callable,
         _row_oracle_matvec_fn: Callable,
         _block_chunk_matvec_fn: Callable,
@@ -239,7 +236,7 @@ class _DistributedKernelLinOp(DistributedTwoSidedLinOp):
         Args:
             A1: Input data tensor
             A2: Input data tensor
-            kernel_params: Dictionary of kernel parameters
+            kernel_config: Kernel configuration
             devices: Set of devices to distribute computation across
         """
         # Clean the global caches at initialization
@@ -249,17 +246,18 @@ class _DistributedKernelLinOp(DistributedTwoSidedLinOp):
         print(f"Initialized with clean caches. PID: {os.getpid()}")
 
         # Save parameters
-        self._check_kernel_params = _check_kernel_params_fn
-        self._check_inputs(A1, A2, kernel_params, devices)
+        self._check_inputs(A1, A2, kernel_config, devices)
         self._kernel_computation = _kernel_computation_fn
         self._row_oracle_matvec = _row_oracle_matvec_fn
         self._block_chunk_matvec = _block_chunk_matvec_fn
         self._cacheable_kernel_name = _cacheable_kernel_name
         self._A1 = A1  # Keep original tensor for oracles
         self._A2 = A2  # Keep original tensor for oracles
-        self._kernel_params = kernel_params
+        self._kernel_config = kernel_config
         self.devices = list(devices)
-        self._kernel_params_devices = self._get_kernel_params_devices()
+        self._kernel_config_devices = [
+            self._kernel_config.to(device) for device in devices
+        ]
 
         # Create row partitioning
         # A1_row_chunks is useful for the linop and block oracle,
@@ -301,14 +299,14 @@ class _DistributedKernelLinOp(DistributedTwoSidedLinOp):
         return self._A2
 
     @property
-    def kernel_params(self) -> dict[str, Any]:
-        return self._kernel_params
+    def kernel_config(self) -> KernelConfig:
+        return self._kernel_config
 
     def _check_inputs(
         self,
         A1: Any,
         A2: Any,
-        kernel_params: Any,
+        kernel_config: Any,
         devices: Any,
     ):
         _is_torch_tensor(A1, "A1")
@@ -319,29 +317,12 @@ class _DistributedKernelLinOp(DistributedTwoSidedLinOp):
             raise ValueError(f"A must be a 2D tensor, got {A2.ndim}D tensor.")
         if A1.dtype != A2.dtype:
             raise ValueError("A1 and A2 must have the same dtype.")
-        _is_dict(kernel_params, "kernel_params")
-        self._check_kernel_params(kernel_params)
+        _is_kernel_config(kernel_config, "kernel_config")
         _is_set(devices, "devices")
         if len(devices) == 0:
             raise ValueError("devices must be a non-empty set.")
         if not all(isinstance(d, torch.device) for d in devices):
             raise ValueError("All elements in devices must be torch.device instances.")
-
-    def _get_kernel_params_devices(self):
-        """Move kernel parameters to the devices.
-
-        Returns:
-            Dictionary of kernel parameters moved to the devices
-        """
-        kernel_params_devices = {}
-        for device in self.devices:
-            kernel_params_devices[device] = self._kernel_params.copy()
-            for key, value in self._kernel_params.items():
-                if isinstance(value, torch.Tensor):
-                    kernel_params_devices[device][key] = value.to(device)
-                else:
-                    kernel_params_devices[device][key] = value
-        return kernel_params_devices
 
     def _create_kernel_operators(self):
         """Create the kernel operators for each chunk.
@@ -355,7 +336,7 @@ class _DistributedKernelLinOp(DistributedTwoSidedLinOp):
                 _CacheableKernelLinOp(
                     A1=self.A1[chunk_idx],
                     A2=self.A2,
-                    kernel_params=self._kernel_params_devices[device],
+                    kernel_config=self._kernel_config_devices[device],
                     device=device,
                     _kernel_computation_fn=self._kernel_computation,
                     _kernel_name=self._cacheable_kernel_name,
@@ -374,7 +355,7 @@ class _DistributedKernelLinOp(DistributedTwoSidedLinOp):
                 A1=self.A1,
                 A2_chunk=A2_chunk,
                 blk=blk,
-                kernel_params=self._kernel_params_devices[device],
+                kernel_config=self._kernel_config_devices[device],
                 kernel_computation=self._kernel_computation,
             )
 
@@ -429,7 +410,7 @@ class _DistributedKernelLinOp(DistributedTwoSidedLinOp):
                 A2=self.A2,
                 blk_chunk=blk_chunk,
                 blk=blk,
-                kernel_params=self._kernel_params_devices[device],
+                kernel_config=self._kernel_config_devices[device],
                 kernel_computation=self._kernel_computation,
             )
 
