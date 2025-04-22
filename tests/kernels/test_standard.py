@@ -181,7 +181,7 @@ def matern52_kernel(x, y, lengthscale):
 
 
 # Define kernel configurations for parameterized testing
-KERNEL_PARAMETERS = [
+KERNEL_PARAMETERIZATIONS = [
     {
         "class": RBFLinOp,
         "name": "rbf",
@@ -211,17 +211,20 @@ KERNEL_PARAMETERS = [
 
 
 @pytest.fixture(
-    params=KERNEL_PARAMETERS, ids=[config["name"] for config in KERNEL_PARAMETERS]
+    params=KERNEL_PARAMETERIZATIONS,
+    ids=[config["name"] for config in KERNEL_PARAMETERIZATIONS],
 )
-def kernel_parameter(request):
+def kernel_parameterization(request):
     """Parameterized fixture for different kernel types."""
     return request.param
 
 
 class TestKernelLinOps:
-    def test_initialization(self, test_matrices, kernel_config, kernel_parameter):
+    def test_initialization(
+        self, test_matrices, kernel_config, kernel_parameterization
+    ):
         """Test initialization of kernel linear operators."""
-        kernel_class = kernel_parameter["class"]
+        kernel_class = kernel_parameterization["class"]
         kernel = kernel_class(
             test_matrices["A1"], test_matrices["A2"], kernel_config=kernel_config
         )
@@ -240,11 +243,11 @@ class TestKernelLinOps:
         test_blk_matmul_vector,
         test_blk_matmul_matrix,
         tol,
-        kernel_parameter,
+        kernel_parameterization,
     ):
         """Test row and block oracles of kernel linear operators."""
-        kernel_class = kernel_parameter["class"]
-        kernel_func = kernel_parameter["kernel_func"]
+        kernel_class = kernel_parameterization["class"]
+        kernel_func = kernel_parameterization["kernel_func"]
 
         kernel = kernel_class(
             test_matrices["A1"], test_matrices["A2"], kernel_config=kernel_config
@@ -304,11 +307,11 @@ class TestKernelLinOps:
         test_matmul_vector,
         test_matmul_matrix,
         tol,
-        kernel_parameter,
+        kernel_parameterization,
     ):
         """Test matmul of kernel linear operators."""
-        kernel_class = kernel_parameter["class"]
-        kernel_func = kernel_parameter["kernel_func"]
+        kernel_class = kernel_parameterization["class"]
+        kernel_func = kernel_parameterization["kernel_func"]
 
         kernel = kernel_class(
             test_matrices["A1"], test_matrices["A2"], kernel_config=kernel_config
