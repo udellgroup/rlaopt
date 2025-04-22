@@ -1,7 +1,5 @@
 """Functions for estimating spectral norm of matrices/linops."""
 
-from typing import Union, Tuple
-
 import torch
 
 from rlaopt.linops import SymmetricLinOp
@@ -11,8 +9,8 @@ __all__ = ["randomized_powering"]
 
 
 def randomized_powering(
-    A: Union[SymmetricLinOp, torch.Tensor], max_iters: int = 10, rtol: float = 1e-3
-) -> Tuple[float, torch.Tensor]:
+    A: SymmetricLinOp | torch.Tensor, max_iters: int = 10, rtol: float = 1e-3
+) -> tuple[float, torch.Tensor]:
 
     d = A.shape[0]
     omega = torch.randn(d, device=A.device)

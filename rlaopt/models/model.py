@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Optional, Callable
+from typing import Callable
 from warnings import warn
 
 import torch
@@ -29,9 +29,9 @@ class Model(ABC):
 
     def _get_log_fn(
         self,
-        callback_fn: Optional[Callable],
-        callback_args: Optional[list],
-        callback_kwargs: Optional[dict],
+        callback_fn: Callable | None,
+        callback_args: list,
+        callback_kwargs: dict,
     ):
         if callback_fn is not None:
 
@@ -118,11 +118,11 @@ class Model(ABC):
         self,
         solver_config: SolverConfig,
         W_init: torch.Tensor,
-        callback_fn: Optional[Callable] = None,
-        callback_args: Optional[list] = [],
-        callback_kwargs: Optional[dict] = {},
-        callback_freq: Optional[int] = 10,
-        log_in_wandb: Optional[bool] = False,
-        wandb_init_kwargs: Optional[dict] = None,
+        callback_fn: Callable | None = None,
+        callback_args: list = [],
+        callback_kwargs: dict = {},
+        callback_freq: int = 10,
+        log_in_wandb: bool = False,
+        wandb_init_kwargs: dict | None = None,
     ):
         pass

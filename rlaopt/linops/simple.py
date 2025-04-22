@@ -1,4 +1,4 @@
-from typing import Callable, Optional
+from typing import Callable
 
 import torch
 from torch import vmap
@@ -21,8 +21,8 @@ class LinOp(_BaseLinOp):
         device: torch.device,
         shape: torch.Size,
         matvec: Callable,
-        matmat: Optional[Callable] = None,
-        dtype: Optional[torch.dtype] = _DEFAULT_DTYPE,
+        matmat: Callable | None = None,
+        dtype: torch.dtype = _DEFAULT_DTYPE,
     ):
         super().__init__(shape=shape, dtype=dtype)
         _is_torch_device(device, "device")
@@ -59,9 +59,9 @@ class TwoSidedLinOp(LinOp):
         shape: torch.Size,
         matvec: Callable,
         rmatvec: Callable,
-        matmat: Optional[Callable] = None,
-        rmatmat: Optional[Callable] = None,
-        dtype: Optional[torch.dtype] = _DEFAULT_DTYPE,
+        matmat: Callable | None = None,
+        rmatmat: Callable | None = None,
+        dtype: torch.dtype = _DEFAULT_DTYPE,
     ):
         super().__init__(device, shape, matvec, matmat, dtype)
 
@@ -99,8 +99,8 @@ class SymmetricLinOp(TwoSidedLinOp):
         device: torch.device,
         shape: torch.Size,
         matvec: Callable,
-        matmat: Optional[Callable] = None,
-        dtype: Optional[torch.dtype] = _DEFAULT_DTYPE,
+        matmat: Callable | None = None,
+        dtype: torch.dtype = _DEFAULT_DTYPE,
     ):
         super().__init__(device, shape, matvec, matvec, matmat, matmat, dtype)
 

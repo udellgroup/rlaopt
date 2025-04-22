@@ -1,6 +1,6 @@
 from functools import partial
 import os
-from typing import Any, Callable, Optional, Set
+from typing import Any, Callable
 
 from pykeops.torch import LazyTensor
 import torch
@@ -70,7 +70,7 @@ class _KernelLinOp(TwoSidedLinOp):
         _is_kernel_config(kernel_config, "kernel_config")
 
     def _get_kernel(
-        self, idx1: Optional[torch.Tensor] = None, idx2: Optional[torch.Tensor] = None
+        self, idx1: torch.Tensor | None = None, idx2: torch.Tensor | None = None
     ) -> LazyTensor:
         if idx1 is None:
             A1_lazy = LazyTensor(self.A1[:, None, :])
@@ -87,8 +87,8 @@ class _KernelLinOp(TwoSidedLinOp):
 
     def _get_kernel_linop(
         self,
-        idx1: Optional[torch.Tensor] = None,
-        idx2: Optional[torch.Tensor] = None,
+        idx1: torch.Tensor | None = None,
+        idx2: torch.Tensor | None = None,
     ) -> LinOp:
         K = self._get_kernel(idx1, idx2)
         return LinOp(
@@ -225,7 +225,7 @@ class _DistributedKernelLinOp(DistributedTwoSidedLinOp):
         A1: torch.Tensor,
         A2: torch.Tensor,
         kernel_config: KernelConfig,
-        devices: Set[torch.device],
+        devices: set[torch.device],
         _kernel_computation_fn: Callable,
         _row_oracle_matvec_fn: Callable,
         _block_chunk_matvec_fn: Callable,
@@ -255,9 +255,9 @@ class _DistributedKernelLinOp(DistributedTwoSidedLinOp):
         self._A2 = A2  # Keep original tensor for oracles
         self._kernel_config = kernel_config
         self.devices = list(devices)
-        self._kernel_config_devices = [
-            self._kernel_config.to(device) for device in devices
-        ]
+        self._kernel_config_devices = {
+            device: self._kernel_config.to(device) for device in devices
+        }
 
         # Create row partitioning
         # A1_row_chunks is useful for the linop and block oracle,

@@ -5,7 +5,7 @@ preconditioners.
 """
 
 from abc import ABC, abstractmethod
-from typing import Callable, Union
+from typing import Callable
 
 import torch
 
@@ -36,7 +36,7 @@ class Preconditioner(ABC):
     @abstractmethod
     def _update(
         self,
-        A: Union[torch.Tensor, LinOpType],
+        A: torch.Tensor | LinOpType,
         device: torch.device,
         *args: list,
         **kwargs: dict
@@ -44,7 +44,7 @@ class Preconditioner(ABC):
         """Update the preconditioner.
 
         Args:
-            A (Union[torch.Tensor, LinOpType]): The matrix or linear operator
+            A (torch.Tensor | LinOpType): The matrix or linear operator
             for which we are constructing a preconditioner.
             device (torch.device): The device on which to perform the update.
             *args: Additional positional arguments.

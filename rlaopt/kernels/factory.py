@@ -1,4 +1,4 @@
-from typing import Callable, Set, Tuple
+from typing import Callable
 import torch
 
 from .base import _KernelLinOp, _DistributedKernelLinOp
@@ -8,7 +8,7 @@ from .utils import _row_oracle_matvec, _block_chunk_matvec
 
 def _create_kernel_classes(
     kernel_name: str, kernel_computation_fn: Callable
-) -> Tuple[_KernelLinOp, _DistributedKernelLinOp]:
+) -> tuple[_KernelLinOp, _DistributedKernelLinOp]:
     """Factory function to create kernel linear operator classes.
 
     Args:
@@ -36,7 +36,7 @@ def _create_kernel_classes(
         A1: torch.Tensor,
         A2: torch.Tensor,
         kernel_config: KernelConfig,
-        devices: Set[torch.device],
+        devices: set[torch.device],
     ):
         _DistributedKernelLinOp.__init__(
             self,

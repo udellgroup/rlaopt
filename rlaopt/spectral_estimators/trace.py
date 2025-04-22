@@ -1,6 +1,4 @@
-"""Module containing Hutchinson type methods for trace estimation."""
-
-from typing import Tuple, Union
+"""Module containing Hutchinson-type methods for trace estimation."""
 
 import torch
 
@@ -11,7 +9,7 @@ from rlaopt.sketches import get_sketch
 __all__ = ["hutchinson", "hutch_plus_plus"]
 
 
-def hutchinson(A: SymmetricLinOp, k: int, sketch: str) -> Tuple[float, float]:
+def hutchinson(A: SymmetricLinOp, k: int, sketch: str) -> tuple[float, float]:
 
     Omega = get_sketch(sketch, "left", k, A.shape[0], A.device)
     Omega_A = Omega._apply_left(A)
@@ -22,7 +20,5 @@ def hutchinson(A: SymmetricLinOp, k: int, sketch: str) -> Tuple[float, float]:
     return trace, var
 
 
-def hutch_plus_plus(
-    A: Union[SymmetricLinOp, torch.Tensor], k: int, sketch: str
-) -> float:
+def hutch_plus_plus(A: SymmetricLinOp | torch.Tensor, k: int, sketch: str) -> float:
     pass

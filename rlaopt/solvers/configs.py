@@ -1,6 +1,6 @@
 from abc import ABC
 from dataclasses import dataclass, asdict
-from typing import Any, dict
+from typing import Any
 
 import torch
 
@@ -89,7 +89,7 @@ class SAPConfig(SolverConfig):
     precond_config: PreconditionerConfig = IdentityConfig()
     blk_sz: int
     accel: bool = True
-    accel_config: SAPAccelConfig = (None,)
+    accel_config: SAPAccelConfig | None = None
     power_iters: int = 10
 
     def __post_init__(self):
