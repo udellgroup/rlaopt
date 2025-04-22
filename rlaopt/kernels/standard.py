@@ -1,3 +1,6 @@
+from pykeops.torch import LazyTensor
+
+from .configs import KernelConfig
 from .factory import _create_kernel_classes
 
 
@@ -25,47 +28,68 @@ _SQRT3 = 3**0.5
 _SQRT5 = 5**0.5
 
 
-def _get_scaled_diff(Ai_lazy, Aj_lazy, kernel_params):
+def _get_scaled_diff(
+    Ai_lazy: LazyTensor, Aj_lazy: LazyTensor, kernel_config: KernelConfig
+):
     """Compute scaled difference for kernels."""
-    return (Ai_lazy - Aj_lazy) / kernel_params["lengthscale"]
+    return (Ai_lazy - Aj_lazy) / kernel_config.lengthscale
 
 
-def _get_scaled_diff_matern(Ai_lazy, Aj_lazy, kernel_params):
+def _get_scaled_diff_matern(
+    Ai_lazy: LazyTensor, Aj_lazy: LazyTensor, kernel_config: KernelConfig
+):
     """Compute scaled distance matrix for Matern kernels."""
-    D = _get_scaled_diff(Ai_lazy, Aj_lazy, kernel_params)
+    D = _get_scaled_diff(Ai_lazy, Aj_lazy, kernel_config)
     return (D**2).sum(dim=2).sqrt()
 
 
-def _kernel_computation_rbf(Ai_lazy, Aj_lazy, kernel_params):
+def _apply_const_scaling(K_lazy: LazyTensor, kernel_config: KernelConfig):
+    """Apply constant scaling to the kernel matrix."""
+    return kernel_config.const_scaling * K_lazy
+
+
+def _kernel_computation_rbf(
+    Ai_lazy: LazyTensor, Aj_lazy: LazyTensor, kernel_config: KernelConfig
+):
     """Compute RBF kernel."""
-    D = _get_scaled_diff(Ai_lazy, Aj_lazy, kernel_params)
+    D = _get_scaled_diff(Ai_lazy, Aj_lazy, kernel_config)
     D = (D**2).sum(dim=2)
-    return (-D / 2).exp()
+    return _apply_const_scaling((-D / 2).exp(), kernel_config)
 
 
-def _kernel_computation_laplace(Ai_lazy, Aj_lazy, kernel_params):
+def _kernel_computation_laplace(
+    Ai_lazy: LazyTensor, Aj_lazy: LazyTensor, kernel_config: KernelConfig
+):
     """Compute Laplace kernel."""
-    D = _get_scaled_diff(Ai_lazy, Aj_lazy, kernel_params)
+    D = _get_scaled_diff(Ai_lazy, Aj_lazy, kernel_config)
     D = D.abs().sum(dim=2)
-    return (-D).exp()
+    return _apply_const_scaling((-D).exp(), kernel_config)
 
 
-def _kernel_computation_matern12(Ai_lazy, Aj_lazy, kernel_params):
+def _kernel_computation_matern12(
+    Ai_lazy: LazyTensor, Aj_lazy: LazyTensor, kernel_config: KernelConfig
+):
     """Compute Matern-1/2 kernel."""
-    D = _get_scaled_diff_matern(Ai_lazy, Aj_lazy, kernel_params)
-    return (-D).exp()
+    D = _get_scaled_diff_matern(Ai_lazy, Aj_lazy, kernel_config)
+    return _apply_const_scaling((-D).exp(), kernel_config)
 
 
-def _kernel_computation_matern32(Ai_lazy, Aj_lazy, kernel_params):
+def _kernel_computation_matern32(
+    Ai_lazy: LazyTensor, Aj_lazy: LazyTensor, kernel_config: KernelConfig
+):
     """Compute Matern-3/2 kernel."""
-    D = _get_scaled_diff_matern(Ai_lazy, Aj_lazy, kernel_params)
-    return (1 + _SQRT3 * D) * (-_SQRT3 * D).exp()
+    D = _get_scaled_diff_matern(Ai_lazy, Aj_lazy, kernel_config)
+    return _apply_const_scaling((1 + _SQRT3 * D) * (-_SQRT3 * D).exp(), kernel_config)
 
 
-def _kernel_computation_matern52(Ai_lazy, Aj_lazy, kernel_params):
+def _kernel_computation_matern52(
+    Ai_lazy: LazyTensor, Aj_lazy: LazyTensor, kernel_config: KernelConfig
+):
     """Compute Matern-5/2 kernel."""
-    D = _get_scaled_diff_matern(Ai_lazy, Aj_lazy, kernel_params)
-    return (1 + _SQRT5 * D + 5 / 3 * D**2) * (-_SQRT5 * D).exp()
+    D = _get_scaled_diff_matern(Ai_lazy, Aj_lazy, kernel_config)
+    return _apply_const_scaling(
+        (1 + _SQRT5 * D + 5 / 3 * D**2) * (-_SQRT5 * D).exp(), kernel_config
+    )
 
 
 RBFLinOp, DistributedRBFLinOp = _create_kernel_classes(

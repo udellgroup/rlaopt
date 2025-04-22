@@ -1,6 +1,6 @@
 from abc import ABC
 from dataclasses import dataclass, asdict
-from typing import Any
+from typing import Any, dict
 
 import torch
 

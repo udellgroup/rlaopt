@@ -1,8 +1,9 @@
-from typing import Dict, Callable, Set, Tuple
+from typing import Callable, Set, Tuple
 import torch
 
 from .base import _KernelLinOp, _DistributedKernelLinOp
-from .utils import _check_kernel_params, _row_oracle_matvec, _block_chunk_matvec
+from .configs import KernelConfig
+from .utils import _row_oracle_matvec, _block_chunk_matvec
 
 
 def _create_kernel_classes(
@@ -18,13 +19,14 @@ def _create_kernel_classes(
         A tuple of (_KernelLinOp, _DistributedKernelLinOp) classes
     """
     # Define the class initialization method that will be used
-    def kernel_init(self, A1: torch.Tensor, A2: torch.Tensor, kernel_params: Dict):
+    def kernel_init(
+        self, A1: torch.Tensor, A2: torch.Tensor, kernel_config: KernelConfig
+    ):
         _KernelLinOp.__init__(
             self,
             A1=A1,
             A2=A2,
-            kernel_params=kernel_params,
-            _check_kernel_params_fn=_check_kernel_params,
+            kernel_config=kernel_config,
             _kernel_computation_fn=kernel_computation_fn,
         )
 
@@ -33,16 +35,15 @@ def _create_kernel_classes(
         self,
         A1: torch.Tensor,
         A2: torch.Tensor,
-        kernel_params: Dict,
+        kernel_config: KernelConfig,
         devices: Set[torch.device],
     ):
         _DistributedKernelLinOp.__init__(
             self,
             A1=A1,
             A2=A2,
-            kernel_params=kernel_params,
+            kernel_config=kernel_config,
             devices=devices,
-            _check_kernel_params_fn=_check_kernel_params,
             _kernel_computation_fn=kernel_computation_fn,
             _row_oracle_matvec_fn=_row_oracle_matvec,
             _block_chunk_matvec_fn=_block_chunk_matvec,
