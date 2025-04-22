@@ -9,6 +9,7 @@ __all__ = [
     "_is_bool",
     "_is_callable",
     "_is_dict",
+    "_is_float",
     "_is_list",
     "_is_set",
     "_is_str",
@@ -142,5 +143,5 @@ def _is_pos_float(param: Any, param_name: str):
 
 def _is_pos_int(param: Any, param_name: str):
     _is_int(param, param_name)
-    if param < 0:
+    if param <= 0:
         raise ValueError(f"{param_name} must be positive, but received {param}")
