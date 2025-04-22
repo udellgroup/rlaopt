@@ -1,4 +1,4 @@
-from typing import Any, Callable, Optional
+from typing import Any, Callable
 
 import torch
 
@@ -18,20 +18,20 @@ class LinSys(Model):
         self,
         A: LinOpType | torch.Tensor,
         B: torch.Tensor,
-        reg: Optional[float] = 0.0,
-        A_row_oracle: Optional[Callable] = None,
-        A_blk_oracle: Optional[Callable] = None,
+        reg: float = 0.0,
+        A_row_oracle: Callable | None = None,
+        A_blk_oracle: Callable | None = None,
     ):
         """Initialize LinSys model.
 
         Args:
             A (LinOpType | torch.Tensor): Linear operator or matrix A.
             B (torch.Tensor): Right-hand side B.
-            reg (Optional[float], optional): Regularization parameter. Defaults to 0.0.
-            A_row_oracle (Optional[Callable], optional): Oracle for row-wise operations.
-              Defaults to None.
-            A_blk_oracle (Optional[Callable], optional): Oracle for block-wise
-            operations. Defaults to None.
+            reg (float, optional): Regularization parameter. Defaults to 0.0.
+            A_row_oracle (Callable, optional): Oracle for row-wise operations.
+            Defaults to None.
+            A_blk_oracle (Callable, optional): Oracle for block-wise operations.
+            Defaults to None.
         """
         self._check_inputs(A, B, reg, A_row_oracle, A_blk_oracle)
         self._A = A
@@ -72,8 +72,8 @@ class LinSys(Model):
         A: Any,
         B: Any,
         reg: Any,
-        A_row_oracle: Optional[Any],
-        A_blk_oracle: Optional[Any],
+        A_row_oracle: Any,
+        A_blk_oracle: Any,
     ):
         _is_linop_or_torch_tensor(A, "A")
         _is_torch_tensor(B, "B")

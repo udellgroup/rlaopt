@@ -1,5 +1,3 @@
-from typing import Optional
-
 from scipy.sparse import csr_matrix, csr_array, csc_array
 import torch
 
@@ -169,7 +167,7 @@ class SparseCSRTensor(_SparseTensor):
     def __init__(
         self,
         data: torch.sparse.Tensor | csr_matrix | csr_array,
-        device: Optional[str | torch.device] = None,
+        device: str | torch.device | None = None,
     ):
         # Check type of data
         if not self._is_sparse_csr_tensor(data) and not isinstance(
@@ -182,10 +180,10 @@ class SparseCSRTensor(_SparseTensor):
             )
 
         # Check device
-        if not isinstance(device, str) and not isinstance(device, torch.device):
+        if not isinstance(device, (str, torch.device, type(None))):
             raise TypeError(
                 f"Unsupported device type {type(device).__name__}. "
-                "Expected str or torch.device."
+                "Expected str, torch.device, or None."
             )
         if self._is_sparse_csr_tensor(data):
             if device is not None and data.device != device:

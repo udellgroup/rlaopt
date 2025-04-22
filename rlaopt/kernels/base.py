@@ -1,6 +1,6 @@
 from functools import partial
 import os
-from typing import Any, Callable, Optional
+from typing import Any, Callable
 
 from pykeops.torch import LazyTensor
 import torch
@@ -70,7 +70,7 @@ class _KernelLinOp(TwoSidedLinOp):
         _is_kernel_config(kernel_config, "kernel_config")
 
     def _get_kernel(
-        self, idx1: Optional[torch.Tensor] = None, idx2: Optional[torch.Tensor] = None
+        self, idx1: torch.Tensor | None = None, idx2: torch.Tensor | None = None
     ) -> LazyTensor:
         if idx1 is None:
             A1_lazy = LazyTensor(self.A1[:, None, :])
@@ -87,8 +87,8 @@ class _KernelLinOp(TwoSidedLinOp):
 
     def _get_kernel_linop(
         self,
-        idx1: Optional[torch.Tensor] = None,
-        idx2: Optional[torch.Tensor] = None,
+        idx1: torch.Tensor | None = None,
+        idx2: torch.Tensor | None = None,
     ) -> LinOp:
         K = self._get_kernel(idx1, idx2)
         return LinOp(
