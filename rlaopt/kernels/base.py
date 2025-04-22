@@ -1,6 +1,6 @@
 from functools import partial
 import os
-from typing import Any, Callable, Optional, Set
+from typing import Any, Callable, Optional
 
 from pykeops.torch import LazyTensor
 import torch
@@ -225,7 +225,7 @@ class _DistributedKernelLinOp(DistributedTwoSidedLinOp):
         A1: torch.Tensor,
         A2: torch.Tensor,
         kernel_config: KernelConfig,
-        devices: Set[torch.device],
+        devices: set[torch.device],
         _kernel_computation_fn: Callable,
         _row_oracle_matvec_fn: Callable,
         _block_chunk_matvec_fn: Callable,

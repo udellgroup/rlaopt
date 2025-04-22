@@ -1,4 +1,4 @@
-from typing import Callable, Set, Tuple
+from typing import Callable, Tuple
 import torch
 
 from .base import _KernelLinOp, _DistributedKernelLinOp
@@ -36,7 +36,7 @@ def _create_kernel_classes(
         A1: torch.Tensor,
         A2: torch.Tensor,
         kernel_config: KernelConfig,
-        devices: Set[torch.device],
+        devices: set[torch.device],
     ):
         _DistributedKernelLinOp.__init__(
             self,
