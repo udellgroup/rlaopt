@@ -354,7 +354,10 @@ class _DistributedKernelLinOp(DistributedTwoSidedLinOp):
         """Create fake kernel operators for each chunk.
 
         These operators do not compute the kernel, but are used to create the
-        distributed operator.
+        distributed operator. They are not suitable for actual computation.
+
+        Returns:
+            List of fake kernel operators, one for each device/chunk
         """
         ops = []
         for device, chunk_idx in zip(self.devices, self.A1_row_chunks):
@@ -362,10 +365,10 @@ class _DistributedKernelLinOp(DistributedTwoSidedLinOp):
                 TwoSidedLinOp(
                     device=device,
                     shape=torch.Size((chunk_idx.shape[0], self.A2.shape[0])),
-                    matvec=lambda x: x,
-                    rmatvec=lambda x: x,
-                    matmat=lambda x: x,
-                    rmatmat=lambda x: x,
+                    matvec=lambda x: None,
+                    rmatvec=lambda x: None,
+                    matmat=lambda x: None,
+                    rmatmat=lambda x: None,
                     dtype=self.dtype,
                 )
             )
