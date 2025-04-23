@@ -37,6 +37,7 @@ def _create_kernel_classes(
         A2: torch.Tensor,
         kernel_config: KernelConfig,
         devices: set[torch.device],
+        use_full_kernel: bool = True,
     ):
         _DistributedKernelLinOp.__init__(
             self,
@@ -44,6 +45,7 @@ def _create_kernel_classes(
             A2=A2,
             kernel_config=kernel_config,
             devices=devices,
+            use_full_kernel=use_full_kernel,
             _kernel_computation_fn=kernel_computation_fn,
             _row_oracle_matvec_fn=_row_oracle_matvec,
             _block_chunk_matvec_fn=_block_chunk_matvec,

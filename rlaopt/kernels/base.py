@@ -226,11 +226,11 @@ class _DistributedKernelLinOp(DistributedTwoSidedLinOp):
         A2: torch.Tensor,
         kernel_config: KernelConfig,
         devices: set[torch.device],
+        use_full_kernel: bool,
         _kernel_computation_fn: Callable,
         _row_oracle_matvec_fn: Callable,
         _block_chunk_matvec_fn: Callable,
         _cacheable_kernel_name: str,
-        use_full_kernel: bool = True,
     ):
         """Initialize the distributed kernel linear operator.
 
@@ -240,7 +240,6 @@ class _DistributedKernelLinOp(DistributedTwoSidedLinOp):
             kernel_config: Kernel configuration
             devices: Set of devices to distribute computation across
             use_full_kernel: Whether to create linear operators for the full kernel.
-            Default is True.
         """
         # Clean the global caches at initialization
         global _KERNEL_CACHE, _LAZY_TENSOR_CACHE
