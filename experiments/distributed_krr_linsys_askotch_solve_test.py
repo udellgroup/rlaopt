@@ -1,7 +1,7 @@
 import torch
 
 from rlaopt.models import LinSys
-from rlaopt.kernels import DistributedRBFLinOp
+from rlaopt.kernels import DistributedRBFLinOp, KernelConfig
 from rlaopt.preconditioners import NystromConfig
 from rlaopt.solvers import SAPConfig, SAPAccelConfig
 
@@ -28,9 +28,9 @@ def main():
 
     # get linear operator for kernel matrix
     lin_op = DistributedRBFLinOp(
-        A=A,
-        # kernel_params={"lengthscale": sigma},
-        kernel_params={"lengthscale": sigma * torch.ones(d, device=devices[0])},
+        A1=A,
+        A2=A,
+        kernel_config=KernelConfig(lengthscale=sigma),
         devices=set(devices),
     )
 

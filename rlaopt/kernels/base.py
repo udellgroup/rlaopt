@@ -226,6 +226,7 @@ class _DistributedKernelLinOp(DistributedTwoSidedLinOp):
         A2: torch.Tensor,
         kernel_config: KernelConfig,
         devices: set[torch.device],
+        use_full_kernel: bool,
         _kernel_computation_fn: Callable,
         _row_oracle_matvec_fn: Callable,
         _block_chunk_matvec_fn: Callable,
@@ -238,6 +239,7 @@ class _DistributedKernelLinOp(DistributedTwoSidedLinOp):
             A2: Input data tensor
             kernel_config: Kernel configuration
             devices: Set of devices to distribute computation across
+            use_full_kernel: Whether to create linear operators for the full kernel.
         """
         # Clean the global caches at initialization
         global _KERNEL_CACHE, _LAZY_TENSOR_CACHE
@@ -260,7 +262,7 @@ class _DistributedKernelLinOp(DistributedTwoSidedLinOp):
         }
 
         # Create row partitioning
-        # A1_row_chunks is useful for the linop and block oracle,
+        # A1_row_chunks is useful for the linop,
         # A2_row_chunks is useful for the row oracle
         self.A1_row_chunks = torch.chunk(
             torch.arange(self._A1.shape[0]), len(self.devices), dim=0
@@ -269,16 +271,19 @@ class _DistributedKernelLinOp(DistributedTwoSidedLinOp):
             torch.arange(self._A2.shape[0]), len(self.devices), dim=0
         )
 
-        # Create chunks of data for each device
-        self.A1_chunks = []
+        # Send chunks of A2 to devices
         self.A2_chunks = []
-        for device, chunk_idx in zip(self.devices, self.A1_row_chunks):
-            self.A1_chunks.append(self._A1[chunk_idx].to(device))
         for device, chunk_idx in zip(self.devices, self.A2_row_chunks):
             self.A2_chunks.append(self._A2[chunk_idx].to(device))
 
-        # Create cacheable kernel operators for each chunk
-        kernel_ops = self._create_kernel_operators()
+        # If we are using the full kernel, we need to create the kernel operators
+        # The kernel operators use cached LazyTensors
+        if use_full_kernel:
+            kernel_ops = self._create_kernel_operators()
+        # If not, we create "fake" kernel operators
+        # In this case, we save memory since we do not have to send A2 to each device
+        else:
+            kernel_ops = self._create_fake_kernel_operators()
 
         # Initialize the distributed operator
         super().__init__(
@@ -340,6 +345,30 @@ class _DistributedKernelLinOp(DistributedTwoSidedLinOp):
                     device=device,
                     _kernel_computation_fn=self._kernel_computation,
                     _kernel_name=self._cacheable_kernel_name,
+                )
+            )
+        return ops
+
+    def _create_fake_kernel_operators(self):
+        """Create fake kernel operators for each chunk.
+
+        These operators do not compute the kernel, but are used to create the
+        distributed operator. They are not suitable for actual computation.
+
+        Returns:
+            List of fake kernel operators, one for each device/chunk
+        """
+        ops = []
+        for device, chunk_idx in zip(self.devices, self.A1_row_chunks):
+            ops.append(
+                TwoSidedLinOp(
+                    device=device,
+                    shape=torch.Size((chunk_idx.shape[0], self.A2.shape[0])),
+                    matvec=lambda x: None,
+                    rmatvec=lambda x: None,
+                    matmat=lambda x: None,
+                    rmatmat=lambda x: None,
+                    dtype=self.dtype,
                 )
             )
         return ops
