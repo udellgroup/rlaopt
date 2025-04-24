@@ -1,5 +1,4 @@
 #include <ATen/Operators.h>
-#include <Python.h>
 #include <torch/library.h>
 #ifdef _OPENMP
 #include <omp.h>
