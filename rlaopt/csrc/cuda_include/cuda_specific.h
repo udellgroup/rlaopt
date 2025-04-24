@@ -1,5 +1,4 @@
 #pragma once
-#include <cuda_runtime.h>
 
 namespace rlaopt::utils {
 // Struct to store configurations for kernel launches
