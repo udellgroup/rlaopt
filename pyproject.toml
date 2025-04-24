@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools", "wheel", "torch>=2.6.0", "ninja>=1.11.0"]
+requires = ["setuptools", "wheel", "torch>=2.7.0", "ninja>=1.11.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -19,7 +19,7 @@ authors = [
 dependencies = [
     "numpy>=2.2.0",
     "scipy>=1.15.0",
-    "torch>=2.6.0",
+    "torch>=2.7.0",
     "wandb>=0.19.0",
     "pykeops>=2.2.0"
 ]

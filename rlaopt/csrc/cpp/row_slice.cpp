@@ -1,27 +1,7 @@
 #include <ATen/Operators.h>
-#include <Python.h>
-#include <torch/all.h>
 #include <torch/library.h>
 
 #include "../cpp_include/input_checks.h"
-
-extern "C" {
-/* Creates a dummy empty _C module that can be imported from Python.
-   The import from Python will load the .so consisting of this file
-   in this extension, so that the TORCH_LIBRARY static initializers
-   below are run. */
-PyObject* PyInit__C(void) {
-    static struct PyModuleDef module_def = {
-        PyModuleDef_HEAD_INIT,
-        "_C", /* name of module */
-        NULL, /* module documentation, may be NULL */
-        -1,   /* size of per-interpreter state of the module,
-                 or -1 if the module keeps state in global variables. */
-        NULL, /* methods */
-    };
-    return PyModule_Create(&module_def);
-}
-}
 
 namespace rlaopt {
 
@@ -79,9 +59,9 @@ at::Tensor get_row_slice_cpu(const at::Tensor& sparse_tensor, const at::Tensor& 
     }
 
     // Create new tensors for the result
-    auto new_crow_indices = torch::empty({num_requested_rows + 1}, crow_indices.options());
-    auto new_col_indices = torch::empty({new_nnz}, col_indices.options());
-    auto new_values = torch::empty({new_nnz}, values.options());
+    auto new_crow_indices = at::empty({num_requested_rows + 1}, crow_indices.options());
+    auto new_col_indices = at::empty({new_nnz}, col_indices.options());
+    auto new_values = at::empty({new_nnz}, values.options());
 
     // Get pointers for new tensors
     auto new_crow_indices_ptr = new_crow_indices.data_ptr<int64_t>();
