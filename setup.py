@@ -12,11 +12,6 @@ from torch.utils.cpp_extension import (
 
 LIBRARY_NAME = "rlaopt"
 
-if torch.__version__ >= "2.6.0":
-    py_limited_api = True
-else:
-    py_limited_api = False
-
 
 def find_sources(root_dir, file_ext):
     """Find all files with the given extension recursively starting from root_dir."""
@@ -57,7 +52,6 @@ def get_extensions():
         "cxx": [
             "-O3" if not debug_mode else "-O0",
             "-fdiagnostics-color=always",
-            "-DPy_LIMITED_API=0x03090000",  # min CPython version 3.9
         ],
         "nvcc": [
             "-O3" if not debug_mode else "-O0",
@@ -92,7 +86,7 @@ def get_extensions():
             include_dirs=extensions_include_dirs,
             library_dirs=[torch_lib_path],  # Add PyTorch library directory
             runtime_library_dirs=[torch_lib_path],  # Add runtime path (RPATH)
-            py_limited_api=py_limited_api,
+            py_limited_api=True,
         )
     ]
 
@@ -103,5 +97,5 @@ setup(
     packages=find_packages(),
     ext_modules=get_extensions(),
     cmdclass={"build_ext": BuildExtension},
-    options={"bdist_wheel": {"py_limited_api": "cp39"}} if py_limited_api else {},
+    options={"bdist_wheel": {"py_limited_api": "cp39"}},
 )
