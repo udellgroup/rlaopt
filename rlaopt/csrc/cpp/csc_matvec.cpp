@@ -1,6 +1,5 @@
 #include <ATen/Operators.h>
 #include <Python.h>
-#include <torch/all.h>
 #include <torch/library.h>
 
 #include "../cpp_include/input_checks.h"
@@ -24,8 +23,7 @@ void csc_matvec_cpu_impl(const scalar_t* values, const int64_t* row_indices,
 }
 }  // namespace
 
-torch::Tensor csc_matvec_cpu(const torch::Tensor& sparse_tensor,
-                             const torch::Tensor& dense_tensor) {
+at::Tensor csc_matvec_cpu(const at::Tensor& sparse_tensor, const at::Tensor& dense_tensor) {
     rlaopt::utils::check_csc_matmul_inputs(sparse_tensor, dense_tensor, at::DeviceType::CPU, 1,
                                            "sparse_tensor", "dense_tensor");
 
@@ -37,7 +35,7 @@ torch::Tensor csc_matvec_cpu(const torch::Tensor& sparse_tensor,
                 "Number of columns in sparse tensor must match dense vector size");
 
     // Create result tensor
-    auto result = torch::zeros({num_rows}, dense_tensor.options());
+    auto result = at::zeros({num_rows}, dense_tensor.options());
 
     // Get row indices and column pointers (same for all data types)
     const int64_t* row_indices = sparse_tensor.row_indices().data_ptr<int64_t>();

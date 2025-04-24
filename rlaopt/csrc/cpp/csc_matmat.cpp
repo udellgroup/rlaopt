@@ -1,6 +1,5 @@
 #include <ATen/Operators.h>
 #include <Python.h>
-#include <torch/all.h>
 #include <torch/library.h>
 #ifdef _OPENMP
 #include <omp.h>
@@ -34,8 +33,7 @@ void csc_matmat_cpu_impl(const scalar_t* values, const int64_t* row_indices,
 }
 }  // namespace
 
-torch::Tensor csc_matmat_cpu(const torch::Tensor& sparse_tensor,
-                             const torch::Tensor& dense_tensor) {
+at::Tensor csc_matmat_cpu(const at::Tensor& sparse_tensor, const at::Tensor& dense_tensor) {
     rlaopt::utils::check_csc_matmul_inputs(sparse_tensor, dense_tensor, at::DeviceType::CPU, 2,
                                            "sparse_tensor", "dense_tensor");
 
@@ -50,7 +48,7 @@ torch::Tensor csc_matmat_cpu(const torch::Tensor& sparse_tensor,
     int64_t dense_batch_stride = dense_strides[1];
 
     // Create result tensor
-    auto result = torch::zeros({num_rows, batch_size}, dense_tensor.options());
+    auto result = at::zeros({num_rows, batch_size}, dense_tensor.options());
     auto result_strides = result.strides();
     int64_t result_row_stride = result_strides[0];
     int64_t result_batch_stride = result_strides[1];
