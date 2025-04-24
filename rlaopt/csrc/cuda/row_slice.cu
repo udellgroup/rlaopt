@@ -1,6 +1,7 @@
+#include <ATen/Operators.h>
 #include <cuda.h>
 #include <cuda_runtime.h>
-#include <torch/extension.h>
+#include <torch/library.h>
 
 #include "../cpp_include/input_checks.h"
 #include "../cuda_include/cuda_specific.h"

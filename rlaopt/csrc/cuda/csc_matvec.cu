@@ -1,6 +1,7 @@
+#include <ATen/Operators.h>
 #include <cuda.h>
 #include <cuda_runtime.h>
-#include <torch/extension.h>
+#include <torch/library.h>
 
 #include "../cpp_include/input_checks.h"
 #include "../cuda_include/cuda_specific.h"
@@ -28,8 +29,7 @@ __global__ void csc_matvec_kernel(const scalar_t* __restrict__ values,
 }
 }  // namespace
 
-torch::Tensor csc_matvec_cuda(const torch::Tensor& sparse_tensor,
-                              const torch::Tensor& dense_tensor) {
+at::Tensor csc_matvec_cuda(const at::Tensor& sparse_tensor, const at::Tensor& dense_tensor) {
     rlaopt::utils::check_csc_matmul_inputs(sparse_tensor, dense_tensor, at::DeviceType::CUDA, 1,
                                            "sparse_tensor", "dense_tensor");
 
@@ -43,7 +43,7 @@ torch::Tensor csc_matvec_cuda(const torch::Tensor& sparse_tensor,
     TORCH_CHECK(num_cols == dense_tensor.size(0),
                 "Number of columns in sparse tensor must match dense vector size");
 
-    auto result = torch::zeros({num_rows}, dense_tensor.options());
+    auto result = at::zeros({num_rows}, dense_tensor.options());
 
     // Get kernel launch configuration
     rlaopt::utils::KernelLaunchConfig config = rlaopt::utils::get_kernel_launch_config_1d();

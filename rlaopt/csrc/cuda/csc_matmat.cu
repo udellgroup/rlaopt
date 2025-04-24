@@ -1,6 +1,7 @@
+#include <ATen/Operators.h>
 #include <cuda.h>
 #include <cuda_runtime.h>
-#include <torch/extension.h>
+#include <torch/library.h>
 
 #include "../cpp_include/input_checks.h"
 #include "../cuda_include/cuda_specific.h"
@@ -32,8 +33,7 @@ __global__ void csc_matmat_kernel_2d(
 }
 }  // namespace
 
-torch::Tensor csc_matmat_cuda(const torch::Tensor& sparse_tensor,
-                              const torch::Tensor& dense_tensor) {
+at::Tensor csc_matmat_cuda(const at::Tensor& sparse_tensor, const at::Tensor& dense_tensor) {
     rlaopt::utils::check_csc_matmul_inputs(sparse_tensor, dense_tensor, at::DeviceType::CUDA, 2,
                                            "sparse_tensor", "dense_tensor");
 
@@ -45,7 +45,7 @@ torch::Tensor csc_matmat_cuda(const torch::Tensor& sparse_tensor,
     auto num_cols = sparse_tensor.size(1);
     auto batch_size = dense_tensor.size(1);
 
-    auto result = torch::zeros({num_rows, batch_size}, dense_tensor.options());
+    auto result = at::zeros({num_rows, batch_size}, dense_tensor.options());
 
     // Get strides for proper memory indexing
     auto dense_strides = dense_tensor.strides();
