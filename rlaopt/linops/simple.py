@@ -4,7 +4,7 @@ import torch
 from torch import vmap
 
 from .base import _BaseLinOp
-from rlaopt.utils.input_checkers import (
+from rlaopt.utils import (
     _is_callable,
     _is_torch_device,
 )

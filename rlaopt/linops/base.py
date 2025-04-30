@@ -30,7 +30,26 @@ class _BaseLinOp(ABC):
     def dtype(self):
         return self._dtype
 
+    @property
+    def T(self):
+        """Transpose of the linear operator.
+
+        By default, linear operators don't support transposition. Subclasses like
+        TwoSidedLinOp should override this property.
+        """
+        raise NotImplementedError("This linear operator doesn't support transposition")
+
     @abstractmethod
     def __matmul__(self, x: torch.Tensor):
         """Matrix-vector multiplication."""
         pass
+
+    def __rmatmul__(self, x: torch.Tensor):
+        """Right matrix-vector multiplication.
+
+        By default, linear operators don't support right multiplication. Subclasses like
+        TwoSidedLinOp should override this method.
+        """
+        raise NotImplementedError(
+            "This linear operator doesn't support right multiplication"
+        )
