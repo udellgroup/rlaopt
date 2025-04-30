@@ -26,8 +26,6 @@ class LinOp(_BaseLinOp):
         if matmat is not None:
             _is_callable(matmat, "matmat")
 
-        self._device = device
-        self._shape = shape
         self._matvec = matvec
 
         if matmat is None:
