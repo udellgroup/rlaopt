@@ -4,10 +4,7 @@ import torch
 from torch import vmap
 
 from .base import _BaseLinOp
-from rlaopt.utils import (
-    _is_callable,
-    _is_torch_device,
-)
+from rlaopt.utils import _is_callable
 
 __all__ = ["LinOp", "TwoSidedLinOp", "SymmetricLinOp"]
 
@@ -24,8 +21,7 @@ class LinOp(_BaseLinOp):
         matmat: Callable | None = None,
         dtype: torch.dtype = _DEFAULT_DTYPE,
     ):
-        super().__init__(shape=shape, dtype=dtype)
-        _is_torch_device(device, "device")
+        super().__init__(device=device, shape=shape, dtype=dtype)
         _is_callable(matvec, "matvec")
         if matmat is not None:
             _is_callable(matmat, "matmat")
@@ -38,10 +34,6 @@ class LinOp(_BaseLinOp):
             self._matmat = vmap(self._matvec, in_dims=1, out_dims=1)
         else:
             self._matmat = matmat
-
-    @property
-    def device(self):
-        return self._device
 
     def __matmul__(self, x: torch.Tensor):
         if x.ndim == 1:

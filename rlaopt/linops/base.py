@@ -3,24 +3,30 @@ from typing import Any
 
 import torch
 
-from rlaopt.utils import _is_torch_size, _is_torch_f32_f64
+from rlaopt.utils import _is_torch_size, _is_torch_f32_f64, _is_torch_device
 
 
 class _BaseLinOp(ABC):
     """Base class for all linear operators."""
 
-    def __init__(self, shape: torch.Size, dtype: torch.dtype):
-        self._check_inputs_base(shape, dtype)
+    def __init__(self, device: torch.device, shape: torch.Size, dtype: torch.dtype):
+        self._check_inputs_base(device, shape, dtype)
+        self._device = device
         self._shape = shape
         self._dtype = dtype
 
-    def _check_inputs_base(self, shape: Any, dtype: Any):
+    def _check_inputs_base(self, device: Any, shape: Any, dtype: Any):
+        _is_torch_device(device, "device")
         _is_torch_size(shape, "shape")
         if len(shape) != 2:
             raise ValueError(f"shape must have two elements. Received {len(shape)}")
         if not all(isinstance(i, int) and i > 0 for i in shape):
             raise ValueError(f"shape must contain positive integers. Received {shape}")
         _is_torch_f32_f64(dtype, "dtype")
+
+    @property
+    def device(self):
+        return self._device
 
     @property
     def shape(self):

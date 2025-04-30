@@ -12,26 +12,12 @@ class ScaleLinOp(_BaseLinOp):
         linop: _BaseLinOp,
         scale: float,
     ):
-        """Initialize a scaled linear operator.
-
-        Parameters
-        ----------
-        linop : _BaseLinOp
-            The linear operator to scale
-        scale : float
-            The scaling factor to apply
-        """
         # Initialize with the shape and dtype from the original operator
-        super().__init__(shape=linop.shape, dtype=linop.dtype)
+        super().__init__(device=linop.device, shape=linop.shape, dtype=linop.dtype)
         _is_float(scale, "scale")
 
         self._linop = linop
         self._scale = scale
-
-    @property
-    def device(self):
-        """Return the device of the underlying linear operator."""
-        return self._linop.device
 
     @property
     def scale(self):
