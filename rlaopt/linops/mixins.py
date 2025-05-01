@@ -41,18 +41,32 @@ class ScaleMixin:
         # Ensure scale is a float
         self._scaling = float(scale) if scale is not None else 1.0
 
-    def _apply_scaling(self, fn):
-        """Create a scaled version of a callable function.
+    def _apply_scaling(self, obj):
+        """Apply scaling to a result or callable function.
+
+        This method can handle both direct results and callable functions:
+        - If obj is callable: Returns a scaled version of the callable
+        - If obj is not callable: Directly scales and returns the result
 
         Args:
-            fn: A callable function whose results should be scaled.
+            obj: Either a callable function whose results should be scaled,
+                 or a direct result (like a tensor) to scale.
 
         Returns:
-            A function that applies scaling to the result of the original function.
-            If scaling is 1.0, returns the original function unchanged.
+            If obj is callable: A function that applies scaling to the result.
+            If obj is not callable: The scaled result.
+            If scaling is 1.0, returns the original obj unchanged.
         """
         if not hasattr(self, "_scaling") or self._scaling == 1.0:
-            return fn  # No scaling needed
+            return obj  # No scaling needed
 
-        # Create a callable object that wraps the function
-        return _ScaledFunction(fn, self._scaling)
+        # For callable objects, return a scaled function
+        if callable(obj):
+            # For existing _ScaledFunction objects, combine the scales
+            if isinstance(obj, _ScaledFunction):
+                return _ScaledFunction(obj.fn, self._scaling * obj.scale)
+            # For regular callables, create a new scaled function
+            return _ScaledFunction(obj, self._scaling)
+
+        # For direct results, apply scaling immediately
+        return self._scaling * obj

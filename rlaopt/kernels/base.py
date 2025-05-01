@@ -153,17 +153,13 @@ class _CacheableKernelLinOp(TwoSidedLinOp, ScaleMixin):
         scale = getattr(kernel_config, "const_scaling", 1.0)
         self._initialize_scaling(scale)
 
-        # Define matvec and rmatvec functions with scaling applied
-        matvec = self._apply_scaling(self._matvec)
-        rmatvec = self._apply_scaling(self._rmatvec)
-
         super().__init__(
             device=device,
             shape=torch.Size((self._A1.shape[0], self._A2.shape[0])),
-            matvec=matvec,
-            rmatvec=rmatvec,
-            matmat=matvec,
-            rmatmat=rmatvec,
+            matvec=self._matvec,
+            rmatvec=self._rmatvec,
+            matmat=self._matvec,
+            rmatmat=self._rmatvec,
             dtype=self._A1.dtype,
         )
 
@@ -210,12 +206,12 @@ class _CacheableKernelLinOp(TwoSidedLinOp, ScaleMixin):
     def _matvec(self, x: torch.Tensor):
         """Matrix-vector product with caching."""
         kernel = self._get_kernel()
-        return kernel @ x
+        return self._apply_scaling(kernel @ x)
 
     def _rmatvec(self, x: torch.Tensor):
         """Transpose matrix-vector product with caching."""
         kernel = self._get_kernel()
-        return kernel.T @ x
+        return self._apply_scaling(kernel.T @ x)
 
     def _clear_cache(self):
         """Clear the kernel cache for this operator."""
@@ -519,7 +515,6 @@ class _DistributedKernelLinOp(DistributedTwoSidedLinOp, ScaleMixin):
         global _KERNEL_CACHE, _LAZY_TENSOR_CACHE
         _KERNEL_CACHE.clear()
         _LAZY_TENSOR_CACHE.clear()
-        print(f"Cleared global caches on shutdown. PID: {os.getpid()}")
 
         # Call parent shutdown
         super().shutdown()

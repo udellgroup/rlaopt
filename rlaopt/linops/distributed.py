@@ -93,12 +93,6 @@ class _DistributedTwoSidedLinOp(_DistributedLinOp):
     def _rmatmat(self, w: torch.Tensor):
         return self._rmatvec(w)
 
-    def __rmatmul__(self, x):
-        if x.ndim == 1:
-            return self._rmatvec(x)
-        elif x.ndim == 2:
-            return self._rmatmat(x.T).T
-
     @property
     def T(self) -> "_DistributedTwoSidedLinOp":
         """Return the transpose of the distributed two-sided operator."""
