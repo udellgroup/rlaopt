@@ -7,7 +7,16 @@ __all__ = ["ScaleLinOp"]
 
 
 class ScaleLinOp(_BaseLinOp):
-    """Linear operator that scales another linear operator by a constant."""
+    """Linear operator that scales another linear operator by a constant.
+
+    This class implements the decorator pattern and forwards attribute access
+    to the underlying operator. Any attribute not found on ScaleLinOp will be
+    looked up on the wrapped linear operator.
+
+    Attributes:
+        linop: The underlying linear operator.
+        scale: The scaling factor.
+    """
 
     def __init__(
         self,
@@ -22,14 +31,14 @@ class ScaleLinOp(_BaseLinOp):
         self._scale = scale
 
     @property
-    def scale(self):
-        """Return the scaling factor."""
-        return self._scale
-
-    @property
     def linop(self):
         """Return the original linear operator."""
         return self._linop
+
+    @property
+    def scale(self):
+        """Return the scaling factor."""
+        return self._scale
 
     def __matmul__(self, x: torch.Tensor):
         """Apply scaled matrix-vector multiplication."""
@@ -43,3 +52,21 @@ class ScaleLinOp(_BaseLinOp):
     def T(self):
         """Return the transpose of the scaled linear operator."""
         return ScaleLinOp(self._linop.T, self._scale)
+
+    def __getattr__(self, name):
+        """Forward attribute access to the underlying linear operator."""
+        # This is called only for attributes that don't exist in ScaleLinOp
+        try:
+            return getattr(self._linop, name)
+        except AttributeError:
+            raise AttributeError(
+                f"Neither '{self.__class__.__name__}' "
+                "nor its underlying linear operator "
+                f"has attribute '{name}'"
+            )
+
+    def __dir__(self):
+        """Include attributes from the underlying operator in dir() output."""
+        own_attrs = set(super().__dir__())
+        linop_attrs = set(dir(self._linop))
+        return sorted(own_attrs | linop_attrs)
