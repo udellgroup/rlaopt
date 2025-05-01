@@ -1,7 +1,7 @@
 import pytest
 import torch
 
-from rlaopt.linops import LinOp
+from rlaopt.linops.base import _BaseLinOp
 from rlaopt.kernels import (
     RBFLinOp,
     LaplaceLinOp,
@@ -264,7 +264,7 @@ class TestKernelLinOps:
         )
 
         row_lin_op = kernel.row_oracle(test_blk)
-        assert isinstance(row_lin_op, LinOp)
+        assert isinstance(row_lin_op, _BaseLinOp)
         assert row_lin_op.shape == (test_blk.shape[0], test_matrices["A2"].shape[0])
         assert row_lin_op.device == kernel.device
         assert row_lin_op.dtype == kernel.dtype
@@ -288,7 +288,7 @@ class TestKernelLinOps:
         )
 
         block_lin_op = kernel.blk_oracle(test_blk)
-        assert isinstance(block_lin_op, LinOp)
+        assert isinstance(block_lin_op, _BaseLinOp)
         assert block_lin_op.shape == (test_blk.shape[0], test_blk.shape[0])
         assert block_lin_op.device == kernel.device
         assert block_lin_op.dtype == kernel.dtype

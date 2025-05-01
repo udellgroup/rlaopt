@@ -39,7 +39,7 @@ class ScaleMixin:
             otherwise the original operator.
         """
         if hasattr(self, "_scaling") and self._scaling != 1.0:
-            from .scale_linop import ScaleLinOp
+            from .scale import ScaleLinOp
 
             return ScaleLinOp(linop, self._scaling)
         return linop

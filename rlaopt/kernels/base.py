@@ -10,6 +10,7 @@ from rlaopt.linops import (
     TwoSidedLinOp,
     DistributedLinOp,
     DistributedTwoSidedLinOp,
+    ScaleMixin,
 )
 from rlaopt.linops.base import _BaseDistributedLinOp
 from rlaopt.utils import _is_torch_tensor, _is_set
@@ -20,7 +21,7 @@ _KERNEL_CACHE: dict[str, LazyTensor] = {}
 _LAZY_TENSOR_CACHE: dict[str, LazyTensor] = {}
 
 
-class _KernelLinOp(TwoSidedLinOp):
+class _KernelLinOp(TwoSidedLinOp, ScaleMixin):
     def __init__(
         self,
         A1: torch.Tensor,
@@ -34,13 +35,27 @@ class _KernelLinOp(TwoSidedLinOp):
         self._kernel_config = kernel_config
         self._kernel_computation = _kernel_computation_fn
         self._K_lazy = self._get_kernel()
+
+        # Initialize scaling from kernel_config
+        scale = getattr(kernel_config, "const_scaling", 1.0)
+        self._initialize_scaling(scale)
+
+        # Define matvec and rmatvec functions with scaling applied
+        def matvec(x):
+            result = self._K_lazy @ x
+            return self._apply_scaling(result)
+
+        def rmatvec(x):
+            result = self._K_lazy.T @ x
+            return self._apply_scaling(result)
+
         super().__init__(
             device=self._A1.device,
             shape=torch.Size((self._A1.shape[0], self._A2.shape[0])),
-            matvec=lambda x: self._K_lazy @ x,
-            rmatvec=lambda x: self._K_lazy.T @ x,
-            matmat=lambda x: self._K_lazy @ x,
-            rmatmat=lambda x: self._K_lazy.T @ x,
+            matvec=matvec,
+            rmatvec=rmatvec,
+            matmat=matvec,  # Reuse matvec for matmat
+            rmatmat=rmatvec,  # Reuse rmatvec for rmatmat
             dtype=self._A1.dtype,
         )
 
@@ -100,10 +115,12 @@ class _KernelLinOp(TwoSidedLinOp):
         )
 
     def row_oracle(self, blk: torch.Tensor) -> LinOp:
-        return self._get_kernel_linop(idx1=blk)
+        base_op = self._get_kernel_linop(idx1=blk)
+        return self._scale_linop(base_op)
 
     def blk_oracle(self, blk: torch.Tensor) -> LinOp:
-        return self._get_kernel_linop(idx1=blk, idx2=blk)
+        base_op = self._get_kernel_linop(idx1=blk, idx2=blk)
+        return self._scale_linop(base_op)
 
 
 class _CacheableKernelLinOp(TwoSidedLinOp):
