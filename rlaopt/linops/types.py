@@ -7,7 +7,6 @@ from .base import _BaseLinOp
 
 # Type checking imports (only for static type checking)
 if TYPE_CHECKING:
-    from .scale import ScaleLinOp
     from .simple import LinOp, TwoSidedLinOp, SymmetricLinOp
     from .distributed import (
         DistributedLinOp,
@@ -21,7 +20,6 @@ __all__ = ["LinOpType", "_is_linop_or_torch_tensor"]
 
 # Type annotation for static type checking
 LinOpType = Union[
-    "ScaleLinOp",
     "LinOp",
     "TwoSidedLinOp",
     "SymmetricLinOp",
