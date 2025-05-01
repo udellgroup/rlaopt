@@ -1,6 +1,32 @@
 """Mixins for extending linear operator functionality."""
+from collections.abc import Callable
+
 
 __all__ = ["ScaleMixin"]
+
+
+class _ScaledFunction(Callable):
+    """Callable class that wraps a function and applies scaling to its result."""
+
+    def __init__(self, fn, scale):
+        self.fn = fn
+        self.scale = scale
+
+        # Copy attributes from the original function
+        if hasattr(fn, "__name__"):
+            self.__name__ = f"scaled_{fn.__name__}"
+        if hasattr(fn, "__doc__") and fn.__doc__:
+            self.__doc__ = f"Scaled version of: {fn.__doc__}"
+
+        # Copy other useful function attributes
+        for attr in ["__module__", "__qualname__", "__annotations__", "__defaults__"]:
+            if hasattr(fn, attr):
+                setattr(self, attr, getattr(fn, attr))
+
+    def __call__(self, *args, **kwargs):
+        """Call the wrapped function and scale its result."""
+        result = self.fn(*args, **kwargs)
+        return self.scale * result
 
 
 class ScaleMixin:
@@ -15,31 +41,18 @@ class ScaleMixin:
         # Ensure scale is a float
         self._scaling = float(scale) if scale is not None else 1.0
 
-    def _apply_scaling(self, result):
-        """Apply scaling to a result.
+    def _apply_scaling(self, fn):
+        """Create a scaled version of a callable function.
 
         Args:
-            result: The result to scale.
+            fn: A callable function whose results should be scaled.
 
         Returns:
-            The scaled result if scaling is not 1.0, otherwise the original result.
+            A function that applies scaling to the result of the original function.
+            If scaling is 1.0, returns the original function unchanged.
         """
-        if hasattr(self, "_scaling") and self._scaling != 1.0:
-            return self._scaling * result
-        return result
+        if not hasattr(self, "_scaling") or self._scaling == 1.0:
+            return fn  # No scaling needed
 
-    def _scale_linop(self, linop):
-        """Apply scaling to a linear operator.
-
-        Args:
-            linop: The linear operator to scale.
-
-        Returns:
-            A ScaleLinOp wrapping the input operator if scaling is not 1.0,
-            otherwise the original operator.
-        """
-        if hasattr(self, "_scaling") and self._scaling != 1.0:
-            from .scale import ScaleLinOp
-
-            return ScaleLinOp(linop, self._scaling)
-        return linop
+        # Create a callable object that wraps the function
+        return _ScaledFunction(fn, self._scaling)

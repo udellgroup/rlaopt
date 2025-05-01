@@ -11,29 +11,30 @@ __all__ = [
 ]
 
 
-class DistributedLinOp(_BaseDistributedLinOp):
-    """Distributed linear operator that performs operations across multiple devices."""
+# Private implementation classes with complete functionality
+class _DistributedLinOp(_BaseDistributedLinOp):
+    """Private implementation of distributed linear operator."""
 
-    def __init__(self, shape: torch.Size, A: list[_BaseLinOp], distribution_mode: str):
-        """Initialize a distributed linear operator.
-
-        Args:
-            shape: Shape of the operator as a torch.Size.
-            A: List of linear operators to distribute across devices. These can be
-               any type of linear operator derived from _BaseLinOp. Each operator
-               in the list will handle computation for a portion of the overall
-               operation, typically on different devices.
-            distribution_mode: Mode for distributing operations.
-                "row" - Each operator handles a set of rows of the matrix.
-                "column" - Each operator handles a set of columns of the matrix.
-
-        Note:
-            The operators in A should be located on different devices (typically GPUs)
-            to take advantage of distributed computation. If all operators are on
-            the same device, there may be no performance benefit.
-        """
+    def __init__(
+        self,
+        shape: torch.Size,
+        A: list[_BaseLinOp],
+        distribution_mode: str,
+        is_new: bool = True,
+        manager=None,
+        result_queue=None,
+        task_queues=None,
+        workers=None,
+    ):
         super().__init__(
-            shape=shape, A=A, distribution_mode=distribution_mode, is_new=True
+            shape=shape,
+            A=A,
+            distribution_mode=distribution_mode,
+            is_new=is_new,
+            manager=manager,
+            result_queue=result_queue,
+            task_queues=task_queues,
+            workers=workers,
         )
 
     def _matvec(self, w: torch.Tensor) -> torch.Tensor:
@@ -52,43 +53,30 @@ class DistributedLinOp(_BaseDistributedLinOp):
         return self._matvec(w)
 
 
-class DistributedTwoSidedLinOp(DistributedLinOp):
-    """Distributed two-sided linear operator that performs operations across multiple
-    devices.
-
-    This extends DistributedLinOp to support both left and right matrix multiplication.
-    """
+class _DistributedTwoSidedLinOp(_DistributedLinOp):
+    """Private implementation of distributed two-sided linear operator."""
 
     def __init__(
         self,
         shape: torch.Size,
         A: list[_BaseLinOp],
         distribution_mode: str,
+        is_new: bool = True,
+        manager=None,
+        result_queue=None,
+        task_queues=None,
+        workers=None,
     ):
-        """Initialize a distributed two-sided linear operator.
-
-        Args:
-            shape: Shape of the operator as a torch.Size.
-            A: List of linear operators.
-               While any _BaseLinOp is accepted in this parameter, the operators
-               are expected to properly support right matrix multiplication
-               (i.e., the __rmatmul__ method should not raise NotImplementedError).
-               Typically these would be TwoSidedLinOp instances or ScaleLinOp instances
-               wrapping TwoSidedLinOp.
-            distribution_mode: Mode for distributing operations.
-                When "row" distribution is used, the transpose will use
-                  "column" distribution internally.
-                When "column" distribution is used, the transpose will use
-                  "row" distribution internally.
-
-        Note:
-            If operators in A don't properly support right matrix multiplication,
-            operations will fail at runtime when right multiplication is attempted.
-
-        See Also:
-            DistributedLinOp: Base class that handles left matrix multiplication only.
-        """
-        super().__init__(shape=shape, A=A, distribution_mode=distribution_mode)
+        super().__init__(
+            shape=shape,
+            A=A,
+            distribution_mode=distribution_mode,
+            is_new=is_new,
+            manager=manager,
+            result_queue=result_queue,
+            task_queues=task_queues,
+            workers=workers,
+        )
 
     def _rmatvec(self, w: torch.Tensor):
         if self._distribution_mode == _DistributionMode.ROW:
@@ -105,31 +93,23 @@ class DistributedTwoSidedLinOp(DistributedLinOp):
     def _rmatmat(self, w: torch.Tensor):
         return self._rmatvec(w)
 
+    def __rmatmul__(self, x):
+        if x.ndim == 1:
+            return self._rmatvec(x)
+        elif x.ndim == 2:
+            return self._rmatmat(x.T).T
+
     @property
-    def T(self) -> "_BaseDistributedLinOp":
-        """Return the transpose of the operator.
-
-        Creates a transposed view that shares the same worker processes
-          as the original operator.
-        The distribution mode is flipped:
-        row distribution becomes column distribution and vice versa.
-
-        Returns:
-            A distributed linear operator representing the transpose,
-              with the same underlying data but
-              transposed shape (m,n) → (n,m) and flipped distribution mode.
-
-        Note:
-            This operation is lightweight and doesn't duplicate
-            the underlying operators, only creating transposed views of them.
-        """
+    def T(self) -> "_DistributedTwoSidedLinOp":
+        """Return the transpose of the distributed two-sided operator."""
         transposed_mode = (
             _DistributionMode.COLUMN
             if self._distribution_mode == _DistributionMode.ROW
             else _DistributionMode.ROW
         )
 
-        return _BaseDistributedLinOp(
+        # Return a proper _DistributedTwoSidedLinOp, not a base class
+        return _DistributedTwoSidedLinOp(
             shape=torch.Size((self.shape[1], self.shape[0])),
             A=[A.T for A in self._A],
             distribution_mode=transposed_mode,
@@ -141,49 +121,37 @@ class DistributedTwoSidedLinOp(DistributedLinOp):
         )
 
 
-class DistributedSymmetricLinOp(DistributedTwoSidedLinOp):
-    """Distributed symmetric linear operator that performs operations across multiple
-    devices.
-
-    This extends DistributedTwoSidedLinOp for symmetric operators where left and right
-    matrix multiplication operations are identical, and the transpose is the operator
-    itself.
-    """
+class _DistributedSymmetricLinOp(_DistributedTwoSidedLinOp):
+    """Private implementation of distributed symmetric linear operator."""
 
     def __init__(
         self,
         shape: torch.Size,
         A: list[_BaseLinOp],
         distribution_mode: str,
+        is_new: bool = True,
+        manager=None,
+        result_queue=None,
+        task_queues=None,
+        workers=None,
     ):
-        """Initialize a distributed symmetric linear operator.
+        super().__init__(
+            shape=shape,
+            A=A,
+            distribution_mode=distribution_mode,
+            is_new=is_new,
+            manager=manager,
+            result_queue=result_queue,
+            task_queues=task_queues,
+            workers=workers,
+        )
 
-        Args:
-            shape: Shape of the operator as a torch.Size, must be square (n, n).
-            A: List of linear operators. These should be symmetric operators or
-               ScaleLinOp instances wrapping symmetric operators.
-            distribution_mode: Mode for distributing operations.
-
-        Raises:
-            ValueError: If the shape is not square.
-
-        Note:
-            For symmetric operators, the distribution mode doesn't change when
-            taking the transpose, as the transpose is the operator itself.
-
-        See Also:
-            DistributedTwoSidedLinOp: Base class that handles
-              two-sided matrix multiplication.
-        """
-        super().__init__(shape=shape, A=A, distribution_mode=distribution_mode)
-
-        if self._is_new and shape[0] != shape[1]:
+        if is_new and shape[0] != shape[1]:
             raise ValueError(
                 f"DistributedSymmetricLinOp requires the shape to be square. "
                 f"The received shape is {shape}."
             )
 
-    # Override the _rmatvec and _rmatmat methods since the operator is symmetric
     def _rmatvec(self, w: torch.Tensor) -> torch.Tensor:
         return self._matvec(w)
 
@@ -191,12 +159,56 @@ class DistributedSymmetricLinOp(DistributedTwoSidedLinOp):
         return self._matmat(w)
 
     @property
-    def T(self) -> "DistributedSymmetricLinOp":
-        """Return the transpose of the operator.
-
-        For symmetric operators, the transpose is the operator itself.
-
-        Returns:
-            The operator itself.
-        """
+    def T(self) -> "_DistributedSymmetricLinOp":
+        """Return the transpose of the distributed symmetric operator (self)."""
         return self
+
+
+class DistributedLinOp(_DistributedLinOp):
+    """Distributed linear operator that performs operations across multiple devices."""
+
+    def __init__(self, shape: torch.Size, A: list[_BaseLinOp], distribution_mode: str):
+        """Initialize a distributed linear operator.
+
+        Args:
+            shape: Shape of the operator as a torch.Size.
+            A: List of linear operators to distribute across devices.
+            distribution_mode: Mode for distributing operations ('row' or 'column').
+        """
+        super().__init__(
+            shape=shape, A=A, distribution_mode=distribution_mode, is_new=True
+        )
+
+
+class DistributedTwoSidedLinOp(_DistributedTwoSidedLinOp):
+    """Distributed two-sided linear operator that performs operations across multiple
+    devices."""
+
+    def __init__(self, shape: torch.Size, A: list[_BaseLinOp], distribution_mode: str):
+        """Initialize a distributed two-sided linear operator.
+
+        Args:
+            shape: Shape of the operator as a torch.Size.
+            A: List of linear operators supporting right matrix multiplication.
+            distribution_mode: Mode for distributing operations ('row' or 'column').
+        """
+        super().__init__(
+            shape=shape, A=A, distribution_mode=distribution_mode, is_new=True
+        )
+
+
+class DistributedSymmetricLinOp(_DistributedSymmetricLinOp):
+    """Distributed symmetric linear operator that performs operations across multiple
+    devices."""
+
+    def __init__(self, shape: torch.Size, A: list[_BaseLinOp], distribution_mode: str):
+        """Initialize a distributed symmetric linear operator.
+
+        Args:
+            shape: Shape of the operator as a torch.Size, must be square.
+            A: List of symmetric linear operators.
+            distribution_mode: Mode for distributing operations.
+        """
+        super().__init__(
+            shape=shape, A=A, distribution_mode=distribution_mode, is_new=True
+        )
