@@ -400,7 +400,7 @@ class _DistributedKernelLinOp(DistributedTwoSidedLinOp, ScaleMixin):
                     rmatvec=lambda x: None,
                     matmat=lambda x: None,
                     rmatmat=lambda x: None,
-                    dtype=self.dtype,
+                    dtype=self.A1.dtype,
                 )
             )
         return ops

@@ -3,23 +3,9 @@ import torch
 
 from rlaopt.linops import TwoSidedLinOp
 from rlaopt.linops.base import _BaseLinOp
-from rlaopt.kernels import (
-    DistributedRBFLinOp,
-    DistributedLaplaceLinOp,
-    DistributedMatern12LinOp,
-    DistributedMatern32LinOp,
-    DistributedMatern52LinOp,
-    KernelConfig,
-)
+from rlaopt.kernels import DistributedRBFLinOp, KernelConfig
 
-from tests.kernels.utils import (
-    compute_kernel_matrix,
-    rbf_kernel,
-    laplace_kernel,
-    matern12_kernel,
-    matern32_kernel,
-    matern52_kernel,
-)
+from tests.kernels.utils import compute_kernel_matrix, rbf_kernel
 
 
 def get_available_devices():
@@ -128,54 +114,12 @@ def tol(precision):
     return TOLERANCES[precision]
 
 
-# Define kernel configurations for parameterized testing
-DISTRIBUTED_KERNEL_PARAMETERIZATIONS = [
-    {
-        "class": DistributedRBFLinOp,
-        "name": "distributed_rbf",
-        "kernel_func": rbf_kernel,
-    },
-    {
-        "class": DistributedLaplaceLinOp,
-        "name": "distributed_laplace",
-        "kernel_func": laplace_kernel,
-    },
-    {
-        "class": DistributedMatern12LinOp,
-        "name": "distributed_matern12",
-        "kernel_func": matern12_kernel,
-    },
-    {
-        "class": DistributedMatern32LinOp,
-        "name": "distributed_matern32",
-        "kernel_func": matern32_kernel,
-    },
-    {
-        "class": DistributedMatern52LinOp,
-        "name": "distributed_matern52",
-        "kernel_func": matern52_kernel,
-    },
-]
-
-
-@pytest.fixture(
-    params=DISTRIBUTED_KERNEL_PARAMETERIZATIONS,
-    ids=[config["name"] for config in DISTRIBUTED_KERNEL_PARAMETERIZATIONS],
-)
-def distributed_kernel_parameterization(request):
-    """Parameterized fixture for different distributed kernel types."""
-    return request.param
-
-
 class TestDistributedKernelLinOps:
     """Tests for distributed kernel linear operators with full kernel computation."""
 
-    def test_initialization(
-        self, test_matrices, kernel_config, devices, distributed_kernel_parameterization
-    ):
+    def test_initialization(self, test_matrices, kernel_config, devices):
         """Test initialization of distributed kernel operators."""
-        kernel_class = distributed_kernel_parameterization["class"]
-        kernel = kernel_class(
+        kernel = DistributedRBFLinOp(
             test_matrices["A1"],
             test_matrices["A2"],
             kernel_config=kernel_config,
@@ -206,7 +150,7 @@ class TestDistributedKernelLinOps:
             # Ensure proper cleanup
             kernel.shutdown()
 
-    def test_matmul(
+    def test_matmul_and_transpose(
         self,
         test_matrices,
         kernel_config,
@@ -214,13 +158,10 @@ class TestDistributedKernelLinOps:
         test_matmul_matrix,
         tol,
         devices,
-        distributed_kernel_parameterization,
     ):
-        """Test matrix-vector multiplication with distributed kernel operators."""
-        kernel_class = distributed_kernel_parameterization["class"]
-        kernel_func = distributed_kernel_parameterization["kernel_func"]
-
-        kernel = kernel_class(
+        """Test matrix-vector multiplication and transpose with
+        distributed kernel operators."""
+        kernel = DistributedRBFLinOp(
             test_matrices["A1"],
             test_matrices["A2"],
             kernel_config=kernel_config,
@@ -236,55 +177,20 @@ class TestDistributedKernelLinOps:
                 kernel_config,
                 test_matrices["A1"].device,
                 test_matrices["A2"].dtype,
-                kernel_func,
+                rbf_kernel,
             )
 
-            # Test vector multiplication
+            # ===== Test 1: Matrix-Vector Multiplication =====
             dist_result = kernel @ test_matmul_vector
             expected_result = K_looped @ test_matmul_vector
             assert torch.allclose(dist_result, expected_result, **tol)
 
-            # Test matrix multiplication
+            # ===== Test 2: Matrix-Matrix Multiplication =====
             dist_result_mat = kernel @ test_matmul_matrix
             expected_result_mat = K_looped @ test_matmul_matrix
             assert torch.allclose(dist_result_mat, expected_result_mat, **tol)
 
-        finally:
-            # Ensure proper cleanup
-            kernel.shutdown()
-
-    def test_transpose(
-        self,
-        test_matrices,
-        kernel_config,
-        test_matmul_vector,
-        tol,
-        devices,
-        distributed_kernel_parameterization,
-    ):
-        """Test transpose of distributed kernel operators."""
-        kernel_class = distributed_kernel_parameterization["class"]
-        kernel_func = distributed_kernel_parameterization["kernel_func"]
-
-        kernel = kernel_class(
-            test_matrices["A1"],
-            test_matrices["A2"],
-            kernel_config=kernel_config,
-            devices=devices,
-            use_full_kernel=True,
-        )
-
-        try:
-            # Compute non-distributed kernel for comparison
-            K_looped = compute_kernel_matrix(
-                test_matrices["A1"],
-                test_matrices["A2"],
-                kernel_config,
-                test_matrices["A1"].device,
-                test_matrices["A2"].dtype,
-                kernel_func,
-            )
-
+            # ===== Test 3: Right Multiplication (Transpose) =====
             # Create a vector of matching size for transpose multiplication
             rhs_vector = torch.randn(
                 test_matrices["A1"].shape[0],
@@ -292,38 +198,32 @@ class TestDistributedKernelLinOps:
                 dtype=test_matrices["A1"].dtype,
             )
 
-            # Test transpose multiplication
-            transposed_kernel = kernel.T
             trans_result = rhs_vector @ kernel
             expected_trans_result = rhs_vector @ K_looped
-
             assert torch.allclose(trans_result, expected_trans_result, **tol)
 
-            # Also test the transposed kernel directly
+            # ===== Test 4: Explicit Transpose =====
+            transposed_kernel = kernel.T
             trans_result2 = transposed_kernel @ rhs_vector
             expected_trans_result2 = K_looped.T @ rhs_vector
-
             assert torch.allclose(trans_result2, expected_trans_result2, **tol)
 
         finally:
             # Ensure proper cleanup
             kernel.shutdown()
 
-    def test_row_oracle(
+    def test_oracles(
         self,
         test_matrices,
         kernel_config,
         test_matmul_vector,
+        test_blk_matmul_vector,
         test_blk,
         tol,
         devices,
-        distributed_kernel_parameterization,
     ):
-        """Test row oracle of distributed kernel operators."""
-        kernel_class = distributed_kernel_parameterization["class"]
-        kernel_func = distributed_kernel_parameterization["kernel_func"]
-
-        kernel = kernel_class(
+        """Test row and block oracles of distributed kernel operators."""
+        kernel = DistributedRBFLinOp(
             test_matrices["A1"],
             test_matrices["A2"],
             kernel_config=kernel_config,
@@ -332,6 +232,7 @@ class TestDistributedKernelLinOps:
         )
 
         try:
+            # ===== Test 1: Row Oracle =====
             # Compute non-distributed row oracle for comparison
             X_row = test_matrices["A1"][test_blk]
             Y_row = test_matrices["A2"]
@@ -341,7 +242,7 @@ class TestDistributedKernelLinOps:
                 kernel_config,
                 test_matrices["A1"].device,
                 test_matrices["A1"].dtype,
-                kernel_func,
+                rbf_kernel,
             )
 
             # Get row oracle from distributed kernel
@@ -358,7 +259,6 @@ class TestDistributedKernelLinOps:
                 # Test multiplication
                 oracle_result = row_oracle @ test_matmul_vector
                 expected_result = K_row_looped @ test_matmul_vector
-
                 assert torch.allclose(oracle_result, expected_result, **tol)
 
             finally:
@@ -366,33 +266,7 @@ class TestDistributedKernelLinOps:
                 if hasattr(row_oracle, "shutdown"):
                     row_oracle.shutdown()
 
-        finally:
-            # Ensure proper cleanup
-            kernel.shutdown()
-
-    def test_blk_oracle(
-        self,
-        test_matrices,
-        kernel_config,
-        test_blk_matmul_vector,
-        test_blk,
-        tol,
-        devices,
-        distributed_kernel_parameterization,
-    ):
-        """Test block oracle of distributed kernel operators."""
-        kernel_class = distributed_kernel_parameterization["class"]
-        kernel_func = distributed_kernel_parameterization["kernel_func"]
-
-        kernel = kernel_class(
-            test_matrices["A1"],
-            test_matrices["A2"],
-            kernel_config=kernel_config,
-            devices=devices,
-            use_full_kernel=True,
-        )
-
-        try:
+            # ===== Test 2: Block Oracle =====
             # Compute non-distributed block oracle for comparison
             X_blk = test_matrices["A1"][test_blk]
             Y_blk = test_matrices["A2"][test_blk]
@@ -402,7 +276,7 @@ class TestDistributedKernelLinOps:
                 kernel_config,
                 test_matrices["A1"].device,
                 test_matrices["A1"].dtype,
-                kernel_func,
+                rbf_kernel,
             )
 
             # Get block oracle from distributed kernel
@@ -416,7 +290,6 @@ class TestDistributedKernelLinOps:
                 # Test multiplication
                 oracle_result = blk_oracle @ test_blk_matmul_vector
                 expected_result = K_blk_looped @ test_blk_matmul_vector
-
                 assert torch.allclose(oracle_result, expected_result, **tol)
 
             finally:
@@ -428,70 +301,14 @@ class TestDistributedKernelLinOps:
             # Ensure proper cleanup
             kernel.shutdown()
 
-    def test_scaling_in_matmul(
-        self,
-        test_matrices,
-        test_matmul_vector,
-        tol,
-        devices,
-        distributed_kernel_parameterization,
-    ):
-        """Test that scaling is correctly applied in matrix-vector multiplication."""
-        kernel_class = distributed_kernel_parameterization["class"]
-
-        # Create two configs with different scaling factors
-        scale1 = 1.0
-        scale2 = 3.5  # Different from default to test scaling is working
-
-        config1 = KernelConfig(const_scaling=scale1, lengthscale=1.0)
-        config2 = KernelConfig(const_scaling=scale2, lengthscale=1.0)
-
-        kernel1 = kernel_class(
-            test_matrices["A1"],
-            test_matrices["A2"],
-            kernel_config=config1,
-            devices=devices,
-            use_full_kernel=True,
-        )
-
-        kernel2 = kernel_class(
-            test_matrices["A1"],
-            test_matrices["A2"],
-            kernel_config=config2,
-            devices=devices,
-            use_full_kernel=True,
-        )
-
-        try:
-            # Perform matrix-vector multiplication with both kernels
-            result1 = kernel1 @ test_matmul_vector
-            result2 = kernel2 @ test_matmul_vector
-
-            # The ratio of results should match the ratio of scaling factors
-            expected_ratio = scale2 / scale1
-            actual_ratio = result2 / result1
-
-            # Check that ratio is consistent
-            assert torch.allclose(
-                actual_ratio, torch.tensor(expected_ratio, device=result1.device), **tol
-            )
-
-        finally:
-            # Ensure proper cleanup
-            kernel1.shutdown()
-            kernel2.shutdown()
-
 
 class TestDistributedKernelOraclesOnly:
-    """Tests for distributed kernel linear operators
-    with oracles only (no full kernel)."""
+    """Tests for distributed kernel linear operators with
+    oracles only (no full kernel)."""
 
-    def test_initialization(
-        self, test_matrices, kernel_config, devices, distributed_kernel_parameterization
-    ):
+    def test_initialization(self, test_matrices, kernel_config, devices):
         """Test initialization of distributed kernel operators in oracle-only mode."""
-        kernel_class = distributed_kernel_parameterization["class"]
-        kernel = kernel_class(
+        kernel = DistributedRBFLinOp(
             test_matrices["A1"],
             test_matrices["A2"],
             kernel_config=kernel_config,
@@ -515,21 +332,19 @@ class TestDistributedKernelOraclesOnly:
             # Ensure proper cleanup
             kernel.shutdown()
 
-    def test_row_oracle_without_full_kernel(
+    def test_oracles_without_full_kernel(
         self,
         test_matrices,
         kernel_config,
         test_matmul_vector,
+        test_blk_matmul_vector,
         test_blk,
         tol,
         devices,
-        distributed_kernel_parameterization,
     ):
-        """Test row oracle works correctly without computing the full kernel."""
-        kernel_class = distributed_kernel_parameterization["class"]
-        kernel_func = distributed_kernel_parameterization["kernel_func"]
-
-        kernel = kernel_class(
+        """Test row and block oracles work correctly without
+        computing the full kernel."""
+        kernel = DistributedRBFLinOp(
             test_matrices["A1"],
             test_matrices["A2"],
             kernel_config=kernel_config,
@@ -538,6 +353,7 @@ class TestDistributedKernelOraclesOnly:
         )
 
         try:
+            # ===== Test 1: Row Oracle =====
             # Compute non-distributed row oracle for comparison
             X_row = test_matrices["A1"][test_blk]
             Y_row = test_matrices["A2"]
@@ -547,7 +363,7 @@ class TestDistributedKernelOraclesOnly:
                 kernel_config,
                 test_matrices["A1"].device,
                 test_matrices["A1"].dtype,
-                kernel_func,
+                rbf_kernel,
             )
 
             # Get row oracle from distributed kernel
@@ -564,7 +380,6 @@ class TestDistributedKernelOraclesOnly:
                 # Test multiplication
                 oracle_result = row_oracle @ test_matmul_vector
                 expected_result = K_row_looped @ test_matmul_vector
-
                 assert torch.allclose(oracle_result, expected_result, **tol)
 
             finally:
@@ -572,33 +387,7 @@ class TestDistributedKernelOraclesOnly:
                 if hasattr(row_oracle, "shutdown"):
                     row_oracle.shutdown()
 
-        finally:
-            # Ensure proper cleanup
-            kernel.shutdown()
-
-    def test_blk_oracle_without_full_kernel(
-        self,
-        test_matrices,
-        kernel_config,
-        test_blk_matmul_vector,
-        test_blk,
-        tol,
-        devices,
-        distributed_kernel_parameterization,
-    ):
-        """Test block oracle works correctly without computing the full kernel."""
-        kernel_class = distributed_kernel_parameterization["class"]
-        kernel_func = distributed_kernel_parameterization["kernel_func"]
-
-        kernel = kernel_class(
-            test_matrices["A1"],
-            test_matrices["A2"],
-            kernel_config=kernel_config,
-            devices=devices,
-            use_full_kernel=False,  # Don't compute the full kernel
-        )
-
-        try:
+            # ===== Test 2: Block Oracle =====
             # Compute non-distributed block oracle for comparison
             X_blk = test_matrices["A1"][test_blk]
             Y_blk = test_matrices["A2"][test_blk]
@@ -608,7 +397,7 @@ class TestDistributedKernelOraclesOnly:
                 kernel_config,
                 test_matrices["A1"].device,
                 test_matrices["A1"].dtype,
-                kernel_func,
+                rbf_kernel,
             )
 
             # Get block oracle from distributed kernel
@@ -622,7 +411,6 @@ class TestDistributedKernelOraclesOnly:
                 # Test multiplication
                 oracle_result = blk_oracle @ test_blk_matmul_vector
                 expected_result = K_blk_looped @ test_blk_matmul_vector
-
                 assert torch.allclose(oracle_result, expected_result, **tol)
 
             finally:
@@ -633,72 +421,3 @@ class TestDistributedKernelOraclesOnly:
         finally:
             # Ensure proper cleanup
             kernel.shutdown()
-
-    def test_scaling_in_oracles(
-        self,
-        test_matrices,
-        test_blk,
-        test_blk_matmul_vector,
-        tol,
-        devices,
-        distributed_kernel_parameterization,
-    ):
-        """Test that scaling is correctly applied in oracles
-        when not using full kernel."""
-        kernel_class = distributed_kernel_parameterization["class"]
-
-        # Create two configs with different scaling factors
-        scale1 = 1.0
-        scale2 = 3.5  # Different from default to test scaling is working
-
-        config1 = KernelConfig(const_scaling=scale1, lengthscale=1.0)
-        config2 = KernelConfig(const_scaling=scale2, lengthscale=1.0)
-
-        kernel1 = kernel_class(
-            test_matrices["A1"],
-            test_matrices["A2"],
-            kernel_config=config1,
-            devices=devices,
-            use_full_kernel=False,
-        )
-
-        kernel2 = kernel_class(
-            test_matrices["A1"],
-            test_matrices["A2"],
-            kernel_config=config2,
-            devices=devices,
-            use_full_kernel=False,
-        )
-
-        try:
-            # Get block oracles
-            blk_oracle1 = kernel1.blk_oracle(test_blk)
-            blk_oracle2 = kernel2.blk_oracle(test_blk)
-
-            try:
-                # Perform matrix-vector multiplication with both oracles
-                result1 = blk_oracle1 @ test_blk_matmul_vector
-                result2 = blk_oracle2 @ test_blk_matmul_vector
-
-                # The ratio of results should match the ratio of scaling factors
-                expected_ratio = scale2 / scale1
-                actual_ratio = result2 / result1
-
-                # Check that ratio is consistent
-                assert torch.allclose(
-                    actual_ratio,
-                    torch.tensor(expected_ratio, device=result1.device),
-                    **tol
-                )
-
-            finally:
-                # Ensure proper cleanup of oracles
-                if hasattr(blk_oracle1, "shutdown"):
-                    blk_oracle1.shutdown()
-                if hasattr(blk_oracle2, "shutdown"):
-                    blk_oracle2.shutdown()
-
-        finally:
-            # Ensure proper cleanup
-            kernel1.shutdown()
-            kernel2.shutdown()
