@@ -1,7 +1,7 @@
 import pytest
 import torch
 
-from rlaopt.linops import LinOp
+from rlaopt.linops.base import _BaseLinOp
 from rlaopt.kernels import (
     RBFLinOp,
     LaplaceLinOp,
@@ -9,6 +9,15 @@ from rlaopt.kernels import (
     Matern32LinOp,
     Matern52LinOp,
     KernelConfig,
+)
+
+from tests.kernels.utils import (
+    compute_kernel_matrix,
+    rbf_kernel,
+    laplace_kernel,
+    matern12_kernel,
+    matern32_kernel,
+    matern52_kernel,
 )
 
 
@@ -121,68 +130,6 @@ def kernel_config(request, device, precision):
         return KernelConfig(const_scaling=const_scaling, lengthscale=lengthscale)
 
 
-# Define a single function to compute kernel matrices for any kernel type
-def compute_kernel_matrix(X, Y, kernel_config, device, dtype, kernel_func):
-    """
-    General function to compute kernel matrices between X and Y.
-
-    Args:
-        X: First set of points (n_x, d)
-        Y: Second set of points (n_y, d)
-        kernel_config: Kernel configuration containing lengthscale and const_scaling
-        device: Device for the output
-        dtype: Data type for the output
-        kernel_func: Function that computes the kernel value between two vectors
-
-    Returns:
-        K: Kernel matrix (n_x, n_y)
-    """
-    K = torch.zeros((X.shape[0], Y.shape[0]), device=device, dtype=dtype)
-    for i in range(K.shape[0]):
-        for j in range(K.shape[1]):
-            K[i, j] = kernel_config.const_scaling * kernel_func(
-                X[i], Y[j], kernel_config.lengthscale
-            )
-    return K
-
-
-# Define kernel-specific functions that just compute
-# the kernel value between two vectors
-def rbf_kernel(x, y, lengthscale):
-    """Compute RBF kernel between two vectors."""
-    return torch.exp(-1 / 2 * torch.sum(((x - y) / lengthscale) ** 2))
-
-
-def laplace_kernel(x, y, lengthscale):
-    """Compute Laplace kernel between two vectors."""
-    return torch.exp(-torch.sum(torch.abs(x - y) / lengthscale))
-
-
-def _distance_matrix_matern(x, y, lengthscale):
-    """Compute scaled distance matrix for Matern kernels."""
-    return torch.sum(((x - y) / lengthscale) ** 2) ** 0.5
-
-
-def matern12_kernel(x, y, lengthscale):
-    """Compute Matern-1/2 kernel between two vectors."""
-    d = _distance_matrix_matern(x, y, lengthscale)
-    return torch.exp(-d)
-
-
-def matern32_kernel(x, y, lengthscale):
-    """Compute Matern-3/2 kernel between two vectors."""
-    d = _distance_matrix_matern(x, y, lengthscale)
-    sqrt3 = 3**0.5
-    return (1 + sqrt3 * d) * torch.exp(-sqrt3 * d)
-
-
-def matern52_kernel(x, y, lengthscale):
-    """Compute Matern-5/2 kernel between two vectors."""
-    d = _distance_matrix_matern(x, y, lengthscale)
-    sqrt5 = 5**0.5
-    return (1 + sqrt5 * d + 5 / 3 * d**2) * torch.exp(-sqrt5 * d)
-
-
 # Define kernel configurations for parameterized testing
 KERNEL_PARAMETERIZATIONS = [
     {
@@ -264,7 +211,7 @@ class TestKernelLinOps:
         )
 
         row_lin_op = kernel.row_oracle(test_blk)
-        assert isinstance(row_lin_op, LinOp)
+        assert isinstance(row_lin_op, _BaseLinOp)
         assert row_lin_op.shape == (test_blk.shape[0], test_matrices["A2"].shape[0])
         assert row_lin_op.device == kernel.device
         assert row_lin_op.dtype == kernel.dtype
@@ -288,7 +235,7 @@ class TestKernelLinOps:
         )
 
         block_lin_op = kernel.blk_oracle(test_blk)
-        assert isinstance(block_lin_op, LinOp)
+        assert isinstance(block_lin_op, _BaseLinOp)
         assert block_lin_op.shape == (test_blk.shape[0], test_blk.shape[0])
         assert block_lin_op.device == kernel.device
         assert block_lin_op.dtype == kernel.dtype
@@ -303,7 +250,7 @@ class TestKernelLinOps:
             **tol
         )
 
-    def test_matmul(
+    def test_matmul_and_transpose(
         self,
         test_matrices,
         kernel_config,
@@ -312,7 +259,7 @@ class TestKernelLinOps:
         tol,
         kernel_parameterization,
     ):
-        """Test matmul of kernel linear operators."""
+        """Test matmul and transpose operations of kernel linear operators."""
         kernel_class = kernel_parameterization["class"]
         kernel_func = kernel_parameterization["kernel_func"]
 
@@ -330,9 +277,50 @@ class TestKernelLinOps:
             kernel_func,
         )
 
-        assert torch.allclose(
-            kernel @ test_matmul_vector, K_looped @ test_matmul_vector, **tol
+        # ===== Test 1: Forward Matrix-Vector Multiplication =====
+        result_vector = kernel @ test_matmul_vector
+        expected_vector = K_looped @ test_matmul_vector
+        assert torch.allclose(result_vector, expected_vector, **tol)
+
+        # ===== Test 2: Forward Matrix-Matrix Multiplication =====
+        result_matrix = kernel @ test_matmul_matrix
+        expected_matrix = K_looped @ test_matmul_matrix
+        assert torch.allclose(result_matrix, expected_matrix, **tol)
+
+        # ===== Test 3: Transpose Matrix-Vector Multiplication =====
+        # Create a vector compatible with the transpose
+        trans_vector = torch.randn(
+            test_matrices["A1"].shape[0],
+            device=test_matrices["A1"].device,
+            dtype=test_matrices["A1"].dtype,
         )
-        assert torch.allclose(
-            kernel @ test_matmul_matrix, K_looped @ test_matmul_matrix, **tol
+
+        # Test right multiplication (equivalent to transpose)
+        trans_result1 = trans_vector @ kernel
+        trans_expected1 = trans_vector @ K_looped
+        assert torch.allclose(trans_result1, trans_expected1, **tol)
+
+        # Test explicit transpose
+        transposed_kernel = kernel.T
+        trans_result2 = transposed_kernel @ trans_vector
+        trans_expected2 = K_looped.T @ trans_vector
+        assert torch.allclose(trans_result2, trans_expected2, **tol)
+
+        # ===== Test 4: Transpose Matrix-Matrix Multiplication =====
+        # Create a matrix compatible with the transpose
+        trans_matrix = torch.randn(
+            2,
+            test_matrices["A1"].shape[0],
+            device=test_matrices["A1"].device,
+            dtype=test_matrices["A1"].dtype,
         )
+
+        # Test right multiplication with matrix (equivalent to transpose)
+        trans_matrix_result = trans_matrix @ kernel
+        trans_matrix_expected = trans_matrix @ K_looped
+        assert torch.allclose(trans_matrix_result, trans_matrix_expected, **tol)
+
+        # Test explicit transpose
+        trans_matrix_result2 = transposed_kernel @ trans_matrix.T
+        train_matrix_expected2 = K_looped.T @ trans_matrix.T
+        assert torch.allclose(trans_matrix_result2, train_matrix_expected2, **tol)

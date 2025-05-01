@@ -8,8 +8,8 @@ import torch
 from rlaopt.linops import (
     LinOp,
     TwoSidedLinOp,
-    DistributedLinOp,
     DistributedTwoSidedLinOp,
+    ScaleMixin,
 )
 from rlaopt.linops.distributed import _DistributedLinOp
 from rlaopt.utils import _is_torch_tensor, _is_set
@@ -20,7 +20,7 @@ _KERNEL_CACHE: dict[str, LazyTensor] = {}
 _LAZY_TENSOR_CACHE: dict[str, LazyTensor] = {}
 
 
-class _KernelLinOp(TwoSidedLinOp):
+class _KernelLinOp(TwoSidedLinOp, ScaleMixin):
     def __init__(
         self,
         A1: torch.Tensor,
@@ -34,13 +34,29 @@ class _KernelLinOp(TwoSidedLinOp):
         self._kernel_config = kernel_config
         self._kernel_computation = _kernel_computation_fn
         self._K_lazy = self._get_kernel()
+
+        # Initialize scaling from kernel_config
+        scale = getattr(kernel_config, "const_scaling", 1.0)
+        self._initialize_scaling(scale)
+
+        # Define matvec and rmatvec functions with scaling applied
+        def matvec(x):
+            return self._K_lazy @ x
+
+        def rmatvec(x):
+            return self._K_lazy.T @ x
+
+        # Apply scaling to the matvec and rmatvec functions
+        matvec = self._apply_scaling(matvec)
+        rmatvec = self._apply_scaling(rmatvec)
+
         super().__init__(
             device=self._A1.device,
             shape=torch.Size((self._A1.shape[0], self._A2.shape[0])),
-            matvec=lambda x: self._K_lazy @ x,
-            rmatvec=lambda x: self._K_lazy.T @ x,
-            matmat=lambda x: self._K_lazy @ x,
-            rmatmat=lambda x: self._K_lazy.T @ x,
+            matvec=matvec,
+            rmatvec=rmatvec,
+            matmat=matvec,  # Reuse matvec for matmat
+            rmatmat=rmatvec,  # Reuse rmatvec for rmatmat
             dtype=self._A1.dtype,
         )
 
@@ -91,11 +107,17 @@ class _KernelLinOp(TwoSidedLinOp):
         idx2: torch.Tensor | None = None,
     ) -> LinOp:
         K = self._get_kernel(idx1, idx2)
+
+        def matvec(x: torch.Tensor) -> torch.Tensor:
+            return K @ x
+
+        matvec = self._apply_scaling(matvec)
+
         return LinOp(
             device=self.device,
             shape=torch.Size(K.shape),
-            matvec=lambda x: K @ x,
-            matmat=lambda x: K @ x,
+            matvec=matvec,
+            matmat=matvec,
             dtype=self.dtype,
         )
 
@@ -106,7 +128,7 @@ class _KernelLinOp(TwoSidedLinOp):
         return self._get_kernel_linop(idx1=blk, idx2=blk)
 
 
-class _CacheableKernelLinOp(TwoSidedLinOp):
+class _CacheableKernelLinOp(TwoSidedLinOp, ScaleMixin):
     """Private implementation of Kernel linear operator with caching."""
 
     def __init__(
@@ -126,6 +148,11 @@ class _CacheableKernelLinOp(TwoSidedLinOp):
             f"{_kernel_name}_{id(self)}_{len(self._A1)}_{len(self._A2)}_"
             f"{self._A1.device}"
         )
+
+        # Initialize scaling from kernel_config
+        scale = getattr(kernel_config, "const_scaling", 1.0)
+        self._initialize_scaling(scale)
+
         super().__init__(
             device=device,
             shape=torch.Size((self._A1.shape[0], self._A2.shape[0])),
@@ -179,12 +206,12 @@ class _CacheableKernelLinOp(TwoSidedLinOp):
     def _matvec(self, x: torch.Tensor):
         """Matrix-vector product with caching."""
         kernel = self._get_kernel()
-        return kernel @ x
+        return self._apply_scaling(kernel @ x)
 
     def _rmatvec(self, x: torch.Tensor):
         """Transpose matrix-vector product with caching."""
         kernel = self._get_kernel()
-        return kernel.T @ x
+        return self._apply_scaling(kernel.T @ x)
 
     def _clear_cache(self):
         """Clear the kernel cache for this operator."""
@@ -217,7 +244,7 @@ def _get_cached_lazy_tensor(A: torch.Tensor) -> LazyTensor:
     return _LAZY_TENSOR_CACHE[cache_key]
 
 
-class _DistributedKernelLinOp(DistributedTwoSidedLinOp):
+class _DistributedKernelLinOp(DistributedTwoSidedLinOp, ScaleMixin):
     """Abstract base class for distributed kernel linear operators."""
 
     def __init__(
@@ -256,34 +283,37 @@ class _DistributedKernelLinOp(DistributedTwoSidedLinOp):
         self._A1 = A1  # Keep original tensor for oracles
         self._A2 = A2  # Keep original tensor for oracles
         self._kernel_config = kernel_config
-        self.devices = list(devices)
         self._kernel_config_devices = {
             device: self._kernel_config.to(device) for device in devices
         }
+
+        # Initialize scaling from kernel_config
+        scale = getattr(kernel_config, "const_scaling", 1.0)
+        self._initialize_scaling(scale)
 
         # Create row partitioning
         # A1_row_chunks is useful for the linop,
         # A2_row_chunks is useful for the row oracle
         self.A1_row_chunks = torch.chunk(
-            torch.arange(self._A1.shape[0]), len(self.devices), dim=0
+            torch.arange(self._A1.shape[0]), len(devices), dim=0
         )
         self.A2_row_chunks = torch.chunk(
-            torch.arange(self._A2.shape[0]), len(self.devices), dim=0
+            torch.arange(self._A2.shape[0]), len(devices), dim=0
         )
 
         # Send chunks of A2 to devices
         self.A2_chunks = []
-        for device, chunk_idx in zip(self.devices, self.A2_row_chunks):
+        for device, chunk_idx in zip(devices, self.A2_row_chunks):
             self.A2_chunks.append(self._A2[chunk_idx].to(device))
 
         # If we are using the full kernel, we need to create the kernel operators
         # The kernel operators use cached LazyTensors
         if use_full_kernel:
-            kernel_ops = self._create_kernel_operators()
+            kernel_ops = self._create_kernel_operators(devices)
         # If not, we create "fake" kernel operators
         # In this case, we save memory since we do not have to send A2 to each device
         else:
-            kernel_ops = self._create_fake_kernel_operators()
+            kernel_ops = self._create_fake_kernel_operators(devices)
 
         # Initialize the distributed operator
         super().__init__(
@@ -329,14 +359,15 @@ class _DistributedKernelLinOp(DistributedTwoSidedLinOp):
         if not all(isinstance(d, torch.device) for d in devices):
             raise ValueError("All elements in devices must be torch.device instances.")
 
-    def _create_kernel_operators(self):
+    def _create_kernel_operators(self, devices: list[torch.device]):
         """Create the kernel operators for each chunk.
 
         Returns:
             List of kernel operators, one for each device/chunk
         """
         ops = []
-        for device, chunk_idx in zip(self.devices, self.A1_row_chunks):
+        for device, chunk_idx in zip(devices, self.A1_row_chunks):
+            # Create a kernel operator for this chunk
             ops.append(
                 _CacheableKernelLinOp(
                     A1=self.A1[chunk_idx],
@@ -349,7 +380,7 @@ class _DistributedKernelLinOp(DistributedTwoSidedLinOp):
             )
         return ops
 
-    def _create_fake_kernel_operators(self):
+    def _create_fake_kernel_operators(self, devices: list[torch.device]):
         """Create fake kernel operators for each chunk.
 
         These operators do not compute the kernel, but are used to create the
@@ -359,7 +390,8 @@ class _DistributedKernelLinOp(DistributedTwoSidedLinOp):
             List of fake kernel operators, one for each device/chunk
         """
         ops = []
-        for device, chunk_idx in zip(self.devices, self.A1_row_chunks):
+        for device, chunk_idx in zip(devices, self.A1_row_chunks):
+            # Create a fake kernel operator for this chunk (unscaled)
             ops.append(
                 TwoSidedLinOp(
                     device=device,
@@ -368,12 +400,12 @@ class _DistributedKernelLinOp(DistributedTwoSidedLinOp):
                     rmatvec=lambda x: None,
                     matmat=lambda x: None,
                     rmatmat=lambda x: None,
-                    dtype=self.dtype,
+                    dtype=self.A1.dtype,
                 )
             )
         return ops
 
-    def row_oracle(self, blk: torch.Tensor) -> DistributedLinOp:
+    def row_oracle(self, blk: torch.Tensor) -> _DistributedLinOp:
         """Generic implementation of row oracle for all kernel types."""
         # Create operators for each device
         row_ops = []
@@ -387,6 +419,9 @@ class _DistributedKernelLinOp(DistributedTwoSidedLinOp):
                 kernel_config=self._kernel_config_devices[device],
                 kernel_computation=self._kernel_computation,
             )
+
+            # Apply scaling to the matvec function
+            matvec_fn = self._apply_scaling(matvec_fn)
 
             # Create a LinOp with the matvec function
             row_ops.append(
@@ -404,14 +439,14 @@ class _DistributedKernelLinOp(DistributedTwoSidedLinOp):
             shape=torch.Size((blk.shape[0], self.A2.shape[0])),
             A=row_ops,
             distribution_mode="column",
+            is_new=False,
             manager=self._manager,
             result_queue=self._result_queue,
             task_queues=self._task_queues,
             workers=self._workers,
-            is_new=False,
         )
 
-    def blk_oracle(self, blk: torch.Tensor) -> DistributedLinOp:
+    def blk_oracle(self, blk: torch.Tensor) -> _DistributedLinOp:
         """Get a distributed linear operator for a block.
 
         Args:
@@ -443,6 +478,9 @@ class _DistributedKernelLinOp(DistributedTwoSidedLinOp):
                 kernel_computation=self._kernel_computation,
             )
 
+            # Apply scaling to the matvec function
+            matvec_fn = self._apply_scaling(matvec_fn)
+
             # Create a linear operator for this chunk
             block_ops.append(
                 LinOp(
@@ -459,11 +497,11 @@ class _DistributedKernelLinOp(DistributedTwoSidedLinOp):
             shape=torch.Size((blk.shape[0], blk.shape[0])),
             A=block_ops,
             distribution_mode="row",
+            is_new=False,
             manager=self._manager,
             result_queue=self._result_queue,
             task_queues=self._task_queues,
             workers=self._workers,
-            is_new=False,
         )
 
     def shutdown(self):
@@ -477,7 +515,6 @@ class _DistributedKernelLinOp(DistributedTwoSidedLinOp):
         global _KERNEL_CACHE, _LAZY_TENSOR_CACHE
         _KERNEL_CACHE.clear()
         _LAZY_TENSOR_CACHE.clear()
-        print(f"Cleared global caches on shutdown. PID: {os.getpid()}")
 
         # Call parent shutdown
         super().shutdown()

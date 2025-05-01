@@ -38,12 +38,26 @@ class KernelConfig:
         return self
 
     def __post_init__(self):
+        """Post-initialization checks for the configuration.
+
+        If the lengthscale is a 1D tensor, it is reshaped to a 2D tensor.
+
+        Raises:
+            TypeError: If the types of the parameters are incorrect.
+            ValueError: If the shape of the lengthscale parameter is incorrect.
+        """
         _is_float(self.const_scaling, "const_scaling")
         if not isinstance(self.lengthscale, (float, torch.Tensor)):
             raise TypeError(
                 f"lengthscale is of type {type(self.lengthscale).__name__}, "
                 "but expected type float or torch.Tensor"
             )
+        if isinstance(self.lengthscale, torch.Tensor):
+            if self.lengthscale.ndim != 1:
+                raise ValueError(
+                    f"lengthscale has {self.lengthscale.ndim} dimensions, "
+                    "but expected 1 dimension"
+                )
 
 
 def _is_kernel_config(param: Any, param_name: str):

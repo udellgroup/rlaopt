@@ -4,10 +4,7 @@ import torch
 from torch import vmap
 
 from .base import _BaseLinOp
-from rlaopt.utils.input_checkers import (
-    _is_callable,
-    _is_torch_device,
-)
+from rlaopt.utils import _is_callable
 
 __all__ = ["LinOp", "TwoSidedLinOp", "SymmetricLinOp"]
 
@@ -24,32 +21,23 @@ class LinOp(_BaseLinOp):
         matmat: Callable | None = None,
         dtype: torch.dtype = _DEFAULT_DTYPE,
     ):
-        super().__init__(shape=shape, dtype=dtype)
-        _is_torch_device(device, "device")
+        super().__init__(device=device, shape=shape, dtype=dtype)
         _is_callable(matvec, "matvec")
         if matmat is not None:
             _is_callable(matmat, "matmat")
 
-        self._device = device
-        self._shape = shape
-        self._matvec = matvec
+        self._matvec_fn = matvec
 
         if matmat is None:
-            self._matmat = vmap(self._matvec, in_dims=1, out_dims=1)
+            self._matmat_fn = vmap(self._matvec_fn, in_dims=1, out_dims=1)
         else:
-            self._matmat = matmat
+            self._matmat_fn = matmat
 
-    @property
-    def device(self):
-        return self._device
+    def _matvec(self, x: torch.Tensor):
+        return self._matvec_fn(x)
 
-    def __matmul__(self, x: torch.Tensor):
-        if x.ndim == 1:
-            return self._matvec(x)
-        elif x.ndim == 2:
-            return self._matmat(x)
-        else:
-            raise ValueError(f"x must be a 1D or 2D tensor. Received {x.ndim}D tensor.")
+    def _matmat(self, x: torch.Tensor):
+        return self._matmat_fn(x)
 
 
 class TwoSidedLinOp(LinOp):
@@ -69,17 +57,17 @@ class TwoSidedLinOp(LinOp):
         if rmatmat is not None:
             _is_callable(rmatmat, "rmatmat")
 
-        self._rmatvec = rmatvec
+        self._rmatvec_fn = rmatvec
         if rmatmat is None:
-            self._rmatmat = vmap(self._rmatvec, in_dims=1, out_dims=1)
+            self._rmatmat_fn = vmap(self._rmatvec_fn, in_dims=1, out_dims=1)
         else:
-            self._rmatmat = rmatmat
+            self._rmatmat_fn = rmatmat
 
-    def __rmatmul__(self, x: torch.Tensor):
-        if x.ndim == 1:
-            return self._rmatvec(x)
-        elif x.ndim == 2:
-            return self._rmatmat(x.T).T
+    def _rmatvec(self, x: torch.Tensor):
+        return self._rmatvec_fn(x)
+
+    def _rmatmat(self, x: torch.Tensor):
+        return self._rmatmat_fn(x)
 
     @property
     def T(self):
