@@ -250,7 +250,7 @@ class TestKernelLinOps:
             **tol
         )
 
-    def test_matmul(
+    def test_matmul_and_transpose(
         self,
         test_matrices,
         kernel_config,
@@ -259,7 +259,7 @@ class TestKernelLinOps:
         tol,
         kernel_parameterization,
     ):
-        """Test matmul of kernel linear operators."""
+        """Test matmul and transpose operations of kernel linear operators."""
         kernel_class = kernel_parameterization["class"]
         kernel_func = kernel_parameterization["kernel_func"]
 
@@ -277,9 +277,50 @@ class TestKernelLinOps:
             kernel_func,
         )
 
-        assert torch.allclose(
-            kernel @ test_matmul_vector, K_looped @ test_matmul_vector, **tol
+        # ===== Test 1: Forward Matrix-Vector Multiplication =====
+        result_vector = kernel @ test_matmul_vector
+        expected_vector = K_looped @ test_matmul_vector
+        assert torch.allclose(result_vector, expected_vector, **tol)
+
+        # ===== Test 2: Forward Matrix-Matrix Multiplication =====
+        result_matrix = kernel @ test_matmul_matrix
+        expected_matrix = K_looped @ test_matmul_matrix
+        assert torch.allclose(result_matrix, expected_matrix, **tol)
+
+        # ===== Test 3: Transpose Matrix-Vector Multiplication =====
+        # Create a vector compatible with the transpose
+        trans_vector = torch.randn(
+            test_matrices["A1"].shape[0],
+            device=test_matrices["A1"].device,
+            dtype=test_matrices["A1"].dtype,
         )
-        assert torch.allclose(
-            kernel @ test_matmul_matrix, K_looped @ test_matmul_matrix, **tol
+
+        # Test right multiplication (equivalent to transpose)
+        trans_result1 = trans_vector @ kernel
+        trans_expected1 = trans_vector @ K_looped
+        assert torch.allclose(trans_result1, trans_expected1, **tol)
+
+        # Test explicit transpose
+        transposed_kernel = kernel.T
+        trans_result2 = transposed_kernel @ trans_vector
+        trans_expected2 = K_looped.T @ trans_vector
+        assert torch.allclose(trans_result2, trans_expected2, **tol)
+
+        # ===== Test 4: Transpose Matrix-Matrix Multiplication =====
+        # Create a matrix compatible with the transpose
+        trans_matrix = torch.randn(
+            2,
+            test_matrices["A1"].shape[0],
+            device=test_matrices["A1"].device,
+            dtype=test_matrices["A1"].dtype,
         )
+
+        # Test right multiplication with matrix (equivalent to transpose)
+        trans_matrix_result = trans_matrix @ kernel
+        trans_matrix_expected = trans_matrix @ K_looped
+        assert torch.allclose(trans_matrix_result, trans_matrix_expected, **tol)
+
+        # Test explicit transpose
+        trans_matrix_result2 = transposed_kernel @ trans_matrix.T
+        train_matrix_expected2 = K_looped.T @ trans_matrix.T
+        assert torch.allclose(trans_matrix_result2, train_matrix_expected2, **tol)
