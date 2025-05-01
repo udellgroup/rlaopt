@@ -144,6 +144,24 @@ class _BaseDistributedLinOp(_BaseLinOp):
             self._task_queues = task_queues
             self._workers = workers
 
+    @property
+    def device(self):
+        """Raises an error to indicate that distributed operators don't have a single
+        device.
+
+        Use `devices` property instead to get all devices used by this operator.
+        """
+        raise AttributeError(
+            "Distributed linear operators operate across multiple devices "
+            "and don't have a single 'device'. "
+            "Use the 'devices' property instead to get the list of all devices."
+        )
+
+    @property
+    def devices(self):
+        """Return the list of all devices used by this distributed operator."""
+        return self._devices
+
     @staticmethod
     def _device_worker(
         device: torch.device,

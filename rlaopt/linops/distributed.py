@@ -20,7 +20,7 @@ class DistributedLinOp(_BaseDistributedLinOp):
             shape=shape, A=A, distribution_mode=distribution_mode, is_new=True
         )
 
-    def _matvec(self, w: torch.Tensor):
+    def _matvec(self, w: torch.Tensor) -> torch.Tensor:
         if self._distribution_mode == _DistributionMode.ROW:
             # Row-distributed operator: send full vector, concatenate results
             self._distribute_tasks(w, _Operation.MATVEC, chunk=False, by_dimension=0)
@@ -32,10 +32,10 @@ class DistributedLinOp(_BaseDistributedLinOp):
             results = self._gather_results(num_tasks=len(self._A))
             return self._combine_results(results, concatenate=False).to(w.device)
 
-    def _matmat(self, w: torch.Tensor):
+    def _matmat(self, w: torch.Tensor) -> torch.Tensor:
         return self._matvec(w)
 
-    def __matmul__(self, x: torch.Tensor):
+    def __matmul__(self, x):
         if x.ndim == 1:
             return self._matvec(x)
         elif x.ndim == 2:
@@ -74,14 +74,14 @@ class DistributedTwoSidedLinOp(DistributedLinOp):
     def _rmatmat(self, w: torch.Tensor):
         return self._rmatvec(w)
 
-    def __rmatmul__(self, x: torch.Tensor):
+    def __rmatmul__(self, x):
         if x.ndim == 1:
             return self._rmatvec(x)
         elif x.ndim == 2:
             return self._rmatmat(x.T).T
 
     @property
-    def T(self):
+    def T(self) -> "_BaseDistributedLinOp":
         # Create a transposed view with shared worker processes
         # When we transpose, we flip the distribution mode
         transposed_mode = (
@@ -121,13 +121,13 @@ class DistributedSymmetricLinOp(DistributedTwoSidedLinOp):
             )
 
     # Override the _rmatvec and _rmatmat methods since the operator is symmetric
-    def _rmatvec(self, w: torch.Tensor):
+    def _rmatvec(self, w: torch.Tensor) -> torch.Tensor:
         return self._matvec(w)
 
-    def _rmatmat(self, w: torch.Tensor):
+    def _rmatmat(self, w: torch.Tensor) -> torch.Tensor:
         return self._matmat(w)
 
     @property
-    def T(self):
+    def T(self) -> "DistributedSymmetricLinOp":
         # For symmetric operators, transpose returns self
         return self
