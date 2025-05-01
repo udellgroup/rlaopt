@@ -367,7 +367,7 @@ class _DistributedKernelLinOp(DistributedTwoSidedLinOp, ScaleMixin):
         """
         ops = []
         for device, chunk_idx in zip(devices, self.A1_row_chunks):
-            # Create a kernel operator for this chunk (unscaled)
+            # Create a kernel operator for this chunk
             ops.append(
                 _CacheableKernelLinOp(
                     A1=self.A1[chunk_idx],
@@ -492,7 +492,7 @@ class _DistributedKernelLinOp(DistributedTwoSidedLinOp, ScaleMixin):
                 )
             )
 
-        # Create a distributed operator that reuses our workers (unscaled)
+        # Create a distributed operator that reuses our workers
         return _DistributedLinOp(
             shape=torch.Size((blk.shape[0], blk.shape[0])),
             A=block_ops,
