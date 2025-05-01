@@ -10,6 +10,7 @@ from rlaopt.linops import (
     TwoSidedLinOp,
     DistributedLinOp,
     DistributedTwoSidedLinOp,
+    # ScaleLinOp,
 )
 from rlaopt.linops.distributed import _DistributedLinOp
 from rlaopt.utils import _is_torch_tensor, _is_set
