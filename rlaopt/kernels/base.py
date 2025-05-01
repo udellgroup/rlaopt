@@ -367,7 +367,8 @@ class _DistributedKernelLinOp(DistributedTwoSidedLinOp, ScaleMixin):
                 _kernel_name=self._cacheable_kernel_name,
             )
             # Apply scaling using ScaleMixin
-            scaled_op = self._scale_linop(base_op)
+            # scaled_op = self._scale_linop(base_op)
+            scaled_op = base_op
             ops.append(scaled_op)
         return ops
 

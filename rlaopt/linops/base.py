@@ -59,19 +59,56 @@ class _BaseLinOp(ABC):
         raise NotImplementedError("This linear operator doesn't support transposition")
 
     @abstractmethod
-    def __matmul__(self, x: torch.Tensor) -> torch.Tensor:
-        """Matrix-vector multiplication."""
+    def _matvec(self, x: torch.Tensor) -> torch.Tensor:
+        """Matrix-vector multiplication.
+
+        This method should be overridden by subclasses to implement the specific matrix-
+        vector multiplication logic.
+        """
         pass
 
-    def __rmatmul__(self, x: torch.Tensor) -> torch.Tensor:
+    @abstractmethod
+    def _matmat(self, x: torch.Tensor) -> torch.Tensor:
+        """Matrix-matrix multiplication.
+
+        This method should be overridden by subclasses to implement the specific matrix-
+        matrix multiplication logic.
+        """
+        pass
+
+    def _rmatvec(self, x: torch.Tensor) -> torch.Tensor:
         """Right matrix-vector multiplication.
 
-        By default, linear operators don't support right multiplication. Subclasses like
-        TwoSidedLinOp should override this method.
+        This method should be overridden by subclasses to implement the specific right
+        matrix-vector multiplication logic.
         """
-        raise NotImplementedError(
-            "This linear operator doesn't support right multiplication"
-        )
+        raise NotImplementedError("This linear operator doesn't support right matvec")
+
+    def _rmatmat(self, x: torch.Tensor) -> torch.Tensor:
+        """Right matrix-matrix multiplication.
+
+        This method should be overridden by subclasses to implement the specific right
+        matrix-matrix multiplication logic.
+        """
+        raise NotImplementedError("This linear operator doesn't support right matmat")
+
+    def __matmul__(self, x: torch.Tensor) -> torch.Tensor:
+        """Matmul operator."""
+        if x.ndim == 1:
+            return self._matvec(x)
+        elif x.ndim == 2:
+            return self._matmat(x)
+        else:
+            raise ValueError(f"x must be a 1D or 2D tensor. Received {x.ndim}D tensor.")
+
+    def __rmatmul__(self, x: torch.Tensor) -> torch.Tensor:
+        """Rmatmul operator."""
+        if x.ndim == 1:
+            return self._rmatvec(x)
+        elif x.ndim == 2:
+            return self._rmatmat(x.T).T
+        else:
+            raise ValueError(f"x must be a 1D or 2D tensor. Received {x.ndim}D tensor.")
 
 
 class _BaseDistributedLinOp(_BaseLinOp):

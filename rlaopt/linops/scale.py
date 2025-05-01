@@ -40,13 +40,21 @@ class ScaleLinOp(_BaseLinOp):
         """Return the scaling factor."""
         return self._scale
 
-    def __matmul__(self, x: torch.Tensor):
+    def _matvec(self, x: torch.Tensor):
         """Apply scaled matrix-vector multiplication."""
-        return self._scale * (self._linop @ x)
+        return self._scale * self._linop._matvec(x)
 
-    def __rmatmul__(self, x: torch.Tensor):
+    def _matmat(self, x: torch.Tensor):
+        """Apply scaled matrix-matrix multiplication."""
+        return self._scale * self._linop._matmat(x)
+
+    def _rmatvec(self, x: torch.Tensor):
         """Apply scaled right matrix-vector multiplication."""
-        return self._scale * (x @ self._linop)
+        return self._scale * self._linop._rmatvec(x)
+
+    def _rmatmat(self, x: torch.Tensor):
+        """Apply scaled right matrix-matrix multiplication."""
+        return self._scale * self._linop._rmatmat(x)
 
     @property
     def T(self):
@@ -56,6 +64,9 @@ class ScaleLinOp(_BaseLinOp):
     def __getattr__(self, name):
         """Forward attribute access to the underlying linear operator."""
         # This is called only for attributes that don't exist in ScaleLinOp
+        # print("self._linop: ", self._linop)
+        # print("self._linop.__class__: ", self._linop.__class__)
+        # print("name: ", name)
         try:
             return getattr(self._linop, name)
         except AttributeError:

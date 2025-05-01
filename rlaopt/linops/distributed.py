@@ -51,14 +51,6 @@ class DistributedLinOp(_BaseDistributedLinOp):
     def _matmat(self, w: torch.Tensor) -> torch.Tensor:
         return self._matvec(w)
 
-    def __matmul__(self, x):
-        if x.ndim == 1:
-            return self._matvec(x)
-        elif x.ndim == 2:
-            return self._matmat(x)
-        else:
-            raise ValueError(f"x must be a 1D or 2D tensor. Received {x.ndim}D tensor.")
-
 
 class DistributedTwoSidedLinOp(DistributedLinOp):
     """Distributed two-sided linear operator that performs operations across multiple
@@ -112,12 +104,6 @@ class DistributedTwoSidedLinOp(DistributedLinOp):
 
     def _rmatmat(self, w: torch.Tensor):
         return self._rmatvec(w)
-
-    def __rmatmul__(self, x):
-        if x.ndim == 1:
-            return self._rmatvec(x)
-        elif x.ndim == 2:
-            return self._rmatmat(x.T).T
 
     @property
     def T(self) -> "_BaseDistributedLinOp":
