@@ -10,9 +10,8 @@ from rlaopt.linops import (
     TwoSidedLinOp,
     DistributedLinOp,
     DistributedTwoSidedLinOp,
-    # ScaleLinOp,
 )
-from rlaopt.linops.distributed import _DistributedLinOp
+from rlaopt.linops.base import _BaseDistributedLinOp
 from rlaopt.utils import _is_torch_tensor, _is_set
 from .configs import KernelConfig, _is_kernel_config
 
@@ -401,15 +400,15 @@ class _DistributedKernelLinOp(DistributedTwoSidedLinOp):
             )
 
         # Create a distributed operator that reuses our workers
-        return _DistributedLinOp(
+        return _BaseDistributedLinOp(
             shape=torch.Size((blk.shape[0], self.A2.shape[0])),
             A=row_ops,
             distribution_mode="column",
+            is_new=False,
             manager=self._manager,
             result_queue=self._result_queue,
             task_queues=self._task_queues,
             workers=self._workers,
-            is_new=False,
         )
 
     def blk_oracle(self, blk: torch.Tensor) -> DistributedLinOp:
@@ -456,15 +455,15 @@ class _DistributedKernelLinOp(DistributedTwoSidedLinOp):
             )
 
         # Create a distributed operator that reuses our workers
-        return _DistributedLinOp(
+        return _BaseDistributedLinOp(
             shape=torch.Size((blk.shape[0], blk.shape[0])),
             A=block_ops,
             distribution_mode="row",
+            is_new=False,
             manager=self._manager,
             result_queue=self._result_queue,
             task_queues=self._task_queues,
             workers=self._workers,
-            is_new=False,
         )
 
     def shutdown(self):
