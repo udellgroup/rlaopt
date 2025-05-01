@@ -3,6 +3,8 @@ import torch
 from .base import _BaseLinOp
 from rlaopt.utils import _is_float
 
+__all__ = ["ScaleLinOp"]
+
 
 class ScaleLinOp(_BaseLinOp):
     """Linear operator that scales another linear operator by a constant."""
