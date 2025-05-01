@@ -131,7 +131,7 @@ class _BaseDistributedLinOp(_BaseLinOp):
                     # For each device, create a task queue and a worker process
                     self._task_queues[device] = Queue()
                     worker = Process(
-                        tatget=self._device_worker,
+                        target=self._device_worker,
                         args=(device, self._task_queues[device], self._result_queue),
                         daemon=True,
                     )
@@ -238,18 +238,18 @@ class _BaseDistributedLinOp(_BaseLinOp):
         else:
             return sum(results)
 
-    def __del__(self):
-        # Clean up workers
-        self.shutdown()
-
     def shutdown(self):
         """Shut down worker processes."""
         # Only shut down if we own the processes
         if self._is_new:
-            for device, queue in self._task_queues.items():
+            for _, queue in self._task_queues.items():
                 queue.put(None)  # Signal worker to exit
 
-            for device, worker in self._workers.items():
+            for _, worker in self._workers.items():
                 worker.join(timeout=5)
                 if worker.is_alive():
                     worker.terminate()
+
+    def __del__(self):
+        # Clean up workers
+        self.shutdown()
