@@ -70,7 +70,7 @@ class PCGConfig(SolverConfig):
     max_iters: int = 1000
     atol: float = 0.0
     rtol: float = 1e-5
-    precond_config: PreconditionerConfig = IdentityConfig()
+    precond_config: PreconditionerConfig = field(default_factory=IdentityConfig)
 
     def __post_init__(self):
         _is_torch_device(self.device, "device")
@@ -86,7 +86,7 @@ class SAPConfig(SolverConfig):
     max_iters: int = 1000
     atol: float = 0.0
     rtol: float = 1e-5
-    precond_config: PreconditionerConfig = IdentityConfig()
+    precond_config: PreconditionerConfig = field(default_factory=IdentityConfig)
     blk_sz: int
     accel: bool = True
     accel_config: SAPAccelConfig | None = None
