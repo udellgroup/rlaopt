@@ -1,5 +1,5 @@
 from abc import ABC
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass, asdict, field
 from typing import Any
 
 import torch
