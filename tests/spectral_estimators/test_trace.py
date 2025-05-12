@@ -20,7 +20,7 @@ def make_linop_from_matrix(M: torch.Tensor) -> SymmetricLinOp:
 @pytest.mark.parametrize("sketch", ["rademacher", "gauss"])
 @pytest.mark.parametrize("dim", [1, 3, 5])
 def test_hutchinson_zero_matrix(sketch, dim):
-    M = torch.zeros(dim, dim)
+    M = torch.zeros(dim, dim, dtype=torch.float32)
     A = make_linop_from_matrix(M)
     est = hutchinson(A, k=10, sketch=sketch)
     assert pytest.approx(0.0, abs=1e-4) == est
@@ -30,7 +30,7 @@ def test_hutchinson_zero_matrix(sketch, dim):
 def test_hutchinson_identity_rademacher_exact(dim, scale):
     # For Rademacher and A = scale * I, each v^T A v = scale * dim exactly,
     # so the estimator is deterministic for ANY k.
-    M = torch.eye(dim) * scale
+    M = torch.eye(dim, dtype=torch.float32) * scale
     A = make_linop_from_matrix(M)
     for k in [1, 5, 10, 100]:
         est = hutchinson(A, k=k, sketch="rademacher")
@@ -40,7 +40,7 @@ def test_hutchinson_identity_rademacher_exact(dim, scale):
 @pytest.mark.parametrize("sketch", ["rademacher", "gauss"])
 @pytest.mark.parametrize("dim", [1, 4, 6])
 def test_hutchpp_zero_matrix(sketch, dim):
-    M = torch.zeros(dim, dim)
+    M = torch.zeros(dim, dim, dtype=torch.float32)
     A = make_linop_from_matrix(M)
     est = hutch_plus_plus(A, k=8, sketch=sketch)
     assert pytest.approx(0.0, abs=1e-4) == est
@@ -50,7 +50,7 @@ def test_hutchpp_identity_rademacher_exact():
     # Hutch++ should also give exact result on scale * I with Rademacher
     # with k/2 >= n due to QR decomposition
     dim, scale = 5, -2.5
-    M = torch.eye(dim) * scale
+    M = torch.eye(dim, dtype=torch.float32) * scale
     A = make_linop_from_matrix(M)
     est = hutch_plus_plus(A, k=dim * 2, sketch="rademacher")
     assert est == pytest.approx(scale * dim, abs=1e-4)
@@ -59,7 +59,7 @@ def test_hutchpp_identity_rademacher_exact():
 def test_reproducibility_given_seed():
     # Fix a random symmetric matrix
     dim = 7
-    M = torch.randn(dim, dim)
+    M = torch.randn(dim, dim, dtype=torch.float32)
     M = (M + M.t()) * 0.5
     A = make_linop_from_matrix(M)
 
