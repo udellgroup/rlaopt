@@ -29,8 +29,9 @@ def run_experiment(n=512, trials=1000, seed=42):
 
 if __name__ == "__main__":
     n = 512
-    test_matrix = torch.randn(n, n)
-    test_matrix = (test_matrix + test_matrix.t()) / 2  # symmetrize
+    test_matrix = torch.zeros(n, n)
+    # test_matrix = torch.randn(n, n)
+    # test_matrix = (test_matrix + test_matrix.t()) / 2  # symmetrize
     test_matrix = test_matrix.to("cpu")
 
     def matvec(x):
@@ -45,7 +46,7 @@ if __name__ == "__main__":
     A = SymmetricLinOp(device, shape, matvec, dtype=test_matrix.dtype)
 
     est = hutchinson(A, k=256, sketch="rademacher")
-    hutchpp_est = hutch_plus_plus(A, k=256, sketch="rademacher")
+    hutchpp_est = hutch_plus_plus(A, k=128, sketch="rademacher")
     print(
         f"Hutchinson trace estimate: {est:.3f}, real trace: \
         {test_matrix.trace().item():.3f}"
