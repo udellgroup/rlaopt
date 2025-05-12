@@ -1,3 +1,10 @@
+"""Enums and utilities for specifying sketch matrix sides and modes.
+
+This module provides the _SketchSide and _SketchMode enums, which represent the side
+(LEFT or RIGHT) on which a sketch matrix is applied, and the mode (GAUSS, ORTHO, SPARSE,
+RADEMACHER) used for constructing a sketch, respectively. These enums include utility
+methods for parsing from string representations.
+"""
 from enum import Enum, auto
 
 
@@ -38,11 +45,13 @@ class _SketchMode(Enum):
         GAUSS: Gaussian sketching mode.
         ORTHO: Orthonormal sketching mode.
         SPARSE: Sparse sketching mode.
+        RADEMACHER: Rademacher sketching mode.
     """
 
     GAUSS = auto()
     ORTHO = auto()
     SPARSE = auto()
+    RADEMACHER = auto()
 
     @classmethod
     def _from_str(cls, value, param_name):
@@ -57,9 +66,12 @@ class _SketchMode(Enum):
                 return cls.ORTHO
             elif value == "sparse":
                 return cls.SPARSE
+            elif value == "rademacher":
+                return cls.RADEMACHER
 
         raise ValueError(
             f"Invalid value for {param_name}: {value}. "
-            "Expected 'gauss', 'ortho', 'sparse', "
-            "_SketchMode.GAUSS, _SketchMode.ORTHO, or _SketchMode.SPARSE."
+            "Expected 'gauss', 'ortho', 'sparse', rademacher"
+            "_SketchMode.GAUSS, _SketchMode.ORTHO, _SketchMode.SPARSE,\
+            or _SketchMode.RADEMACHER"
         )

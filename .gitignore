@@ -4,3 +4,4 @@ rlaopt.egg-info/
 wandb/
 *.so
 .nfs*
+.ipynb_checkpoints/
