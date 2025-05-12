@@ -11,11 +11,13 @@ from .sketch import Sketch
 from .gauss import Gauss
 from .sparse import Sparse
 from .ortho import Ortho
+from .rademacher import Rademacher
 
 SKETCH_MODE_TO_CLASS = {
     _SketchMode.GAUSS: Gauss,
     _SketchMode.ORTHO: Ortho,
     _SketchMode.SPARSE: Sparse,
+    _SketchMode.RADEMACHER: Rademacher,
 }
 
 
@@ -37,7 +39,7 @@ def get_sketch(
 
     Args:
         name (str): The name of the sketching technique to use.
-                    Valid options are "gauss", "ortho", and "sparse".
+                    Valid options are "gauss", "ortho", "sparse", and "rademacher".
         mode (str): The sketching mode. Can be specified as "left" or "right".
         sketch_size (int): The target dimension of the sketch.
         matrix_dim (int): The dimension of the original matrix.
