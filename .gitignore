@@ -5,3 +5,4 @@ wandb/
 *.so
 .nfs*
 .ipynb_checkpoints/
+data/
