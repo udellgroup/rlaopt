@@ -1,6 +1,1 @@
 __pycache__/
-build/
-rlaopt.egg-info/
-wandb/
-*.so
-.nfs*
