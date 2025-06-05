@@ -27,40 +27,34 @@ class Atom(torch.nn.Module, ABC):
         """Returns True if the atom is smooth (differentiable everywhere)."""
         pass
 
+    @abstractmethod
     def gradient(self) -> Optional[torch.Tensor]:
-        """Returns the gradient if the atom is smooth, None otherwise.
+        """Returns the gradient of the atom.
 
-        Default implementation uses PyTorch autograd for smooth atoms. Non-smooth atoms
-        should return None.
+        This method should only be called if the atom is smooth. Otherwise, it should
+        raise a NotImplementedError.
         """
-        if not self.is_smooth():
-            raise NotImplementedError(
-                f"{self.__class__.__name__} is non-smooth and does "
-                "not support gradient computation"
-            )
-        raise NotImplementedError("Gradient computation not implemented for this atom")
+        pass
 
     @abstractmethod
     def is_proxable(self) -> bool:
         """Returns True if the atom has a computable proximal operator."""
         pass
 
+    @abstractmethod
     def prox(self, location: torch.Tensor) -> torch.Tensor:
         """Proximal operator of the atom.
 
+        This method should only be called if the atom is proxable. Otherwise, it should
+        raise a NotImplementedError.
+
         Args:
             location: Point at which to evaluate the proximal operator
-            step_size: Step size parameter (lambda in prox_{lambda*f})
 
         Returns:
             Result of the proximal operator
-
-        Raises:
-            NotImplementedError: If the atom is not proxable
         """
-        if not self.is_proxable():
-            raise NotImplementedError(f"{self.__class__.__name__} is not proxable")
-        raise NotImplementedError("Proximal operator not implemented")
+        pass
 
     @abstractmethod
     def is_subsamplable(self) -> bool:
@@ -68,34 +62,30 @@ class Atom(torch.nn.Module, ABC):
         methods)."""
         pass
 
+    @abstractmethod
     def subsample(self, indices: torch.Tensor) -> "Atom":
         """Returns a subsampled version of the atom.
+
+        This method should only be called if the atom is subsamplable.
+        Otherwise, it should raise a NotImplementedError.
 
         Args:
             indices: Indices to subsample
 
         Returns:
             New atom representing the subsampled version
-
-        Raises:
-            NotImplementedError: If the atom is not subsamplable
         """
-        if not self.is_subsamplable():
-            raise NotImplementedError(f"{self.__class__.__name__} is not subsamplable")
-        raise NotImplementedError("Subsampling not implemented")
+        pass
 
+    @abstractmethod
     def to_cvxpy(self) -> cp.Expression:
         """Converts the atom to a CVXPY expression for convex optimization.
 
         Returns:
             CVXPY expression representing this atom
-
-        Raises:
-            NotImplementedError: If conversion to CVXPY is not supported
         """
-        raise NotImplementedError("CVXPY conversion not implemented")
+        pass
 
-    # Operator overloading for composition
     @abstractmethod
     def __mul__(self, scalar: float) -> "Atom":
         """Scale the atom by a scalar.
@@ -136,18 +126,26 @@ class SumAtom(Atom):
     def is_smooth(self) -> bool:
         return all(atom.is_smooth() for atom in self.atoms)
 
+    def gradient(self) -> torch.Tensor:
+        return sum(atom.gradient() for atom in self.atoms)
+
     def is_proxable(self) -> bool:
-        # Sum is proxable if it has at most one non-smooth term
-        non_smooth_count = sum(1 for atom in self.atoms if not atom.is_smooth())
-        return non_smooth_count <= 1 and all(atom.is_proxable() for atom in self.atoms)
+        # Default to False - subclasses should override with specific logic
+        return False
+
+    def prox(self, location: torch.Tensor) -> torch.Tensor:
+        raise NotImplementedError("SumAtom does not have a prox operator by default.")
+
+    def is_subsamplable(self):
+        # Default to False - subclasses should override with specific logic
+        return False
+
+    def subsample(self, indices: torch.Tensor) -> "SumAtom":
+        raise NotImplementedError("SumAtom does not support subsampling by default.")
 
     def __mul__(self, scalar: float) -> "SumAtom":
         """Scale all atoms in the sum."""
         return SumAtom([atom * scalar for atom in self.atoms])
-
-    def __rmul__(self, scalar: float) -> "SumAtom":
-        """Scale all atoms in the sum (reverse multiplication)."""
-        return self.__mul__(scalar)
 
     def to_cvxpy(self) -> cp.Expression:
         return sum(atom.to_cvxpy() for atom in self.atoms)
