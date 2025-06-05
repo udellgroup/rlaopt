@@ -3,7 +3,6 @@
 from abc import ABC, abstractmethod
 import torch
 import cvxpy as cp
-from typing import Optional
 
 
 class Atom(torch.nn.Module, ABC):
@@ -28,11 +27,17 @@ class Atom(torch.nn.Module, ABC):
         pass
 
     @abstractmethod
-    def gradient(self) -> Optional[torch.Tensor]:
+    def gradient(self, location: torch.Tensor) -> torch.Tensor:
         """Returns the gradient of the atom.
 
         This method should only be called if the atom is smooth. Otherwise, it should
         raise a NotImplementedError.
+
+        Args:
+            location: Point at which to evaluate the gradient
+
+        Returns:
+            Gradient of the atom at the specified location
         """
         pass
 
@@ -147,8 +152,8 @@ class SumAtom(Atom):
     def is_smooth(self) -> bool:
         return all(atom.is_smooth() for atom in self.atoms)
 
-    def gradient(self) -> torch.Tensor:
-        return sum(atom.gradient() for atom in self.atoms)
+    def gradient(self, location: torch.Tensor) -> torch.Tensor:
+        return sum(atom.gradient(location) for atom in self.atoms)
 
     def is_proxable(self) -> bool:
         # Default to False - subclasses should override with specific logic
