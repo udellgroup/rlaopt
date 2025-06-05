@@ -17,7 +17,7 @@ class Atom(torch.nn.Module, ABC):
         super().__init__()
 
     @abstractmethod
-    def forward(self) -> torch.Tensor:
+    def forward(self, location: torch.Tensor) -> torch.Tensor:
         """Evaluates the atom and returns its value as a tensor."""
         pass
 
@@ -146,8 +146,8 @@ class SumAtom(Atom):
 
         self.atoms = torch.nn.ModuleList(flattened_atoms)
 
-    def forward(self) -> torch.Tensor:
-        return sum(atom.forward() for atom in self.atoms)
+    def forward(self, location: torch.Tensor) -> torch.Tensor:
+        return sum(atom.forward(location) for atom in self.atoms)
 
     def is_smooth(self) -> bool:
         return all(atom.is_smooth() for atom in self.atoms)
