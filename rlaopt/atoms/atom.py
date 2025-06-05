@@ -112,6 +112,18 @@ class Atom(torch.nn.Module, ABC):
         """Add atoms together (reverse addition)."""
         return self.__add__(other)
 
+    def __sub__(self, other: "Atom") -> "SumAtom":
+        """Subtract atoms (self - other)."""
+        if isinstance(other, Atom):
+            return SumAtom([self, other * (-1.0)])
+        return NotImplemented
+
+    def __rsub__(self, other: "Atom") -> "SumAtom":
+        """Reverse subtraction (other - self)."""
+        if isinstance(other, Atom):
+            return other.__sub__(self)
+        return NotImplemented
+
 
 class SumAtom(Atom):
     """Sum of multiple atoms."""
@@ -142,6 +154,22 @@ class SumAtom(Atom):
 
     def subsample(self, indices: torch.Tensor) -> "SumAtom":
         raise NotImplementedError("SumAtom does not support subsampling by default.")
+
+    def __add__(self, other: "Atom") -> "SumAtom":
+        """Add atoms together, flattening SumAtoms to avoid nested structure."""
+        if isinstance(other, SumAtom):
+            return SumAtom(list(self.atoms) + list(other.atoms))
+        elif isinstance(other, Atom):
+            return SumAtom(list(self.atoms) + [other])
+        return NotImplemented
+
+    def __sub__(self, other: "Atom") -> "SumAtom":
+        """Subtract atoms (self - other), flattening SumAtoms."""
+        if isinstance(other, SumAtom):
+            return SumAtom(list(self.atoms) + [atom * (-1.0) for atom in other.atoms])
+        elif isinstance(other, Atom):
+            return SumAtom(list(self.atoms) + [other * (-1.0)])
+        return NotImplemented
 
     def __mul__(self, scalar: float) -> "SumAtom":
         """Scale all atoms in the sum."""
