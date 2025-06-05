@@ -130,7 +130,16 @@ class SumAtom(Atom):
 
     def __init__(self, atoms: list[Atom]):
         super().__init__()
-        self.atoms = torch.nn.ModuleList(atoms)
+
+        # Flatten nested SumAtoms during initialization
+        flattened_atoms = []
+        for atom in atoms:
+            if isinstance(atom, SumAtom):
+                flattened_atoms.extend(list(atom.atoms))
+            else:
+                flattened_atoms.append(atom)
+
+        self.atoms = torch.nn.ModuleList(flattened_atoms)
 
     def forward(self) -> torch.Tensor:
         return sum(atom.forward() for atom in self.atoms)
@@ -148,28 +157,12 @@ class SumAtom(Atom):
     def prox(self, location: torch.Tensor) -> torch.Tensor:
         raise NotImplementedError("SumAtom does not have a prox operator by default.")
 
-    def is_subsamplable(self):
+    def is_subsamplable(self) -> bool:
         # Default to False - subclasses should override with specific logic
         return False
 
     def subsample(self, indices: torch.Tensor) -> "SumAtom":
         raise NotImplementedError("SumAtom does not support subsampling by default.")
-
-    def __add__(self, other: "Atom") -> "SumAtom":
-        """Add atoms together, flattening SumAtoms to avoid nested structure."""
-        if isinstance(other, SumAtom):
-            return SumAtom(list(self.atoms) + list(other.atoms))
-        elif isinstance(other, Atom):
-            return SumAtom(list(self.atoms) + [other])
-        return NotImplemented
-
-    def __sub__(self, other: "Atom") -> "SumAtom":
-        """Subtract atoms (self - other), flattening SumAtoms."""
-        if isinstance(other, SumAtom):
-            return SumAtom(list(self.atoms) + [atom * (-1.0) for atom in other.atoms])
-        elif isinstance(other, Atom):
-            return SumAtom(list(self.atoms) + [other * (-1.0)])
-        return NotImplemented
 
     def __mul__(self, scalar: float) -> "SumAtom":
         """Scale all atoms in the sum."""
