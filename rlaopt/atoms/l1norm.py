@@ -9,11 +9,11 @@ from rlaopt.atoms.atom import Atom
 class L1Norm(Atom):
     """L1-norm atom."""
 
-    def __init__(self, scaling: float = 1.0):
+    def __init__(self, scaling):
         """Initializes the L1-norm atom."""
         super().__init__(scaling=scaling)
 
-    def _forward_impl(self, location: torch.Tensor) -> torch.Tensor:
+    def _forward_impl(self, location) -> torch.Tensor:
         """Unscaled evaluation of the L1-norm."""
         return torch.sum(torch.abs(location))
 
@@ -25,7 +25,7 @@ class L1Norm(Atom):
         """Returns True because L1-norm is proxable."""
         return True
 
-    def prox(self, location: torch.Tensor) -> torch.Tensor:
+    def prox(self, location) -> torch.Tensor:
         """Proximal operator for the L1-norm.
 
         The proximal operator is computed by soft-thresholding the input location.
@@ -38,15 +38,15 @@ class L1Norm(Atom):
         """Returns False because L1-norm is not subsamplable."""
         return False
 
-    def subsample(self, indices: torch.Tensor):
+    def subsample(self, indices) -> "L1Norm":
         """Raises NotImplementedError because L1-norm cannot be subsampled."""
         raise NotImplementedError("L1-norm cannot be subsampled.")
 
-    def to_cvxpy(self, variable_or_expr: cp.Variable | cp.Expression) -> cp.Expression:
+    def to_cvxpy(self, variable_or_expr) -> cp.Expression:
         """Converts the L1-norm to a cvxpy expression."""
         return self.scaling * cp.norm(variable_or_expr, 1)
 
-    def __mul__(self, scalar: float) -> "L1Norm":
+    def __mul__(self, scalar) -> "L1Norm":
         """Allows scaling the L1-norm by a scalar."""
         if isinstance(scalar, float):
             return L1Norm(self.scaling * scalar)

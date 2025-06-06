@@ -194,7 +194,7 @@ class SumAtom(Atom):
 
         self.atoms = torch.nn.ModuleList(flattened_atoms)
 
-    def forward(self, location: torch.Tensor) -> torch.Tensor:
+    def forward(self, location) -> torch.Tensor:
         return sum(atom.forward(location) for atom in self.atoms)
 
     def is_smooth(self) -> bool:
@@ -204,21 +204,21 @@ class SumAtom(Atom):
         # Default to False - subclasses should override with specific logic
         return False
 
-    def prox(self, location: torch.Tensor) -> torch.Tensor:
+    def prox(self, location) -> torch.Tensor:
         raise NotImplementedError("SumAtom does not have a prox operator by default.")
 
     def is_subsamplable(self) -> bool:
         # Default to False - subclasses should override with specific logic
         return False
 
-    def subsample(self, indices: torch.Tensor) -> "SumAtom":
+    def subsample(self, indices) -> "SumAtom":
         raise NotImplementedError("SumAtom does not support subsampling by default.")
 
-    def __mul__(self, scalar: float) -> "SumAtom":
+    def __mul__(self, scalar) -> "SumAtom":
         """Scale all atoms in the sum."""
         return SumAtom([atom * scalar for atom in self.atoms])
 
-    def to_cvxpy(self, variable_or_expr: cp.Variable | cp.Expression) -> cp.Expression:
+    def to_cvxpy(self, variable_or_expr) -> cp.Expression:
         return sum(atom.to_cvxpy(variable_or_expr) for atom in self.atoms)
 
 
@@ -250,7 +250,7 @@ class ComposedAtom(Atom):
 
         self.atoms = torch.nn.ModuleList(flattened_atoms)
 
-    def _forward_impl(self, location: torch.Tensor) -> torch.Tensor:
+    def _forward_impl(self, location) -> torch.Tensor:
         """Evaluates the composition by applying each atom in sequence."""
         result = location
         for atom in self.atoms:
@@ -265,7 +265,7 @@ class ComposedAtom(Atom):
         """In general, composed atoms are not proxable."""
         return False
 
-    def prox(self, location: torch.Tensor) -> torch.Tensor:
+    def prox(self, location) -> torch.Tensor:
         """Proximal operator for composed functions."""
         raise NotImplementedError(
             "Proximal operator not available for general function composition"
@@ -275,7 +275,7 @@ class ComposedAtom(Atom):
         """In general, composed atoms are not subsamplable."""
         return False
 
-    def subsample(self, indices: torch.Tensor) -> "ComposedAtom":
+    def subsample(self, indices) -> "ComposedAtom":
         """Creates a subsampled version of this composition."""
         raise NotImplementedError(
             "ComposedAtom does not support subsampling by default."
@@ -311,6 +311,6 @@ class ComposedAtom(Atom):
         # Apply scaling to the final expression
         return self.scaling * expr
 
-    def __mul__(self, scalar: float) -> "ComposedAtom":
+    def __mul__(self, scalar) -> "ComposedAtom":
         """Scale the composed atom."""
         return ComposedAtom(list(self.atoms), scaling=self.scaling * scalar)
