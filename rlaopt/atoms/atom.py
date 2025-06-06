@@ -185,9 +185,6 @@ class SumAtom(Atom):
     def is_smooth(self) -> bool:
         return all(atom.is_smooth() for atom in self.atoms)
 
-    def gradient(self, location: torch.Tensor) -> torch.Tensor:
-        return sum(atom.gradient(location) for atom in self.atoms)
-
     def is_proxable(self) -> bool:
         # Default to False - subclasses should override with specific logic
         return False
