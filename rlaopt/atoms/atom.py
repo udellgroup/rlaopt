@@ -64,7 +64,7 @@ class Atom(torch.nn.Module, ABC):
         if not location.requires_grad:
             location = location.detach().clone().requires_grad_(True)
 
-        output = self.forward(location)
+        output = self(location)
 
         if output.numel() != 1:
             raise ValueError(
@@ -73,7 +73,7 @@ class Atom(torch.nn.Module, ABC):
             )
 
         grad = torch.autograd.grad(
-            outputs=self.forward(location), inputs=location, create_graph=create_graph
+            outputs=self(location), inputs=location, create_graph=create_graph
         )[0]
 
         return grad
@@ -177,6 +177,28 @@ class Atom(torch.nn.Module, ABC):
             return other.__sub__(self)
         return NotImplemented
 
+    def __or__(self, other: "Atom") -> "ComposedAtom":
+        """Compose atoms using the | operator.
+
+        The pipe operator creates a composition where operations flow left-to-right:
+        (f | g)(x) means "apply f, then apply g"
+
+        Args:
+            other: The atom to apply after this one
+
+        Returns:
+            A new ComposedAtom representing the composition
+        """
+        if isinstance(other, Atom):
+            return ComposedAtom([self, other])
+        return NotImplemented
+
+    def __ror__(self, other: "Atom") -> "ComposedAtom":
+        """Handle reverse composition with the | operator."""
+        if isinstance(other, Atom):
+            return other.__or__(self)
+        return NotImplemented
+
 
 class SumAtom(Atom):
     """Sum of multiple atoms."""
@@ -195,7 +217,7 @@ class SumAtom(Atom):
         self.atoms = torch.nn.ModuleList(flattened_atoms)
 
     def forward(self, location) -> torch.Tensor:
-        return sum(atom.forward(location) for atom in self.atoms)
+        return sum(atom(location) for atom in self.atoms)
 
     def is_smooth(self) -> bool:
         return all(atom.is_smooth() for atom in self.atoms)
@@ -254,7 +276,7 @@ class ComposedAtom(Atom):
         """Evaluates the composition by applying each atom in sequence."""
         result = location
         for atom in self.atoms:
-            result = atom.forward(result)
+            result = atom(result)
         return result
 
     def is_smooth(self) -> bool:
@@ -304,7 +326,7 @@ class ComposedAtom(Atom):
         expr = variable_or_expr
 
         # Apply each atom in sequence
-        for i, atom in enumerate(self.atoms):
+        for atom in self.atoms:
             # Apply the current atom to the result of the previous step
             expr = atom.to_cvxpy(expr)
 
