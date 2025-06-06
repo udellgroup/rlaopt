@@ -13,13 +13,26 @@ class Atom(torch.nn.Module, ABC):
     to form more complex objective functions.
     """
 
-    def __init__(self):
+    def __init__(self, scale: float = 1.0):
+        """Initializes the atom with an optional scaling factor."""
         super().__init__()
+        self.scale = scale
 
     @abstractmethod
-    def forward(self, location: torch.Tensor) -> torch.Tensor:
-        """Evaluates the atom and returns its value as a tensor."""
+    def _forward_impl(self, location: torch.Tensor) -> torch.Tensor:
+        """Unscaled evaluation of the atom."""
         pass
+
+    def forward(self, location: torch.Tensor) -> torch.Tensor:
+        """Evaluates the atom and returns its value as a tensor.
+        
+        Args:
+            location: Point at which to evaluate the atom
+
+        Returns:
+            Value of the atom at the specified location
+        """
+        return self.scale * self._forward_impl(location)
 
     @abstractmethod
     def is_smooth(self) -> bool:
@@ -27,31 +40,40 @@ class Atom(torch.nn.Module, ABC):
         pass
 
     @abstractmethod
+    def _gradient_impl(self, location: torch.Tensor) -> torch.Tensor:
+        """Unscaled evaluation of the gradient. 
+        
+        Should raise NotImplementedError if the atom is not smooth.
+        """
+        pass
+
     def gradient(self, location: torch.Tensor) -> torch.Tensor:
         """Returns the gradient of the atom.
-
-        This method should only be called if the atom is smooth. Otherwise, it should
-        raise a NotImplementedError.
 
         Args:
             location: Point at which to evaluate the gradient
 
         Returns:
             Gradient of the atom at the specified location
+
+        Raises:
+            NotImplementedError: If the atom is not smooth (gradient is not defined).
         """
-        pass
+        return self.scale * self._gradient_impl(location)
 
     @abstractmethod
     def is_proxable(self) -> bool:
         """Returns True if the atom has a computable proximal operator."""
         pass
-
+    
     @abstractmethod
     def prox(self, location: torch.Tensor) -> torch.Tensor:
         """Proximal operator of the atom.
 
         This method should only be called if the atom is proxable. Otherwise, it should
         raise a NotImplementedError.
+
+        Note that this function has to account for the scaling factor of the atom.
 
         Args:
             location: Point at which to evaluate the proximal operator
