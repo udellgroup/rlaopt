@@ -42,9 +42,9 @@ class L1Norm(Atom):
         """Raises NotImplementedError because L1-norm cannot be subsampled."""
         raise NotImplementedError("L1-norm cannot be subsampled.")
 
-    def to_cvxpy(self, variable: cp.Variable) -> cp.Expression:
+    def to_cvxpy(self, variable_or_expr: cp.Variable | cp.Expression) -> cp.Expression:
         """Converts the L1-norm to a cvxpy expression."""
-        return self.scaling * cp.norm(variable, 1)
+        return self.scaling * cp.norm(variable_or_expr, 1)
 
     def __mul__(self, scalar: float) -> "L1Norm":
         """Allows scaling the L1-norm by a scalar."""

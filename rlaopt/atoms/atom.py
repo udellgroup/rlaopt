@@ -125,11 +125,14 @@ class Atom(torch.nn.Module, ABC):
         pass
 
     @abstractmethod
-    def to_cvxpy(self, variable: cp.Variable) -> cp.Expression:
-        """Converts the atom to a CVXPY expression for convex optimization.
+    def to_cvxpy(self, variable_or_expr: cp.Variable | cp.Expression) -> cp.Expression:
+        """Converts the atom to a CVXPY expression.
+
+        This method can be called with either a CVXPY variable (for initial atoms)
+        or a CVXPY expression (for atoms used in composition).
 
         Args:
-            variable: CVXPY variable to use in the expression
+            variable_or_expr: Either a cp.Variable or a cp.Expression
 
         Returns:
             CVXPY expression representing this atom
@@ -215,8 +218,8 @@ class SumAtom(Atom):
         """Scale all atoms in the sum."""
         return SumAtom([atom * scalar for atom in self.atoms])
 
-    def to_cvxpy(self, variable: cp.Variable) -> cp.Expression:
-        return sum(atom.to_cvxpy(variable) for atom in self.atoms)
+    def to_cvxpy(self, variable_or_expr: cp.Variable | cp.Expression) -> cp.Expression:
+        return sum(atom.to_cvxpy(variable_or_expr) for atom in self.atoms)
 
 
 class ComposedAtom(Atom):
@@ -278,29 +281,32 @@ class ComposedAtom(Atom):
             "ComposedAtom does not support subsampling by default."
         )
 
-    def to_cvxpy(self) -> cp.Expression:
-        """Converts to a CVXPY expression if all atoms support it."""
-        # Start with the CVXPY variable/expression
-        expr = None
+    def to_cvxpy(self, variable_or_expr) -> cp.Expression:
+        """Converts the atom to a CVXPY expression for convex optimization.
 
+        This method handles function composition by sequentially applying each atom's
+        to_cvxpy method to the result of the previous atom.
+
+        Args:
+            variable_or_expr: Either a cp.Variable or a cp.Expression to use as input
+
+        Returns:
+            CVXPY expression representing this composed atom
+
+        Raises:
+            ValueError: If there are no atoms
+        """
         # Handle the case where there are no atoms
         if len(self.atoms) == 0:
             raise ValueError("ComposedAtom must contain at least one atom.")
 
+        # Start with the input variable or expression
+        expr = variable_or_expr
+
         # Apply each atom in sequence
         for i, atom in enumerate(self.atoms):
-            if i == 0:
-                # The first atom might need special handling in the CVXPY conversion
-                expr = atom.to_cvxpy()
-            else:
-                # Apply subsequent atoms to the expression from the previous step
-                # Note: This might not work for all atoms in CVXPY
-                try:
-                    expr = atom.to_cvxpy()(expr)
-                except Exception as e:
-                    raise ValueError(
-                        f"Cannot convert atom at index {i} to CVXPY: {e}"
-                    ) from e
+            # Apply the current atom to the result of the previous step
+            expr = atom.to_cvxpy(expr)
 
         # Apply scaling to the final expression
         return self.scaling * expr
