@@ -54,6 +54,7 @@ class Atom(torch.nn.Module, ABC):
 
         Raises:
             NotImplementedError: If the atom is not smooth (gradient is not defined).
+            ValueError: If the output of the atom's forward method is not a scalar.
         """
         if not self.is_smooth():
             raise NotImplementedError("Gradient is not defined for non-smooth atoms.")
@@ -62,6 +63,14 @@ class Atom(torch.nn.Module, ABC):
         # If not, detach and clone the tensor to ensure it requires gradients
         if not location.requires_grad:
             location = location.detach().clone().requires_grad_(True)
+
+        output = self.forward(location)
+
+        if output.numel() != 1:
+            raise ValueError(
+                "Gradient can only be computed for scalar outputs. "
+                "Please ensure the atom's forward method returns a scalar."
+            )
 
         grad = torch.autograd.grad(
             outputs=self.forward(location), inputs=location, create_graph=create_graph
