@@ -125,8 +125,11 @@ class Atom(torch.nn.Module, ABC):
         pass
 
     @abstractmethod
-    def to_cvxpy(self) -> cp.Expression:
+    def to_cvxpy(self, variable: cp.Variable) -> cp.Expression:
         """Converts the atom to a CVXPY expression for convex optimization.
+
+        Args:
+            variable: CVXPY variable to use in the expression
 
         Returns:
             CVXPY expression representing this atom
@@ -212,5 +215,96 @@ class SumAtom(Atom):
         """Scale all atoms in the sum."""
         return SumAtom([atom * scalar for atom in self.atoms])
 
+    def to_cvxpy(self, variable: cp.Variable) -> cp.Expression:
+        return sum(atom.to_cvxpy(variable) for atom in self.atoms)
+
+
+class ComposedAtom(Atom):
+    """Represents function composition f_n(f_{n-1}(...f_1(x)))
+
+    This atom represents the mathematical composition of multiple functions, where each
+    function is applied in sequence.
+    """
+
+    def __init__(self, atoms: list[Atom], scaling: float = 1.0):
+        """Initialize a composed atom.
+
+        Args:
+            atoms: List of atoms to compose, in order of application
+            (first atom is applied first)
+            scaling: Optional scaling factor for the entire composition
+        """
+        super().__init__(scaling=scaling)
+
+        # Flatten nested ComposedAtoms during initialization
+        flattened_atoms = []
+        for atom in atoms:
+            if isinstance(atom, ComposedAtom):
+                # For nested ComposedAtom, maintain the order of composition
+                flattened_atoms.extend(list(atom.atoms))
+            else:
+                flattened_atoms.append(atom)
+
+        self.atoms = torch.nn.ModuleList(flattened_atoms)
+
+    def _forward_impl(self, location: torch.Tensor) -> torch.Tensor:
+        """Evaluates the composition by applying each atom in sequence."""
+        result = location
+        for atom in self.atoms:
+            result = atom.forward(result)
+        return result
+
+    def is_smooth(self) -> bool:
+        """A composition is smooth if all constituent atoms are smooth."""
+        return all(atom.is_smooth() for atom in self.atoms)
+
+    def is_proxable(self) -> bool:
+        """In general, composed atoms are not proxable."""
+        return False
+
+    def prox(self, location: torch.Tensor) -> torch.Tensor:
+        """Proximal operator for composed functions."""
+        raise NotImplementedError(
+            "Proximal operator not available for general function composition"
+        )
+
+    def is_subsamplable(self) -> bool:
+        """In general, composed atoms are not subsamplable."""
+        return False
+
+    def subsample(self, indices: torch.Tensor) -> "ComposedAtom":
+        """Creates a subsampled version of this composition."""
+        raise NotImplementedError(
+            "ComposedAtom does not support subsampling by default."
+        )
+
     def to_cvxpy(self) -> cp.Expression:
-        return sum(atom.to_cvxpy() for atom in self.atoms)
+        """Converts to a CVXPY expression if all atoms support it."""
+        # Start with the CVXPY variable/expression
+        expr = None
+
+        # Handle the case where there are no atoms
+        if len(self.atoms) == 0:
+            raise ValueError("ComposedAtom must contain at least one atom.")
+
+        # Apply each atom in sequence
+        for i, atom in enumerate(self.atoms):
+            if i == 0:
+                # The first atom might need special handling in the CVXPY conversion
+                expr = atom.to_cvxpy()
+            else:
+                # Apply subsequent atoms to the expression from the previous step
+                # Note: This might not work for all atoms in CVXPY
+                try:
+                    expr = atom.to_cvxpy()(expr)
+                except Exception as e:
+                    raise ValueError(
+                        f"Cannot convert atom at index {i} to CVXPY: {e}"
+                    ) from e
+
+        # Apply scaling to the final expression
+        return self.scaling * expr
+
+    def __mul__(self, scalar: float) -> "ComposedAtom":
+        """Scale the composed atom."""
+        return ComposedAtom(list(self.atoms), scaling=self.scaling * scalar)
