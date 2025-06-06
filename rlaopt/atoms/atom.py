@@ -13,10 +13,10 @@ class Atom(torch.nn.Module, ABC):
     to form more complex objective functions.
     """
 
-    def __init__(self, scale: float = 1.0):
+    def __init__(self, scaling: float = 1.0):
         """Initializes the atom with an optional scaling factor."""
         super().__init__()
-        self.scale = scale
+        self.scaling = scaling
 
     @abstractmethod
     def _forward_impl(self, location: torch.Tensor) -> torch.Tensor:
@@ -25,14 +25,14 @@ class Atom(torch.nn.Module, ABC):
 
     def forward(self, location: torch.Tensor) -> torch.Tensor:
         """Evaluates the atom and returns its value as a tensor.
-        
+
         Args:
             location: Point at which to evaluate the atom
 
         Returns:
             Value of the atom at the specified location
         """
-        return self.scale * self._forward_impl(location)
+        return self.scaling * self._forward_impl(location)
 
     @abstractmethod
     def is_smooth(self) -> bool:
@@ -41,8 +41,8 @@ class Atom(torch.nn.Module, ABC):
 
     @abstractmethod
     def _gradient_impl(self, location: torch.Tensor) -> torch.Tensor:
-        """Unscaled evaluation of the gradient. 
-        
+        """Unscaled evaluation of the gradient.
+
         Should raise NotImplementedError if the atom is not smooth.
         """
         pass
@@ -59,13 +59,13 @@ class Atom(torch.nn.Module, ABC):
         Raises:
             NotImplementedError: If the atom is not smooth (gradient is not defined).
         """
-        return self.scale * self._gradient_impl(location)
+        return self.scaling * self._gradient_impl(location)
 
     @abstractmethod
     def is_proxable(self) -> bool:
         """Returns True if the atom has a computable proximal operator."""
         pass
-    
+
     @abstractmethod
     def prox(self, location: torch.Tensor) -> torch.Tensor:
         """Proximal operator of the atom.
@@ -101,6 +101,9 @@ class Atom(torch.nn.Module, ABC):
 
         Returns:
             New atom representing the subsampled version
+
+        Raises:
+            NotImplementedError: If the atom does not support subsampling.
         """
         pass
 
