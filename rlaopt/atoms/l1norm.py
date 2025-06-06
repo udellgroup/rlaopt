@@ -21,12 +21,6 @@ class L1Norm(Atom):
         """Returns False because L1-norm is not smooth."""
         return False
 
-    def _gradient_impl(self, location: torch.Tensor) -> torch.Tensor:
-        """Raises NotImplementedError because L1-norm is non-smooth."""
-        raise NotImplementedError(
-            "L1-norm does not have a gradient because it is non-smooth."
-        )
-
     def is_proxable(self) -> bool:
         """Returns True because L1-norm is proxable."""
         return True

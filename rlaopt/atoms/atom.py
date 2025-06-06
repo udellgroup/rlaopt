@@ -39,19 +39,15 @@ class Atom(torch.nn.Module, ABC):
         """Returns True if the atom is smooth (differentiable everywhere)."""
         pass
 
-    @abstractmethod
-    def _gradient_impl(self, location: torch.Tensor) -> torch.Tensor:
-        """Unscaled evaluation of the gradient.
-
-        Should raise NotImplementedError if the atom is not smooth.
-        """
-        pass
-
-    def gradient(self, location: torch.Tensor) -> torch.Tensor:
-        """Returns the gradient of the atom.
+    def gradient(
+        self, location: torch.Tensor, create_graph: bool = False
+    ) -> torch.Tensor:
+        """Returns the gradient of the atom, computed with automatic differentiation.
 
         Args:
             location: Point at which to evaluate the gradient
+            create_graph: If True, will create a graph for the gradient computation.
+            This can be useful for computing higher-order derivatives.
 
         Returns:
             Gradient of the atom at the specified location
@@ -59,7 +55,19 @@ class Atom(torch.nn.Module, ABC):
         Raises:
             NotImplementedError: If the atom is not smooth (gradient is not defined).
         """
-        return self.scaling * self._gradient_impl(location)
+        if not self.is_smooth():
+            raise NotImplementedError("Gradient is not defined for non-smooth atoms.")
+
+        # Ensure we can compute gradients
+        # If not, detach and clone the tensor to ensure it requires gradients
+        if not location.requires_grad:
+            location = location.detach().clone().requires_grad_(True)
+
+        grad = torch.autograd.grad(
+            outputs=self.forward(location), inputs=location, create_graph=create_graph
+        )[0]
+
+        return grad
 
     @abstractmethod
     def is_proxable(self) -> bool:
