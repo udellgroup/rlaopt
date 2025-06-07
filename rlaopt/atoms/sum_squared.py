@@ -20,9 +20,9 @@ class SumSquared(rlaopt.atoms.Atom):
     def is_proxable(self):
         return self.arg.is_affine()
 
-    def prox(self):
+    def prox(self, scale):
         if self.arg.is_leaf():
-            return 1 / (1 + self.scaling) * self.arg
+            return 1 / (1 + scale * self.scaling) * self.arg
         else:
             raise NotImplementedError # Do something with NysCG
 
