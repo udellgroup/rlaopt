@@ -90,17 +90,18 @@ class Variable(torch.nn.Parameter):
 
     def __repr__(self):
         """Full representation of the Variable."""
-        prefix = f"Variable(name='{self.name}', shape={tuple(self.shape)}"
-        prefix += f", id={self.id}"
-        prefix += f", dtype={self.dtype}"
-        prefix += f", device='{self.device}'"
-        prefix += f", requires_grad={self.requires_grad}"
+        info_components = [
+            f"Variable(name='{self.name}'",
+            f"id='{self.id}'",
+            f"shape={tuple(self.shape)}",
+            f"dtype={self.dtype}",
+            f"device='{self.device}'",
+            f"requires_grad={self.requires_grad}",
+        ]
+        info = ", ".join(info_components)
 
-        # Add the data representation
-        tensor_content = str(self.data.tolist())
-
-        return prefix + ")\n" + tensor_content
+        return info + ")"
 
     def __str__(self):
-        """Shortened representation focusing on the data."""
-        return f"Variable with shape {tuple(self.shape)}:\n{self.data}"
+        """Shortened representation of the Variable."""
+        return f"Variable '{self.name}' with shape {tuple(self.shape)}"
