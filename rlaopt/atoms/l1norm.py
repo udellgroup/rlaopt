@@ -9,11 +9,11 @@ from rlaopt.atoms.atom import Atom
 class L1Norm(Atom):
     """L1-norm atom."""
 
-    def __init__(self, scaling):
+    def __init__(self):
         """Initializes the L1-norm atom."""
-        super().__init__(scaling=scaling)
+        super().__init__()
 
-    def _forward_impl(self, location) -> torch.Tensor:
+    def forward(self, location) -> torch.Tensor:
         """Unscaled evaluation of the L1-norm."""
         return torch.sum(torch.abs(location))
 
@@ -44,10 +44,4 @@ class L1Norm(Atom):
 
     def to_cvxpy(self, variable_or_expr) -> cp.Expression:
         """Converts the L1-norm to a cvxpy expression."""
-        return self.scaling * cp.norm(variable_or_expr, 1)
-
-    def __mul__(self, scalar) -> "L1Norm":
-        """Allows scaling the L1-norm by a scalar."""
-        if isinstance(scalar, float):
-            return L1Norm(self.scaling * scalar)
-        return NotImplemented
+        return cp.norm(variable_or_expr, 1)
