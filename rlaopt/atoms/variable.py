@@ -12,46 +12,61 @@ from rlaopt.utils.counter import get_id
 class Variable(torch.nn.Parameter):
     """A variable class that extends torch.nn.Parameter."""
 
-    def __init__(
-        self,
+    def __new__(
+        cls,
         *size,
         requires_grad: bool = True,
-        var_id: int | None = None,
-        name: str | None = None,
-        dtype: torch.dtype | None = None,
-        device: torch.device | None = None,
+        dtype: torch.dtype = None,
+        device: torch.device = None,
+        **kwargs,
     ):
-        """Initializes the Variable class with zeros of the given shape.
+        """Create a new Variable instance.
 
         Args:
-            size: Shape of the variable. Can be specified as individual ints or
-                as a single tuple/list of ints.
-            requires_grad: Whether to compute gradients with respect to this variable.
-            var_id: Optional identifier for the variable.
-                If None, a new id is generated.
-            name: Optional name for the variable.
-                If None, a default name is generated using the variable id.
-            dtype: Data type of the variable. Default: None
-            device: Device to place the variable on. Default: None
+            *size: Shape dimensions (as individual integers or a tuple)
+            requires_grad: Whether to track gradients for this variable
+            dtype: Data type of the tensor
+            device: Device to place the tensor on
+            **kwargs: Additional keyword arguments captured for __init__ later
         """
-        # Set id and name
+        # Process size to get proper shape
+        if len(size) == 1 and isinstance(size[0], (tuple, list)):
+            shape = size[0]
+        else:
+            shape = size
+
+        # Create tensor first
+        data = torch.zeros(shape, dtype=dtype, device=device)
+
+        # Call Parameter's __new__ with tensor
+        return super().__new__(cls, data, requires_grad)
+
+    def __init__(
+        self, *args, var_id: int | None = None, name: str | None = None, **kwargs
+    ):
+        """Initialize Variable attributes.
+
+        Args:
+            *args: Positional arguments (not used, kept for compatibility)
+            var_id: Optional identifier for the variable
+            name: Optional name for the variable
+            **kwargs: Additional keyword arguments (not used, kept for compatibility)
+        """
+        # No need to call super().__init__
+
+        # Set id
         if var_id is None:
             self._id = get_id()
         else:
             self._id = var_id
 
+        # Set name
         if name is None:
             self._name = f"{VAR_PREFIX}{self._id}"
         elif isinstance(name, str):
             self._name = name
         else:
             raise TypeError(f"Expected name to be a string, got {type(name)} instead.")
-
-        # Create zeros tensor with the given shape
-        data = torch.zeros(*size, dtype=dtype, device=device)
-
-        # Initialize the Parameter with the data
-        super().__init__(data, requires_grad=requires_grad)
 
     @classmethod
     def from_tensor(
@@ -61,33 +76,27 @@ class Variable(torch.nn.Parameter):
         var_id: int | None = None,
         name: str | None = None,
     ):
-        """Initialize a Variable from an existing tensor.
-
-        Args:
-            tensor: Existing tensor to use as initial data.
-            requires_grad: Whether to compute gradients with respect to this variable.
-                If None, it defaults to the requires_grad attribute of the tensor.
-            var_id: Optional identifier for the variable.
-            name: Optional name for the variable.
-
-        Returns:
-            A new Variable instance initialized with the given tensor data.
-        """
+        """Create a Variable from an existing tensor."""
         if requires_grad is None:
             requires_grad = tensor.requires_grad
-        variable = cls(
-            tensor.shape,
-            requires_grad=requires_grad,
-            var_id=var_id,
-            name=name,
-            dtype=tensor.dtype,
-            device=tensor.device,
-        )
 
-        # Replace the zeros data with the provided tensor data
-        variable.data.copy_(tensor)
+        # Create Parameter first
+        param = super().__new__(cls, tensor.clone(), requires_grad)
 
-        return variable
+        # Set Variable-specific attributes
+        if var_id is None:
+            param._id = get_id()
+        else:
+            param._id = var_id
+
+        if name is None:
+            param._name = f"{VAR_PREFIX}{param._id}"
+        elif isinstance(name, str):
+            param._name = name
+        else:
+            raise TypeError(f"Expected name to be a string, got {type(name)} instead.")
+
+        return param
 
     @property
     def id(self) -> int:
