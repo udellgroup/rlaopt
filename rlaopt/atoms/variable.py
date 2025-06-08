@@ -14,7 +14,7 @@ class Variable(torch.nn.Parameter):
 
     def __init__(
         self,
-        shape: tuple[int, ...] | int,
+        *size,
         requires_grad: bool = True,
         var_id: int | None = None,
         name: str | None = None,
@@ -24,7 +24,8 @@ class Variable(torch.nn.Parameter):
         """Initializes the Variable class with zeros of the given shape.
 
         Args:
-            shape: Shape of the variable (int or tuple of ints).
+            size: Shape of the variable. Can be specified as individual ints or
+                as a single tuple/list of ints.
             requires_grad: Whether to compute gradients with respect to this variable.
             var_id: Optional identifier for the variable.
                 If None, a new id is generated.
@@ -47,7 +48,7 @@ class Variable(torch.nn.Parameter):
             raise TypeError(f"Expected name to be a string, got {type(name)} instead.")
 
         # Create zeros tensor with the given shape
-        data = torch.zeros(shape, dtype=dtype, device=device)
+        data = torch.zeros(*size, dtype=dtype, device=device)
 
         # Initialize the Parameter with the data
         super().__init__(data, requires_grad=requires_grad)
