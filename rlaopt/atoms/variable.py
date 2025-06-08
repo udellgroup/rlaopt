@@ -44,6 +44,7 @@ class Variable(torch.nn.Parameter):
         cls,
         tensor: torch.Tensor,
         requires_grad: bool | None = None,
+        clone: bool = True,
         var_id: int | None = None,
         name: str | None = None,
     ):
@@ -52,7 +53,8 @@ class Variable(torch.nn.Parameter):
             requires_grad = tensor.requires_grad
 
         # Create Parameter instance
-        instance = super().__new__(cls, tensor.clone(), requires_grad)
+        data = tensor if not clone else tensor.clone()
+        instance = super().__new__(cls, data, requires_grad)
 
         # Initialize Variable-specific attributes
         Variable._set_id_and_name(instance, var_id, name)
@@ -85,3 +87,20 @@ class Variable(torch.nn.Parameter):
     def name(self) -> str:
         """Returns the name of the variable."""
         return self._name
+
+    def __repr__(self):
+        """Full representation of the Variable."""
+        prefix = f"Variable(name='{self.name}', shape={tuple(self.shape)}"
+        prefix += f", id={self.id}"
+        prefix += f", dtype={self.dtype}"
+        prefix += f", device='{self.device}'"
+        prefix += f", requires_grad={self.requires_grad}"
+
+        # Add the data representation
+        tensor_content = str(self.data.tolist())
+
+        return prefix + ")\n" + tensor_content
+
+    def __str__(self):
+        """Shortened representation focusing on the data."""
+        return f"Variable with shape {tuple(self.shape)}:\n{self.data}"
