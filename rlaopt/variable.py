@@ -3,6 +3,7 @@
 Inspired by the Variable class in cvxpy.
 """
 
+import cvxpy as cp
 import torch
 
 from rlaopt.settings import VAR_PREFIX
@@ -43,7 +44,7 @@ class Variable(torch.nn.Parameter):
     def from_tensor(
         cls,
         tensor: torch.Tensor,
-        requires_grad: bool | None = None,
+        requires_grad: bool = True,
         clone: bool = True,
         var_id: int | None = None,
         name: str | None = None,
@@ -87,6 +88,9 @@ class Variable(torch.nn.Parameter):
     def name(self) -> str:
         """Returns the name of the variable."""
         return self._name
+
+    def to_cvxpy(self) -> cp.Variable:
+        return cp.Variable(shape=self.shape, name=self.name, var_id=self.id)
 
     def __repr__(self):
         """Full representation of the Variable."""

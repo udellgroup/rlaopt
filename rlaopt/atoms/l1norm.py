@@ -10,7 +10,7 @@ from rlaopt.variable import Variable
 class L1Norm(Atom):
     """L1-norm atom with scaling: scaling * ||x||_1"""
 
-    def __init__(self, x, scaling=1.0):
+    def __init__(self, x: Variable, scaling: float | torch.Tensor = 1.0):
         """Initializes the L1-norm atom with optional scaling.
 
         Args:
