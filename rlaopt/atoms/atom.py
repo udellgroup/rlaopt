@@ -1,11 +1,14 @@
 """Base class for optimization atoms."""
 
 from abc import ABC, abstractmethod
-import torch
+
 import cvxpy as cp
+import torch
+
+from rlaopt.expression import Expression
 
 
-class Atom(torch.nn.Module, ABC):
+class Atom(Expression, ABC):
     """Abstract base class for optimization atoms.
 
     An atom represents a mathematical function that can be used in optimization
