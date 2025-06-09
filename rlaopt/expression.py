@@ -1,5 +1,4 @@
 from abc import ABC, abstractmethod
-
 import cvxpy as cp
 import torch
 
@@ -11,16 +10,26 @@ class Expression(torch.nn.Module, ABC):
         """Initialize the expression."""
         super().__init__()
 
-    def forward(self, location=None):
-        """Evaluate the expression, potentially at a specific location.
-
-        Args:
-            location: Optional location at which to evaluate
+    def forward(self):
+        """Evaluate the expression using registered variables.
 
         Returns:
             The evaluated expression
         """
-        raise NotImplementedError("Subclasses must implement forward()")
+        # Forward simply calls evaluate_at with no substitutions
+        return self.evaluate_at()
+
+    @abstractmethod
+    def evaluate_at(self, **variable_locations):
+        """Evaluate the expression at specific variable locations.
+
+        Args:
+            **variable_locations: Mapping of variable names to locations
+
+        Returns:
+            The evaluated expression with variables substituted with their locations
+        """
+        pass
 
     @abstractmethod
     def to_cvxpy(self) -> cp.Expression:
@@ -31,9 +40,16 @@ class Expression(torch.nn.Module, ABC):
         """
         pass
 
-    def __call__(self, location=None):
-        """Call the expression, optionally at a specific location."""
-        return self.forward(location)
+    def __call__(self, **variable_locations):
+        """Call the expression, choosing the appropriate evaluation method.
+
+        If called with no arguments, uses forward(). If called with keyword arguments,
+        uses evaluate_at().
+        """
+        if not variable_locations:
+            return self.forward()
+        else:
+            return self.evaluate_at(**variable_locations)
 
     def __add__(self, other):
         return AddExpression(self, other)
@@ -82,39 +98,37 @@ class AddExpression(Expression):
         else:
             raise TypeError(f"Unsupported type for right term: {type(right)}")
 
-    def forward(self, location=None):
-        """Evaluate the addition, potentially at a specific location.
-
-        Args:
-            location: Optional location at which to evaluate
-
-        Returns:
-            Sum of the left and right terms
-        """
-        # Get left value from the appropriate registered attribute
-        if hasattr(self, "left") and callable(self.left):
-            left_value = self.left(location) if location is not None else self.left()
+    def evaluate_at(self, **variable_locations):
+        """Evaluate the addition at specific variable locations."""
+        # Get left value with substitutions
+        if hasattr(self, "left") and isinstance(self.left, Expression):
+            left_value = self.left.evaluate_at(**variable_locations)
         else:
             left_value = self.left
 
-        # Get right value from the appropriate registered attribute
-        if hasattr(self, "right") and callable(self.right):
-            right_value = self.right(location) if location is not None else self.right()
+        # Get right value with substitutions
+        if hasattr(self, "right") and isinstance(self.right, Expression):
+            right_value = self.right.evaluate_at(**variable_locations)
         else:
             right_value = self.right
 
         return left_value + right_value
 
     def to_cvxpy(self):
+        """Convert to a CVXPY expression."""
         left_cvxpy = (
             self.left.to_cvxpy()
             if isinstance(self.left, Expression)
-            else self.left.numpy(force=True)
+            else float(self.left.item())
+            if self.left.numel() == 1
+            else self.left.numpy()
         )
         right_cvxpy = (
             self.right.to_cvxpy()
             if isinstance(self.right, Expression)
-            else self.right.numpy(force=True)
+            else float(self.right.item())
+            if self.right.numel() == 1
+            else self.right.numpy()
         )
 
         return left_cvxpy + right_cvxpy
@@ -149,39 +163,37 @@ class MulExpression(Expression):
         else:
             raise TypeError(f"Unsupported type for right term: {type(right)}")
 
-    def forward(self, location=None):
-        """Evaluate the multiplication, potentially at a specific location.
-
-        Args:
-            location: Optional location at which to evaluate
-
-        Returns:
-            Product of the left and right terms
-        """
-        # Get left value from the appropriate registered attribute
-        if hasattr(self, "left") and callable(self.left):
-            left_value = self.left(location) if location is not None else self.left()
+    def evaluate_at(self, **variable_locations):
+        """Evaluate the multiplication at specific variable locations."""
+        # Get left value with substitutions
+        if hasattr(self, "left") and isinstance(self.left, Expression):
+            left_value = self.left.evaluate_at(**variable_locations)
         else:
             left_value = self.left
 
-        # Get right value from the appropriate registered attribute
-        if hasattr(self, "right") and callable(self.right):
-            right_value = self.right(location) if location is not None else self.right()
+        # Get right value with substitutions
+        if hasattr(self, "right") and isinstance(self.right, Expression):
+            right_value = self.right.evaluate_at(**variable_locations)
         else:
             right_value = self.right
 
         return left_value * right_value
 
     def to_cvxpy(self):
+        """Convert to a CVXPY expression."""
         left_cvxpy = (
             self.left.to_cvxpy()
             if isinstance(self.left, Expression)
-            else self.left.numpy(force=True)
+            else float(self.left.item())
+            if self.left.numel() == 1
+            else self.left.numpy()
         )
         right_cvxpy = (
             self.right.to_cvxpy()
             if isinstance(self.right, Expression)
-            else self.right.numpy(force=True)
+            else float(self.right.item())
+            if self.right.numel() == 1
+            else self.right.numpy()
         )
 
         return left_cvxpy * right_cvxpy

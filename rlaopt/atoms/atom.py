@@ -25,17 +25,14 @@ class Atom(Expression, ABC):
         super().__init__()
 
     @abstractmethod
-    def forward(self, location: torch.Tensor | None = None) -> torch.Tensor:
-        """Evaluates the atom and returns its value as a tensor.
-
-        If location is provided, evaluates the atom at that point.
-        Otherwise, uses the variables registered within the atom.
+    def evaluate_at(self, **variable_locations):
+        """Evaluate the atom at specific variable locations.
 
         Args:
-            location: Optional point at which to evaluate the atom
+            **variable_locations: Mapping of variable names to locations
 
         Returns:
-            Value of the atom at the specified location or with registered variables
+            Value of the atom with variables substituted with their locations
         """
         pass
 

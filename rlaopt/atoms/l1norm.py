@@ -8,14 +8,14 @@ from rlaopt.variable import Variable
 
 
 class L1Norm(Atom):
-    """L1-norm atom with scaling: scaling * ||x||_1"""
+    """L1-norm atom."""
 
-    def __init__(self, x: Variable, scaling: float | torch.Tensor = 1.0):
+    def __init__(self, x, scaling=1.0):
         """Initializes the L1-norm atom with optional scaling.
 
         Args:
             x: Variable to apply the L1-norm to.
-               Must be an instance of rlaopt.variable.Variable.
+               Must be an instance of Variable.
             scaling: Scaling factor for the L1-norm (default: 1.0).
                      Can be a float or a torch.Tensor.
         """
@@ -33,19 +33,22 @@ class L1Norm(Atom):
         else:
             self.register_buffer("scaling", torch.tensor(float(scaling)))
 
-    def forward(self, location=None) -> torch.Tensor:
-        """Evaluation of the scaled L1-norm: scaling * ||x||_1
+    def evaluate_at(self, **variable_locations):
+        """Evaluate the scaled L1-norm at specific locations.
 
         Args:
-            location: Optional tensor at which to evaluate the L1-norm.
-                     If provided, uses this location instead of the stored variable.
+            **variable_locations: Mapping of variable names to locations
 
         Returns:
-            Scaled sum of absolute values (L1-norm) of the input
+            Scaled sum of absolute values (L1-norm)
         """
-        if location is not None:
-            return self.scaling * torch.sum(torch.abs(location))
-        return self.scaling * torch.sum(torch.abs(self.x))
+        # Use substituted value if available, otherwise use registered variable
+        if hasattr(self.x, "name") and self.x.name in variable_locations:
+            value = variable_locations[self.x.name]
+        else:
+            value = self.x
+
+        return self.scaling * torch.sum(torch.abs(value))
 
     def is_smooth(self) -> bool:
         """Returns False because L1-norm is not smooth."""
@@ -55,7 +58,7 @@ class L1Norm(Atom):
         """Returns True because L1-norm is proxable."""
         return True
 
-    def prox(self, location, prox_scaling) -> torch.Tensor:
+    def prox(self, location: torch.Tensor, prox_scaling: float) -> torch.Tensor:
         """Proximal operator for the scaled L1-norm.
 
         For the function f(x) = scaling * ||x||_1, the proximal operator is:
@@ -63,7 +66,7 @@ class L1Norm(Atom):
 
         Args:
             location: Point at which to evaluate the proximal operator
-            prox_scaling: Additional scaling factor for the proximal operator
+            prox_scaling: Scaling factor for the proximal operator
 
         Returns:
             Result of soft-thresholding operation
@@ -77,7 +80,7 @@ class L1Norm(Atom):
         """Returns False because L1-norm is not subsamplable."""
         return False
 
-    def subsample(self, indices) -> "L1Norm":
+    def subsample(self, indices: torch.Tensor) -> "L1Norm":
         """Raises NotImplementedError because L1-norm cannot be subsampled."""
         raise NotImplementedError("L1-norm cannot be subsampled.")
 
@@ -86,8 +89,7 @@ class L1Norm(Atom):
 
         Args:
             expr: Optional CVXPY expression to use.
-                 If provided, uses this expression instead of converting
-                 the stored variable.
+                 If None, converts the stored variable to a CVXPY expression.
 
         Returns:
             CVXPY expression for the scaled L1-norm
