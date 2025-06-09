@@ -14,18 +14,25 @@ class Atom(torch.nn.Module, ABC):
     """
 
     def __init__(self):
-        """Initializes the atom."""
+        """Initializes the atom.
+
+        Subclasses should call this constructor to ensure proper initialization.
+        Subclasses should also register any variables they use with the atom.
+        """
         super().__init__()
 
     @abstractmethod
-    def forward(self, location: torch.Tensor) -> torch.Tensor:
+    def forward(self, location: torch.Tensor | None = None) -> torch.Tensor:
         """Evaluates the atom and returns its value as a tensor.
 
+        If location is provided, evaluates the atom at that point.
+        Otherwise, uses the variables registered within the atom.
+
         Args:
-            location: Point at which to evaluate the atom
+            location: Optional point at which to evaluate the atom
 
         Returns:
-            Value of the atom at the specified location
+            Value of the atom at the specified location or with registered variables
         """
         pass
 
@@ -40,16 +47,15 @@ class Atom(torch.nn.Module, ABC):
         pass
 
     @abstractmethod
-    def prox(self, location: torch.Tensor) -> torch.Tensor:
+    def prox(self, location: torch.Tensor, prox_scaling: float) -> torch.Tensor:
         """Proximal operator of the atom.
 
         This method should only be called if the atom is proxable. Otherwise, it should
         raise a NotImplementedError.
 
-        Note that this function has to account for the scaling factor of the atom.
-
         Args:
             location: Point at which to evaluate the proximal operator
+            prox_scaling: Scaling factor for the proximal operator
 
         Returns:
             Result of the proximal operator
@@ -81,14 +87,14 @@ class Atom(torch.nn.Module, ABC):
         pass
 
     @abstractmethod
-    def to_cvxpy(self, expr: cp.Expression) -> cp.Expression:
+    def to_cvxpy(self, expr: cp.Expression | None = None) -> cp.Expression:
         """Converts the atom to a CVXPY expression.
 
-        This method should be called with a CVXPY expression, including
-        its subclasses of CVXPY variables and CVXPY parameters.
+        If expr is provided, uses it as the variable expression.
+        Otherwise, creates a new expression using the atom's variables.
 
         Args:
-            expr: Either a cp.Variable or a cp.Expression
+            expr: Optional CVXPY expression to use
 
         Returns:
             CVXPY expression representing this atom
