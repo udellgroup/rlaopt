@@ -8,7 +8,7 @@ from rlaopt.expression import Expression
 from rlaopt.variable import Variable
 
 
-class SumSquared(Atom):
+class SumSquares(Atom):
     """Sum of squared elements atom."""
 
     def __init__(self, x: Variable | Expression):
@@ -84,19 +84,19 @@ class SumSquared(Atom):
         """Returns True if the input is a an affine expression."""
         raise NotImplementedError("Should eventually be True for certain cases.")
 
-    def subsample(self) -> "SumSquared":
-        """Returns a subsampled version of the SumSquared atom.
+    def subsample(self) -> "SumSquares":
+        """Returns a subsampled version of the SumSquares atom.
 
         Args:
             indices: Indices to subsample
 
         Returns:
-            New SumSquared atom representing the subsampled version
+            New SumSquares atom representing the subsampled version
 
         Raises:
             NotImplementedError: If the atom does not support subsampling.
         """
-        raise NotImplementedError("Subsampling not implemented for SumSquared atom.")
+        raise NotImplementedError("Subsampling not implemented for SumSquares atom.")
 
     def to_cvxpy(self) -> cp.Expression:
         """Convert the sum of squares to a CVXPY expression."""
