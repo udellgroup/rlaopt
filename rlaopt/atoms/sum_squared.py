@@ -1,66 +1,103 @@
-import rlaopt.atoms
+"""Implementation of the sum squared atom."""
+
+import cvxpy as cp
 import torch
 
-class Leaf(rlaopt.atoms.Atom):
-    def __init__(self, ...):
-        ...
+from rlaopt.atoms.atom import Atom
+from rlaopt.expression import Expression
+from rlaopt.variable import Variable
 
-class SumSquared(rlaopt.atoms.Atom):
-    def __init__(self, arg | torch.Tensor | atom):
+
+class SumSquared(Atom):
+    """Sum of squared elements atom."""
+
+    def __init__(self, x: Variable | Expression):
+        """Initializes the sum squared atom.
+
+        Args:
+            x: Variable or Expression to apply the sum of squares to.
+        """
         super().__init__()
-        self.arg = rlaopt.utils.to_atom(arg)
 
-    def _forward_impl(self) -> torch.Tensor:
-        val = self.arg()
-        return (val**2).sum()
+        if not isinstance(x, (Variable, Expression)):
+            raise TypeError(f"Expected Variable or Expression, got {type(x)}")
 
-    def is_smooth(self):
-        return self.arg.is_smooth()
+        # Register the variable as a parameter or module if it's an Expression
+        if isinstance(x, Expression):
+            self.add_module("x", x)
+        elif isinstance(x, Variable):
+            self.register_parameter("x", x)
 
-    def is_proxable(self):
-        return self.arg.is_affine()
+    def is_smooth(self) -> bool:
+        """Returns True depending on the smoothness of the expression."""
+        if isinstance(self.x, Expression):
+            return self.x.is_smooth()
+        elif isinstance(self.x, Variable):
+            return True
 
-    def prox(self, scale):
-        if self.arg.is_leaf():
-            return 1 / (1 + scale * self.scaling) * self.arg
+    def evaluate_at(self, **variable_locations):
+        """Evaluate the sum of squares at specific locations.
+
+        Args:
+            **variable_locations: Mapping of variable names to locations
+
+        Returns:
+            Sum of squares
+        """
+        # If x is an Expression, pass the variable_locations to it
+        if isinstance(self.x, Expression):
+            value = self.x.evaluate_at(**variable_locations)
+        # If x is a Variable, check if it's in variable_locations
+        elif isinstance(self.x, Variable) and self.x.name in variable_locations:
+            value = variable_locations[self.x.name]
+        # Otherwise use the registered variable
         else:
-            raise NotImplementedError # Do something with NysCG
+            value = self.x
 
+        return torch.sum(value**2)
 
-"""
-x = SumSquared(X @ variable - y)
-y = x.copy()
+    def is_proxable(self) -> bool:
+        """Returns True if the input is a Variable or affine."""
+        raise NotImplementedError("Should eventually be True for certain cases.")
 
-# Inputs
-# Parameters
+    def prox(self, location, prox_scaling) -> torch.Tensor:
+        """Proximal operator for the sum of squares.
 
-||Xb - y||_2^2
- - b is a torch.nn.parameters.Parameter
- - X, y are inputs
+        Args:
+            location: Point at which to evaluate the proximal operator
+            prox_scaling: Scaling factor for the proximal operator
 
+        Returns:
+            Result of the proximal operator
+        """
+        if isinstance(self.x, Variable):
+            return 1 / (1 + prox_scaling) * location
+        elif isinstance(self.x, Expression):
+            # For expressions, we need to handle the proximal operator differently
+            # This is a placeholder; actual implementation may vary
+            # based on the expression type
+            raise NotImplementedError(
+                "Proximal operator for Expression not implemented."
+            )
 
-"Linear fit"
-class LinearFit(Atom):
-    def __init__(self, dataloader, param):
-        self.... = ...
+    def is_subsamplable(self) -> bool:
+        """Returns True if the input is a an affine expression."""
+        raise NotImplementedError("Should eventually be True for certain cases.")
 
-    def _forward_impl(self):
-        return torch.vstack(
-            [X @ self.param - y for X, y in self.dataloader])
+    def subsample(self) -> "SumSquared":
+        """Returns a subsampled version of the SumSquared atom.
 
-class quad_form(Atom):
-    def __init__(self, param, tensor):
-        self.... = ...
+        Args:
+            indices: Indices to subsample
 
+        Returns:
+            New SumSquared atom representing the subsampled version
 
-Parameter
-Variable
-||X b - y||_2^2
- - X, y are parameters are effectively the same as a "Constant"
- - b is a variable
+        Raises:
+            NotImplementedError: If the atom does not support subsampling.
+        """
+        raise NotImplementedError("Subsampling not implemented for SumSquared atom.")
 
-x^T P x = cp.quad_form(x, P)
- - P is a parameter or a constant
- - x is a variable
-
-"""
+    def to_cvxpy(self) -> cp.Expression:
+        """Convert the sum of squares to a CVXPY expression."""
+        return cp.sum_squares(self.x.to_cvxpy())

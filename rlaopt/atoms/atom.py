@@ -2,7 +2,6 @@
 
 from abc import ABC, abstractmethod
 
-import cvxpy as cp
 import torch
 
 from rlaopt.expression import Expression
@@ -34,11 +33,6 @@ class Atom(Expression, ABC):
         Returns:
             Value of the atom with variables substituted with their locations
         """
-        pass
-
-    @abstractmethod
-    def is_smooth(self) -> bool:
-        """Returns True if the atom is smooth (differentiable everywhere)."""
         pass
 
     @abstractmethod
@@ -83,20 +77,5 @@ class Atom(Expression, ABC):
 
         Raises:
             NotImplementedError: If the atom does not support subsampling.
-        """
-        pass
-
-    @abstractmethod
-    def to_cvxpy(self, expr: cp.Expression | None = None) -> cp.Expression:
-        """Converts the atom to a CVXPY expression.
-
-        If expr is provided, uses it as the variable expression.
-        Otherwise, creates a new expression using the atom's variables.
-
-        Args:
-            expr: Optional CVXPY expression to use
-
-        Returns:
-            CVXPY expression representing this atom
         """
         pass

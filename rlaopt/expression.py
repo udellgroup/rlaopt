@@ -20,6 +20,15 @@ class Expression(torch.nn.Module, ABC):
         return self.evaluate_at()
 
     @abstractmethod
+    def is_smooth(self) -> bool:
+        """Check if the expression is smooth (differentiable everywhere).
+
+        Returns:
+            True if the expression is smooth, False otherwise
+        """
+        pass
+
+    @abstractmethod
     def evaluate_at(self, **variable_locations):
         """Evaluate the expression at specific variable locations.
 
@@ -98,6 +107,21 @@ class AddExpression(Expression):
         else:
             raise TypeError(f"Unsupported type for right term: {type(right)}")
 
+    def is_smooth(self) -> bool:
+        """Check if the addition is smooth."""
+        # Both left and right must be smooth for the addition to be smooth
+        if hasattr(self.left, "is_smooth"):
+            left_smooth = self.left.is_smooth()
+        else:
+            left_smooth = True
+
+        if hasattr(self.right, "is_smooth"):
+            right_smooth = self.right.is_smooth()
+        else:
+            right_smooth = True
+
+        return left_smooth and right_smooth
+
     def evaluate_at(self, **variable_locations):
         """Evaluate the addition at specific variable locations."""
         # Get left value with substitutions
@@ -162,6 +186,21 @@ class MulExpression(Expression):
             self.register_buffer("right", right)
         else:
             raise TypeError(f"Unsupported type for right term: {type(right)}")
+
+    def is_smooth(self) -> bool:
+        """Check if the multiplication is smooth."""
+        # Both left and right must be smooth for the multiplication to be smooth
+        if hasattr(self.left, "is_smooth"):
+            left_smooth = self.left.is_smooth()
+        else:
+            left_smooth = True
+
+        if hasattr(self.right, "is_smooth"):
+            right_smooth = self.right.is_smooth()
+        else:
+            right_smooth = True
+
+        return left_smooth and right_smooth
 
     def evaluate_at(self, **variable_locations):
         """Evaluate the multiplication at specific variable locations."""
