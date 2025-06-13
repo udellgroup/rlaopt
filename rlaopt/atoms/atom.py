@@ -24,39 +24,6 @@ class Atom(Expression, ABC):
         super().__init__()
 
     @abstractmethod
-    def evaluate_at(self, **variable_locations):
-        """Evaluate the atom at specific variable locations.
-
-        Args:
-            **variable_locations: Mapping of variable names to locations
-
-        Returns:
-            Value of the atom with variables substituted with their locations
-        """
-        pass
-
-    @abstractmethod
-    def is_proxable(self) -> bool:
-        """Returns True if the atom has a computable proximal operator."""
-        pass
-
-    @abstractmethod
-    def prox(self, location: torch.Tensor, prox_scaling: float) -> torch.Tensor:
-        """Proximal operator of the atom.
-
-        This method should only be called if the atom is proxable. Otherwise, it should
-        raise a NotImplementedError.
-
-        Args:
-            location: Point at which to evaluate the proximal operator
-            prox_scaling: Scaling factor for the proximal operator
-
-        Returns:
-            Result of the proximal operator
-        """
-        pass
-
-    @abstractmethod
     def is_subsamplable(self) -> bool:
         """Returns True if the atom supports subsampling (e.g., for stochastic
         methods)."""

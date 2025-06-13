@@ -10,12 +10,12 @@ from rlaopt.settings import VAR_PREFIX
 from rlaopt.utils.counter import get_id
 
 
-class Variable(torch.nn.Parameter):
+class Variable(Expression):
     """A variable class that extends torch.nn.Parameter."""
 
-    def __new__(
-        cls,
-        *size,
+    def __init__(
+        self,
+        *size_or_tensor,
         requires_grad: bool = True,
         var_id: int | None = None,
         name: str | None = None,
@@ -23,59 +23,39 @@ class Variable(torch.nn.Parameter):
         device: torch.device = None,
     ):
         """Create and initialize a new Variable instance."""
+        super().__init__()
         # Process size to get proper shape
-        if len(size) == 1 and isinstance(size[0], (tuple, list)):
-            shape = size[0]
+        if len(size_or_tensor) == 1 and isinstance(size_or_tensor[0], torch.Tensor):
+            data = size_or_tensor[0]
         else:
-            shape = size
+            size = size_or_tensor
+            if len(size) == 1 and isinstance(size[0], (tuple, list)):
+                shape = size[0]
+            else:
+                shape = size
+            # Create tensor
+            data = torch.zeros(shape, dtype=dtype, device=device)
 
-        # Create tensor
-        data = torch.zeros(shape, dtype=dtype, device=device)
 
-        # Create Parameter instance
-        instance = super().__new__(cls, data, requires_grad)
-
-        # Initialize Variable-specific attributes
-        Variable._set_id_and_name(instance, var_id, name)
-
+        self.value = torch.nn.Parameter(
+            data, requires_grad
+        )
+        self._set_id_and_name(var_id, name)
         return instance
 
-    @classmethod
-    def from_tensor(
-        cls,
-        tensor: torch.Tensor,
-        requires_grad: bool = True,
-        clone: bool = True,
-        var_id: int | None = None,
-        name: str | None = None,
-    ):
-        """Create a Variable from an existing tensor."""
-        if requires_grad is None:
-            requires_grad = tensor.requires_grad
-
-        # Create Parameter instance
-        data = tensor if not clone else tensor.clone()
-        instance = super().__new__(cls, data, requires_grad)
-
-        # Initialize Variable-specific attributes
-        Variable._set_id_and_name(instance, var_id, name)
-
-        return instance
-
-    @staticmethod
-    def _set_id_and_name(instance, var_id=None, name=None):
+    def _set_id_and_name(self, var_id=None, name=None):
         """Helper method to set ID and name attributes."""
         # Set ID
         if var_id is None:
-            instance._id = get_id()
+            self._id = get_id()
         else:
-            instance._id = var_id
+            self._id = var_id
 
         # Set name
         if name is None:
-            instance._name = f"{VAR_PREFIX}{instance._id}"
+            self._name = f"{VAR_PREFIX}{self._id}"
         elif isinstance(name, str):
-            instance._name = name
+            self._name = name
         else:
             raise TypeError(f"Expected name to be a string, got {type(name)} instead.")
 
@@ -109,3 +89,16 @@ class Variable(torch.nn.Parameter):
     def __str__(self):
         """Shortened representation of the Variable."""
         return f"Variable '{self.name}' with shape {tuple(self.shape)}"
+
+    def is_smooth(self):
+        return True
+
+    def is_proxable(self):
+        return False
+
+    def evaluate_at(self, **variable_locations):
+        if len(variable_locations) == 0:
+            return self.value
+        else:
+            return variable_locations[self.name]
+

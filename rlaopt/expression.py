@@ -29,6 +29,15 @@ class Expression(torch.nn.Module, ABC):
         pass
 
     @abstractmethod
+    def is_proxable(self) -> bool:
+        """Check if the expression is proxable.
+
+        Returns:
+            True if the expression is proxable, False otherwise
+        """
+        pass
+
+    @abstractmethod
     def evaluate_at(self, **variable_locations):
         """Evaluate the expression at specific variable locations.
 
@@ -67,10 +76,24 @@ class Expression(torch.nn.Module, ABC):
         return AddExpression(other, self)
 
     def __mul__(self, other):
-        return MulExpression(self, other)
+        left = self
+        right = to_expr(other)
+        if left.parameters() == 0:
+            const = left
+            nonconst = right
+        else:
+            const = right
+            nonconst = left
+        if isinstance(nonconst, AddExpression):
+            return AddExpression([const * expr for expr in nonconst.exprs])
+        else:
+            return MulExpression(left, right)
 
     def __rmul__(self, other):
-        return MulExpression(other, self)
+        return self.__mul__(other)
+
+    def __truediv__(self, other):
+        return self.__mul__(1 / other)
 
     def __neg__(self):
         return MulExpression(-1.0, self)
@@ -81,158 +104,152 @@ class Expression(torch.nn.Module, ABC):
     def __rsub__(self, other):
         return AddExpression(other, -self)
 
+    def prox(self, location: torch.Tensor, prox_scaling: float) -> torch.Tensor:
+        """Proximal operator of the atom.
 
-class AddExpression(Expression):
-    """Expression representing addition."""
+        This method should only be called if the atom is proxable. Otherwise, it should
+        raise a NotImplementedError.
 
-    def __init__(self, left, right):
+        Args:
+            location: Point at which to evaluate the proximal operator
+            prox_scaling: Scaling factor for the proximal operator
+
+        Returns:
+            Result of the proximal operator
+        """
+        raise NotImplementedError
+
+
+class ConstExpression(Expression):
+    def __init__(self, value):
         super().__init__()
-
-        # Register based on type, using clear distinctive names
-        if isinstance(left, Expression):
-            self.add_module("left", left)
-        elif isinstance(left, (int, float)):
-            self.register_buffer("left", torch.tensor(float(left)))
-        elif isinstance(left, torch.Tensor):
-            self.register_buffer("left", left)
+        if isinstance(value, torch.Tensor):
+            self.value = torch.nn.parameter.Buffer(value)
         else:
-            raise TypeError(f"Unsupported type for left term: {type(left)}")
+            self.value = torch.nn.parameter.Buffer(torch.tensor(value))
 
-        if isinstance(right, Expression):
-            self.add_module("right", right)
-        elif isinstance(right, (int, float)):
-            self.register_buffer("right", torch.tensor(float(right)))
-        elif isinstance(right, torch.Tensor):
-            self.register_buffer("right", right)
+    def is_smooth(self) -> bool:
+        return  True
+
+    def is_proxable(self) -> bool:
+        return  True
+
+    def evaluate_at(self, **variable_locations):
+        return self.value
+
+    def to_cvxpy(self) -> cp.Expression:
+        return cp.Constant(value.numpy())
+
+def to_expr(val):
+    if isinstance(val, Expression):
+        return val
+    else:
+        return ConstExpression(val)
+
+
+class BinaryOperatorExpression(Expression, ABC):
+    """Expression representing addition."""
+    
+    @abstractmethod
+    def op(self, exprs, lib):
+        pass
+    
+    def validate(self):
+        pass
+
+    def __init__(self, left_or_exprs, right=None):
+        """
+        Constructors are either 
+            left: Expression, right: Expression
+        or
+            exprs: list[Expression]
+        """
+
+        super().__init__()
+        if right is not None:
+            exprs = []
+            left = to_expr(left_or_exprs)
+            right = to_expr(right)
+            if isinstance(left, type(self)):
+                exprs.extend(left.exprs)
+            else:
+                exprs.append(left)
+
+            if isinstance(right, type(self)):
+                exprs.extend(right.exprs)
+            else:
+                exprs.append(right)
         else:
-            raise TypeError(f"Unsupported type for right term: {type(right)}")
+            exprs = left_or_exprs
+
+        self.exprs = torch.nn.ModuleList(exprs)
+
+        self.validate()
 
     def is_smooth(self) -> bool:
         """Check if the addition is smooth."""
         # Both left and right must be smooth for the addition to be smooth
-        if hasattr(self.left, "is_smooth"):
-            left_smooth = self.left.is_smooth()
-        else:
-            left_smooth = True
-
-        if hasattr(self.right, "is_smooth"):
-            right_smooth = self.right.is_smooth()
-        else:
-            right_smooth = True
-
-        return left_smooth and right_smooth
+        return all([expr.is_smooth() for expr in self.exprs])
 
     def evaluate_at(self, **variable_locations):
         """Evaluate the addition at specific variable locations."""
-        # Get left value with substitutions
-        if hasattr(self, "left") and isinstance(self.left, Expression):
-            left_value = self.left.evaluate_at(**variable_locations)
-        else:
-            left_value = self.left
-
-        # Get right value with substitutions
-        if hasattr(self, "right") and isinstance(self.right, Expression):
-            right_value = self.right.evaluate_at(**variable_locations)
-        else:
-            right_value = self.right
-
-        return left_value + right_value
+        return self.op([expr.evaluate_at(**variable_locations) for expr in self.exprs], torch)
 
     def to_cvxpy(self):
         """Convert to a CVXPY expression."""
-        left_cvxpy = (
-            self.left.to_cvxpy()
-            if isinstance(self.left, Expression)
-            else float(self.left.item())
-            if self.left.numel() == 1
-            else self.left.numpy()
-        )
-        right_cvxpy = (
-            self.right.to_cvxpy()
-            if isinstance(self.right, Expression)
-            else float(self.right.item())
-            if self.right.numel() == 1
-            else self.right.numpy()
-        )
+        return self.op([expr.to_cvxpy() for expr in self.exprs], cvxpy)
 
-        return left_cvxpy + right_cvxpy
+
+class AddExpression(BinaryOperatorExpression):
+    """Expression representing addition."""
+
+    def op(self, exprs, lib):
+        return lib.sum(exprs)
+
+    def is_proxable(self):
+        if any(not expr.is_proxable() for expr in self.exprs):
+            return False
+        length = 0
+        params = set()
+        for expr in exprs:
+            expr_params = list(expr.parameters())
+            length += len(expr_params)
+            params.extend(expr_params)
+            if length != len(params):
+                return False
+        return True
+
+    def operator_split(self):
+        """
+        Splits sum of operators into smooth and proxable part
+        """
+        smooth = []
+        prox = []
+        for expr in exprs:
+            if expr.is_smooth():
+                smooth.append(expr)
+            else:
+                prox.append(expr)
+        prox_expr = AddExpression(prox)
+        if not prox_expr.is_proxable():
+            raise ValueError("Cannot split operator")
+        return AddExpression(smooth), prox_expr
+
 
 
 class MulExpression(Expression):
     """Expression representing multiplication."""
 
-    def __init__(self, left, right):
-        super().__init__()
+    def op(self, exprs, lib):
+        return lib.prod(exprs)
 
-        # Do not allow both left and right to be Expression instances
-        if isinstance(left, Expression) and isinstance(right, Expression):
-            raise TypeError("Cannot multiply two Expression instances directly.")
+    def validate(self):
+        if sum(len(expr.parameters()) != 0 for expr in self.exprs) > 1:
+            raise TypeError("Cannot multiply two nonconstant Expressions.")
 
-        # Register based on type, using clear distinctive names
-        if isinstance(left, Expression):
-            self.add_module("left", left)
-        elif isinstance(left, (int, float)):
-            self.register_buffer("left", torch.tensor(float(left)))
-        elif isinstance(left, torch.Tensor):
-            self.register_buffer("left", left)
-        else:
-            raise TypeError(f"Unsupported type for left term: {type(left)}")
-
-        if isinstance(right, Expression):
-            self.add_module("right", right)
-        elif isinstance(right, (int, float)):
-            self.register_buffer("right", torch.tensor(float(right)))
-        elif isinstance(right, torch.Tensor):
-            self.register_buffer("right", right)
-        else:
-            raise TypeError(f"Unsupported type for right term: {type(right)}")
-
-    def is_smooth(self) -> bool:
-        """Check if the multiplication is smooth."""
-        # Both left and right must be smooth for the multiplication to be smooth
-        if hasattr(self.left, "is_smooth"):
-            left_smooth = self.left.is_smooth()
-        else:
-            left_smooth = True
-
-        if hasattr(self.right, "is_smooth"):
-            right_smooth = self.right.is_smooth()
-        else:
-            right_smooth = True
-
-        return left_smooth and right_smooth
-
-    def evaluate_at(self, **variable_locations):
-        """Evaluate the multiplication at specific variable locations."""
-        # Get left value with substitutions
-        if hasattr(self, "left") and isinstance(self.left, Expression):
-            left_value = self.left.evaluate_at(**variable_locations)
-        else:
-            left_value = self.left
-
-        # Get right value with substitutions
-        if hasattr(self, "right") and isinstance(self.right, Expression):
-            right_value = self.right.evaluate_at(**variable_locations)
-        else:
-            right_value = self.right
-
-        return left_value * right_value
-
-    def to_cvxpy(self):
-        """Convert to a CVXPY expression."""
-        left_cvxpy = (
-            self.left.to_cvxpy()
-            if isinstance(self.left, Expression)
-            else float(self.left.item())
-            if self.left.numel() == 1
-            else self.left.numpy()
-        )
-        right_cvxpy = (
-            self.right.to_cvxpy()
-            if isinstance(self.right, Expression)
-            else float(self.right.item())
-            if self.right.numel() == 1
-            else self.right.numpy()
-        )
-
-        return left_cvxpy * right_cvxpy
+    def is_proxable(self):
+        """Assumes that this is a const scalar times a function"""
+        for expr in self.exprs:
+            if len(expr.parameters()) != 0:
+                return expr.is_proxable()
+        return True
