@@ -48,7 +48,7 @@ def hutch_plus_plus(
     if sketch_fraction >= 1 / 2:
         raise ValueError("sketch_fraction must be smaller than 1/2!!")
 
-    s_dim = math.ceil(k * sketch_fraction)
+    s_dim = math.floor(k * sketch_fraction)
     g_dim = k - 2 * s_dim
 
     trace_sketch = torch.tensor(0.0, dtype=A.dtype, device=A.device)
@@ -65,7 +65,7 @@ def hutch_plus_plus(
 
     if g_dim > 0:
         G = get_sketch(sketch, "right", g_dim, A.shape[0], A.dtype, A.device)
-        if Q is not None:
+        if s_dim > 0:
             QT_G = G._apply_right(Q.T)
             Q_QT_G = Q @ QT_G
             G_proj = G.Omega_mat - Q_QT_G

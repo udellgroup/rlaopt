@@ -112,17 +112,3 @@ def test_hutchpp_only_gdim_active(dtype, sketch_fraction):
     )
     # Should fallback to Hutchinson, so approximately equal to trace(A)
     assert pytest.approx(3.0, rel=0.05) == trace
-
-
-@pytest.mark.parametrize("dtype", [torch.float32, torch.float64])
-@pytest.mark.parametrize("sketch", ["rademacher", "gauss"])
-def test_hutchpp_only_sdim_active(dtype, sketch):
-    # Large sketch_fraction so g_dim == 0 (but < 0.5, the limit)
-    k = 12
-    sketch_fraction = 0.49
-    M = torch.eye(k, dtype=dtype)
-    A = make_linop_from_matrix(M)
-    trace = hutch_plus_plus(A, k=k, sketch=sketch, sketch_fraction=sketch_fraction)
-    # Should fallback to just the sketch component, which should \
-    # estimate trace well for the identity
-    assert pytest.approx(float(k), rel=0.1) == trace
