@@ -4,7 +4,7 @@ import cvxpy as cp
 import torch
 
 from rlaopt.atoms.atom import Atom
-from rlaopt.variable import Variable
+from rlaopt.expression.variable import Variable
 
 
 class L1Norm(Atom):
@@ -25,11 +25,13 @@ class L1Norm(Atom):
             raise TypeError(f"Expected Variable, got {type(x)}")
 
         # Register the variable as a parameter
-        self.register_parameter("x", x)
+        self.register_parameter("x", x.value)
 
         # Register the scaling factor
         if isinstance(scaling, torch.Tensor):
             self.register_buffer("scaling", scaling)
+        elif isinstance(scaling, torch.nn.Parameter):
+            self.register_buffer("scaling", scaling.data)
         else:
             self.register_buffer("scaling", torch.tensor(float(scaling)))
 
@@ -48,7 +50,7 @@ class L1Norm(Atom):
         """
         # Use substituted value if available, otherwise use registered variable
         if isinstance(self.x, Variable) and self.x.name in variable_locations:
-            value = variable_locations[self.x.name]
+            value = self.x.evaluate_at(**variable_locations)
         else:
             value = self.x
 
@@ -72,9 +74,9 @@ class L1Norm(Atom):
             Result of soft-thresholding operation
         """
         threshold = self.scaling * prox_scaling
-        return torch.sign(location) * torch.clamp(
-            torch.abs(location) - threshold, min=0.0
-        )
+        zero = torch.zeros(1, dtype=location.dtype, device=location.device)
+        return torch.maximum(location - threshold, zero) \
+            - torch.maximum(-location - threshold, zero)
 
     def is_subsamplable(self) -> bool:
         """Returns False because L1-norm is not subsamplable."""

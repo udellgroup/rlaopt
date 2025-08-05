@@ -4,8 +4,9 @@ import cvxpy as cp
 import torch
 
 from rlaopt.atoms.atom import Atom
-from rlaopt.expression import Expression
-from rlaopt.variable import Variable
+from rlaopt.atoms.affine_atom import AffineAtom
+from rlaopt.expression.expression import Expression
+from ..expression.variable import Variable
 
 
 class SumSquares(Atom):
@@ -26,7 +27,7 @@ class SumSquares(Atom):
         if isinstance(x, Expression):
             self.add_module("x", x)
         elif isinstance(x, Variable):
-            self.register_parameter("x", x)
+            self.register_parameter("x", x.value)
 
     def is_smooth(self) -> bool:
         """Returns True depending on the smoothness of the expression."""
@@ -44,21 +45,23 @@ class SumSquares(Atom):
         Returns:
             Sum of squares
         """
+
         # If x is an Expression, pass the variable_locations to it
         if isinstance(self.x, Expression):
             value = self.x.evaluate_at(**variable_locations)
-        # If x is a Variable, check if it's in variable_locations
-        elif isinstance(self.x, Variable) and self.x.name in variable_locations:
-            value = variable_locations[self.x.name]
-        # Otherwise use the registered variable
+
+        # Otherwise use registered value    
         else:
             value = self.x
 
-        return torch.sum(value**2)
+        return torch.sum(value ** 2)
 
     def is_proxable(self) -> bool:
         """Returns True if the input is a Variable or affine."""
-        raise NotImplementedError("Should eventually be True for certain cases.")
+        if isinstance(self.x, Variable) or isinstance(self.x, AffineAtom):
+            return True
+        else:
+            return False
 
     def prox(self, location, prox_scaling) -> torch.Tensor:
         """Proximal operator for the sum of squares.
@@ -76,10 +79,10 @@ class SumSquares(Atom):
             # For expressions, we need to handle the proximal operator differently
             # This is a placeholder; actual implementation may vary
             # based on the expression type
-            raise NotImplementedError(
-                "Proximal operator for Expression not implemented."
+             raise NotImplementedError(
+                 "Proximal operator for Expression not implemented."
             )
-
+            
     def is_subsamplable(self) -> bool:
         """Returns True if the input is a an affine expression."""
         raise NotImplementedError("Should eventually be True for certain cases.")

@@ -4,7 +4,7 @@ from abc import ABC, abstractmethod
 
 import torch
 
-from rlaopt.expression import Expression
+from ..expression.expression import Expression
 
 
 class Atom(Expression, ABC):
