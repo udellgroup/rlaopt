@@ -8,7 +8,7 @@ import torch
 
 from rlaopt.settings import VAR_PREFIX
 from rlaopt.utils.counter import get_id
-from .expression import Expression
+from rlaopt.expression.expression import Expression, UnaryOpExpression
 
 
 class Variable(Expression):
@@ -37,12 +37,8 @@ class Variable(Expression):
             # Create tensor
             data = torch.zeros(shape, dtype=dtype, device=device)
 
-
-        self.value = torch.nn.Parameter(
-            data, requires_grad
-        )
+        self.value = torch.nn.Parameter(data, requires_grad)
         self._set_id_and_name(var_id, name)
-        # return instance
 
     def _set_id_and_name(self, var_id=None, name=None):
         """Helper method to set ID and name attributes."""
@@ -71,17 +67,18 @@ class Variable(Expression):
         return self._name
 
     def to_cvxpy(self) -> cp.Variable:
-        return cp.Variable(shape=self.shape, name=self.name, var_id=self.id)
-
+        return cp.Variable(shape=self.value.shape, name=self.name, var_id=self.id)
+    
+    
     def __repr__(self):
         """Full representation of the Variable."""
         info_components = [
             f"Variable(name='{self.name}'",
             f"id='{self.id}'",
-            f"shape={tuple(self.shape)}",
-            f"dtype={self.dtype}",
-            f"device='{self.device}'",
-            f"requires_grad={self.requires_grad}",
+            f"shape={tuple(self.value.shape)}",
+            f"dtype={self.value.dtype}",
+            f"device='{self.value.device}'",
+            f"requires_grad={self.value.requires_grad}",
         ]
         info = ", ".join(info_components)
 
@@ -89,7 +86,7 @@ class Variable(Expression):
 
     def __str__(self):
         """Shortened representation of the Variable."""
-        return f"Variable '{self.name}' with shape {tuple(self.shape)}"
+        return f"Variable '{self.name}' with shape {self.value.shape}"
 
     def is_smooth(self):
         return True
@@ -102,4 +99,9 @@ class Variable(Expression):
             return self.value
         else:
             return variable_locations[self.name]
+    
+    def sum(self, dim=None):
+        return UnaryOpExpression(self, lambda t: torch.sum(t, dim=dim))
 
+    def T(self):
+        return UnaryOpExpression(self, lambda t: t.transpose(-2, -1))
