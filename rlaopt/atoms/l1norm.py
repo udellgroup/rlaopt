@@ -3,11 +3,12 @@
 import cvxpy as cp
 import torch
 
-from rlaopt.atoms.atom import Atom
-from rlaopt.expression.variable import Variable
+from rlaopt.atoms.atom_expression import AtomExpression
+from rlaopt.expression.expression import Variable
+from rlaopt.atoms._utils import get_variable_value
 
 
-class L1Norm(Atom):
+class L1Norm(AtomExpression):
     """L1-norm atom."""
 
     def __init__(self, x: Variable, scaling: float = 1.0):
@@ -48,11 +49,7 @@ class L1Norm(Atom):
         Returns:
             Scaled sum of absolute values (L1-norm)
         """
-        # Use substituted value if available, otherwise use registered variable
-        if isinstance(self.x, Variable) and self.x.name in variable_locations:
-            value = self.x.evaluate_at(**variable_locations)
-        else:
-            value = self.x
+        value = get_variable_value(self.x, **variable_locations)
 
         return self.scaling * torch.sum(torch.abs(value))
 
@@ -74,9 +71,8 @@ class L1Norm(Atom):
             Result of soft-thresholding operation
         """
         threshold = self.scaling * prox_scaling
-        zero = torch.zeros(1, dtype=location.dtype, device=location.device)
-        return torch.maximum(location - threshold, zero) \
-            - torch.maximum(-location - threshold, zero)
+        return torch.nn.functional.relu(location - threshold) - torch.nn.functional.relu(
+            -location - threshold)
 
     def is_subsamplable(self) -> bool:
         """Returns False because L1-norm is not subsamplable."""

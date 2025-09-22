@@ -1,15 +1,16 @@
 """Implementation of the sum squared atom."""
 
+from __future__ import annotations
+
 import cvxpy as cp
 import torch
 
-from rlaopt.atoms.atom import Atom
-from rlaopt.atoms.affine_atom import AffineAtom
-from rlaopt.expression.expression import Expression
-from ..expression.variable import Variable
+from rlaopt.atoms.atom_expression import AtomExpression
+from rlaopt.atoms.affine import Affine
+from rlaopt.expression.expression import Expression, Variable
+from rlaopt.atoms._utils import get_variable_value
 
-
-class SumSquares(Atom):
+class SumSquares(AtomExpression):
     """Sum of squared elements atom."""
 
     def __init__(self, x: Variable | Expression):
@@ -24,16 +25,16 @@ class SumSquares(Atom):
             raise TypeError(f"Expected Variable or Expression, got {type(x)}")
 
         # Register the variable as a parameter or module if it's an Expression
-        if isinstance(x, Expression):
-            self.add_module("x", x)
-        elif isinstance(x, Variable):
+        if isinstance(x, Variable):
             self.register_parameter("x", x.value)
+        elif isinstance(x, Expression):
+            self.add_module("x", x)
 
     def is_smooth(self) -> bool:
         """Returns True depending on the smoothness of the expression."""
         if isinstance(self.x, Expression):
             return self.x.is_smooth()
-        elif isinstance(self.x, Variable):
+        elif isinstance(self.x, torch.nn.Parameter):
             return True
 
     def evaluate_at(self, **variable_locations):
@@ -45,20 +46,16 @@ class SumSquares(Atom):
         Returns:
             Sum of squares
         """
-
-        # If x is an Expression, pass the variable_locations to it
         if isinstance(self.x, Expression):
             value = self.x.evaluate_at(**variable_locations)
-
-        # Otherwise use registered value    
         else:
-            value = self.x
+            value = get_variable_value(self.x, **variable_locations)
 
         return torch.sum(value ** 2)
 
     def is_proxable(self) -> bool:
         """Returns True if the input is a Variable or affine."""
-        if isinstance(self.x, Variable) or isinstance(self.x, AffineAtom):
+        if isinstance(self.x, torch.nn.Parameter) or isinstance(self.x, Affine):
             return True
         else:
             return False
@@ -73,21 +70,21 @@ class SumSquares(Atom):
         Returns:
             Result of the proximal operator
         """
-        if isinstance(self.x, Variable):
+        if isinstance(self.x, torch.nn.Parameter):
             return 1 / (1 + prox_scaling) * location
         elif isinstance(self.x, Expression):
             # For expressions, we need to handle the proximal operator differently
             # This is a placeholder; actual implementation may vary
             # based on the expression type
-             raise NotImplementedError(
-                 "Proximal operator for Expression not implemented."
+            raise NotImplementedError(
+                "Proximal operator for Expression not implemented."
             )
-            
+
     def is_subsamplable(self) -> bool:
-        """Returns True if the input is a an affine expression."""
+        """Returns True if the input is an affine expression."""
         raise NotImplementedError("Should eventually be True for certain cases.")
 
-    def subsample(self) -> "SumSquares":
+    def subsample(self) -> SumSquares:
         """Returns a subsampled version of the SumSquares atom.
 
         Args:
