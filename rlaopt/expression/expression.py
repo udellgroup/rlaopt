@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 from functools import reduce
-from typing import Callable, Dict, Iterable, Union
+from typing import Callable, Dict, Union
 
 
 import cvxpy as cp
@@ -10,6 +10,17 @@ from rlaopt.settings import VAR_PREFIX
 from rlaopt.utils.counter import get_id
 from rlaopt.utils import tensor_dict_ops as dict_ops
 from rlaopt._typing import TensorDict
+
+# ===============================
+# Helper Functions
+# ===============================
+def to_expr(val) -> "Expression":
+    """Convert a value to an Expression if it isn't already."""
+    if isinstance(val, Expression):
+        return val
+    if isinstance(val, (float, int, torch.Tensor)):
+        return ConstExpression(val)
+    raise TypeError(f"Cannot convert {type(val)} to Expression")
 
 
 # ===============================
@@ -38,7 +49,7 @@ class Expression(torch.nn.Module, ABC):
 
     def params_dict(self) -> TensorDict:
         return dict(self.named_parameters())
-    
+
     def update_params(self, params_dict: TensorDict):
         """Update parameters from a dictionary."""
         self.load_state_dict(params_dict, strict=False)
@@ -51,15 +62,14 @@ class Expression(torch.nn.Module, ABC):
         Given params from another Expression whose leaf tensor shapes are consistent
         with current Expression but have different names, this function returns a new
         dict where each leaf tensor's name is consistent with the current expression.
-        
         """
         return dict_ops.relabel_from_template(params_dict, self.params)
-    
+
     @property
     def params(self) -> TensorDict:
         """Get parameters as a dictionary."""
         return self.params_dict()
-    
+
     def __call__(self, **variable_locations):
         return self.evaluate_at(**variable_locations)
 
@@ -141,6 +151,7 @@ class Expression(torch.nn.Module, ABC):
     def __pow__(self, exponent):
         return UnaryOpExpression(self, lambda t: torch.pow(t, exponent))
 
+
 # ===============================
 # Constants
 # ===============================
@@ -178,31 +189,15 @@ class NAryOperatorExpression(Expression, ABC):
 
     @abstractmethod
     def op(self, exprs: list[torch.Tensor], lib):
-        """Apply the operator to a list of evaluated tensors using `lib` (torch/cp)."""
+        """Apply the operator to evaluated tensors using lib (torch or cp)."""
         pass
 
-    def validate(self):
-        """Optional validation hook for subclasses."""
-        pass
-
-    def __init__(self, left_or_exprs, right=None):
+    def __init__(self, *exprs):
+        """Initialize with variable number of expressions."""
         super().__init__()
-
-        if right is not None:
-            # Assume left_or_exprs is a single Expression or convertible
-            if isinstance(left_or_exprs, Iterable) and not isinstance(left_or_exprs, (Expression, ConstExpression, float, int, torch.Tensor)):
-                raise TypeError("When right is provided, left_or_exprs must be a single Expression, not an iterable")
-            left_or_exprs = to_expr(left_or_exprs)
-            right = to_expr(right)
-            exprs = [left_or_exprs, right]
-        else:
-            # left_or_exprs is iterable of expressions
-            if not isinstance(left_or_exprs, Iterable) or isinstance(left_or_exprs, Expression):
-                raise TypeError("When right is None, left_or_exprs must be iterable of Expressions")
-            exprs = [to_expr(e) for e in left_or_exprs]
-
-        self.exprs = torch.nn.ModuleList(exprs)
-        self.validate()
+        if len(exprs) == 0:
+            raise ValueError(f"{self.__class__.__name__} requires at least one operand")
+        self.exprs = torch.nn.ModuleList([to_expr(e) for e in exprs])
 
     def is_smooth(self) -> bool:
         return all(expr.is_smooth() for expr in self.exprs)
@@ -213,17 +208,18 @@ class NAryOperatorExpression(Expression, ABC):
 
     def to_cvxpy(self):
         return self.op([expr.to_cvxpy() for expr in self.exprs], cp)
-    
-    @abstractmethod
-    def is_proxable(self) -> bool:
-        pass
+
 
 # ===============================
 # AddExpression (sum of exprs)
 # ===============================
 
+
 class AddExpression(NAryOperatorExpression):
-    """Sum of expressions. Accepts either two operands or a list."""
+    """Sum of expressions.
+
+    Accepts either two operands or a list.
+    """
 
     def __init__(self, left_or_exprs, right=None):
         super().__init__(left_or_exprs, right)
@@ -241,38 +237,42 @@ class AddExpression(NAryOperatorExpression):
         else:
             # CVXPY: reduce using +
             return reduce(lambda a, b: a + b, exprs)
-    
+
     def is_proxable(self):
-        # If any of non-smooth terms isn't proxable, then the sum isn't proxable
-        if any(not expr.is_proxable() and not expr.is_smooth() for expr in self.exprs):
+        """Check if sum is proxable.
+
+        Proxable if:
+        1. All non-smooth terms are proxable, AND
+        2. Non-smooth terms operate on disjoint parameter sets
+        """
+
+        non_smooth_exprs = [e for e in self.exprs if not e.is_smooth()]
+
+        # All non-smooth terms must be proxable
+        if any(not expr.is_proxable() for expr in non_smooth_exprs):
             return False
 
-        # If the non-smooth terms have no overlap,
-        # then the resulting AddExpression is proxable,
-        # otherwise it isn't
-        length = 0
-        params = set()
-        for expr in self.exprs:
-            expr_params = list(expr.parameters())
-            length += len(expr_params)
-            params.update(expr_params)
-            if length != len(params):
+        # Check for parameter overlap
+        seen_params = set()
+        for expr in non_smooth_exprs:
+            expr_params = set(expr.parameters())
+            if seen_params & expr_params:  # intersection
                 return False
+            seen_params.update(expr_params)
+
         return True
-    
+
     def operator_split(self):
         """Splits sum of operators into smooth and non-smooth part."""
-        smooth = []
-        non_smooth = []
-        for expr in self.exprs:
-            if expr.is_smooth():
-                smooth.append(expr)
-            else:
-                non_smooth.append(expr)
-        non_smooth_expr = AddExpression(non_smooth) if non_smooth else None
-        return AddExpression(smooth) if smooth else None, non_smooth_expr
 
-    
+        smooth = [e for e in self.exprs if e.is_smooth()]
+        non_smooth = [e for e in self.exprs if not e.is_smooth()]
+
+        smooth_expr = AddExpression(*smooth) if smooth else None
+        non_smooth_expr = AddExpression(*non_smooth) if non_smooth else None
+
+        return smooth_expr, non_smooth_expr
+
     def prox(self, location, prox_scaling):
         return self._prox(location, prox_scaling)
 
@@ -291,14 +291,14 @@ class AddExpression(NAryOperatorExpression):
                 raise NotImplementedError("Expression is not proxable")
 
             return prox
-        
+
         # If there is only one non-smooth proxable expr, AddExpression is proxable
         elif self._num_non_smooth_exprs == 1:
             proxes = self._get_proxes()
             return proxes[0]
-        
-        # Otherwise we have sum of prox of terms with no overlap,
-        # so apply prox of each term to appropriate param group
+
+        # Final case is multiple non-smooth proxable exprs with disjoint params,
+        # So prox mappling applies prox of each expr to its param group
         else:
             proxes = self._get_proxes()
 
@@ -331,22 +331,41 @@ class AddExpression(NAryOperatorExpression):
 # ProductExpression (* and @)
 # ===============================
 class ProductExpression(NAryOperatorExpression):
-    """N-ary product. If matmul=True, does sequential matrix-multiplication."""
+    """N-ary product.
 
-    def __init__(self, left_or_exprs, right=None, matmul: bool = False):
+    If matmul=True, does sequential matrix-multiplication.
+    """
+
+    def __init__(self, *exprs, matmul: bool = False):
         self.matmul = matmul
-        super().__init__(left_or_exprs, right)
+        super().__init__(*exprs)
+        self._validate()
 
-    def validate(self):
+    def _validate(self):
         # disallow arbitrary parameterized expressions multiplied together unless
         # all parameterized leaves are Variables or Constants.
-        param_exprs = [e for e in self.exprs if any(True for _ in e.parameters())]
+        # In other words, only expressions built from Variables and Constants
+        # using addition, multiplication, and unary ops are allowed.
+        param_exprs = [e for e in self.exprs if list(e.parameters())]
+
         if len(param_exprs) > 1:
-            if not all(self._all_leaves_are_vars_or_consts(e) for e in param_exprs):
+            # Only allow if all are Variables or Constants
+            if not all(self._is_var_or_const_tree(e) for e in param_exprs):
                 raise TypeError(
                     "Cannot multiply two arbitrary parameterized Expressions. "
-                    "Allowed: Variable * (@) Variable, or chained products of Variables/Consts."
+                    "Only Variables and Constants can be multiplied together."
                 )
+
+    def _is_var_or_const_tree(self, expr: Expression) -> bool:
+        """Check if expression tree contains only Variables and Constants."""
+        if isinstance(expr, (Variable, ConstExpression)):
+            return True
+        if isinstance(expr, (ProductExpression, AddExpression)):
+            return all(self._is_var_or_const_tree(child) for child in expr.exprs)
+        if isinstance(expr, UnaryOpExpression):
+            return self._is_var_or_const_tree(expr.operand)
+        # conservative default
+        return False
 
     def op(self, exprs, lib):
         if not exprs:
@@ -365,18 +384,6 @@ class ProductExpression(NAryOperatorExpression):
             else:
                 return reduce(lambda a, b: a * b, exprs)
 
-    def _all_leaves_are_vars_or_consts(self, expr: Expression) -> bool:
-        if isinstance(expr, (Variable, ConstExpression)):
-            return True
-        if isinstance(expr, ProductExpression):
-            return all(self._all_leaves_are_vars_or_consts(child) for child in expr.exprs)
-        if isinstance(expr, UnaryOpExpression):
-            return self._all_leaves_are_vars_or_consts(expr.operand)
-        if isinstance(expr, AddExpression):
-            return all(self._all_leaves_are_vars_or_consts(c) for c in expr.exprs)
-        # conservative default
-        return False
-    
     def is_smooth(self):
         return True
 
@@ -386,23 +393,23 @@ class ProductExpression(NAryOperatorExpression):
     def to_cvxpy(self):
         return super().to_cvxpy()
 
+
 # ===============================
 # Unary ops
 # ===============================
 class UnaryOpExpression(Expression):
+    """Unary operation on an expression."""
+
     def __init__(self, operand, op: Callable[[torch.Tensor], torch.Tensor]):
         super().__init__()
-        expr = to_expr(operand)
-        self.operands = torch.nn.ModuleList([expr])
+        self.operand = to_expr(operand)
+        # Store as module to ensure proper parameter tracking
+        self.add_module("_operand", self.operand)
         self._op = op
 
-    @property
-    def operand(self) -> Expression:
-        return self.operands[0]
-
     def evaluate_at(self, **variable_locations):
-        v = self.operand.evaluate_at(**variable_locations)
-        return self._op(v)
+        val = self.operand.evaluate_at(**variable_locations)
+        return self._op(val)
 
     def is_smooth(self) -> bool:
         return self.operand.is_smooth()
@@ -413,15 +420,18 @@ class UnaryOpExpression(Expression):
     def to_cvxpy(self):
         raise NotImplementedError("to_cvxpy not implemented for UnaryOpExpression")
 
+    def sum(self, dim=None):
+        return UnaryOpExpression(self, lambda t: torch.sum(t, dim=dim))
+
 
 # # ===============================
 # # Variable (leaf)
 # # ===============================
 class Variable(Expression):
-    """
-    Leaf optimization variable that actually registers a torch.nn.Parameter.
-    name should be unique identifier used for evaluate_at substitutions.
-    This class extends torch.nn.Parameter.
+    """Leaf optimization variable that actually registers a torch.nn.Parameter.
+
+    name should be unique identifier used for evaluate_at substitutions. This class
+    extends torch.nn.Parameter.
     """
 
     def __init__(
@@ -478,8 +488,7 @@ class Variable(Expression):
 
     def to_cvxpy(self) -> cp.Variable:
         return cp.Variable(shape=self.value.shape, name=self.name, var_id=self.id)
-    
-    
+
     def __repr__(self):
         """Full representation of the Variable."""
         info_components = [
@@ -509,26 +518,13 @@ class Variable(Expression):
             return self.value
         else:
             return variable_locations[self.name]
-    
+
     def sum(self, dim=None):
         return UnaryOpExpression(self, lambda t: torch.sum(t, dim=dim))
 
     def transpose(self):
         return UnaryOpExpression(self, lambda t: t.transpose(-2, -1))
-    
+
     @property
     def T(self):
         return self.transpose()
-
-    
-# -----------------------
-# Small helper
-# -----------------------
-def to_expr(val: Expression | float | int | torch.Tensor) -> Expression:
-    if isinstance(val, Expression):
-        return val
-    elif isinstance(val, (float, int, torch.Tensor)):
-        return ConstExpression(val)
-    else:
-        raise TypeError("Expected input of type Union[Expression, float, int, torch.Tensor]," \
-        f"but got {type(val)}")
