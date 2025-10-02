@@ -5,8 +5,8 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "rlaopt"
 version = "0.1.0"
-description = "Randomized linear algebra-based methods for optimization in PyTorch."
-keywords = ["optimization", "linear algebra", "randomized algorithms", "PyTorch"]
+description = "Randomized linear algebra-based methods for optimization and scientific computing in PyTorch."
+keywords = ["optimization", "scientific computing", "linear algebra", "randomized algorithms", "PyTorch"]
 readme = "README.md"
 requires-python = ">=3.10"
 license = "Apache-2.0"
