@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools", "wheel", "torch>=2.6.0", "ninja>=1.11.0"]
+requires = ["setuptools", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -13,15 +13,12 @@ license = "Apache-2.0"
 license-files = ["LICENSE"]
 authors = [
     {name = "Pratik Rathore", email = "pratikr@stanford.edu"},
+    {name = "Parth Nobel", email = "ptnobel@stanford.edu"},
     {name = "Zachary Frangella", email = "zfran@stanford.edu"},
     {name = "Weimu Lei", email = "leiweimu@gmail.com"}
 ]
 dependencies = [
-    "numpy>=2.2.0",
-    "scipy>=1.15.0",
-    "torch>=2.6.0",
-    "wandb>=0.19.0",
-    "pykeops>=2.2.0"
+    "torch>=2.6.0"
 ]
 
 [project.urls]
@@ -36,7 +33,6 @@ test = [
 dev = [
     "pytest>=8.0.0",
     "pytest-cov>=6.0.0",
-    "ninja>=1.11.0",
     "pre-commit>=4.0.0",
 ]
 
