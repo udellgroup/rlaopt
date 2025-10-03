@@ -197,7 +197,16 @@ class NAryOperatorExpression(Expression, ABC):
         super().__init__()
         if len(exprs) == 0:
             raise ValueError(f"{self.__class__.__name__} requires at least one operand")
-        self.exprs = torch.nn.ModuleList([to_expr(e) for e in exprs])
+        else:
+            if exprs[-1] is not None:
+                self.exprs = torch.nn.ModuleList([to_expr(e) for e in exprs])
+            else:
+                # If last expr is None, ignore it
+                # This is needed for operator_split in AddExpression
+                # As right can be None there
+                self.exprs = torch.nn.ModuleList(
+                    [to_expr(e) for e in exprs[:-1]]
+                )  # ignore last None
 
     def is_smooth(self) -> bool:
         return all(expr.is_smooth() for expr in self.exprs)
@@ -267,7 +276,6 @@ class AddExpression(NAryOperatorExpression):
 
         smooth = [e for e in self.exprs if e.is_smooth()]
         non_smooth = [e for e in self.exprs if not e.is_smooth()]
-
         smooth_expr = AddExpression(*smooth) if smooth else None
         non_smooth_expr = AddExpression(*non_smooth) if non_smooth else None
 
