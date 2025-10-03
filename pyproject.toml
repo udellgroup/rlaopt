@@ -39,3 +39,19 @@ dev = [
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 python_files = "test_*.py"
+
+[tool.ruff]
+line-length = 88
+target-version = "py310"
+
+[tool.ruff.lint]
+select = [
+    "E",    # pycodestyle errors
+    "W",    # pycodestyle warnings
+    "F",    # pyflakes
+    "I",    # isort
+    "D",    # pydocstyle (docstring conventions)
+]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
