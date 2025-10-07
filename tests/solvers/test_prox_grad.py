@@ -1,0 +1,208 @@
+import numpy as np
+import pytest
+import torch
+from math import sqrt
+
+from rlaopt.atoms import SumSquares, Box, L1Norm, NonNegative
+
+from rlaopt.expression.expression import Variable
+from rlaopt.solvers.configs import ProxGradConfig
+from rlaopt.solvers.proximal_gradient.prox_grad import ProximalGradient
+from rlaopt.utils import tensor_dict_ops as dict_ops
+
+ACCEL = {"accel": True, "no_accel": False}
+LINESEARCH = {"linesearch": True, "no_linesearch": False}
+TOLERANCES = {torch.float32: 1e-4, torch.float64: 1e-10}
+
+
+@pytest.fixture(params=["accel", "no_accel"], ids=["accel", "no_accel"])
+def accel(request):
+    return request.param
+
+
+@pytest.fixture(
+    params=["linesearch", "no_linesearch"], ids=["linesearch", "no_linesearch"]
+)
+def linesearch(request):
+    return request.param
+
+
+@pytest.fixture(params=[torch.float32, torch.float64], ids=["float32", "float64"])
+def precision(request):
+    return request.param
+
+
+@pytest.fixture
+def acceleration(accel):
+    return ACCEL[accel]
+
+
+@pytest.fixture
+def ls(linesearch):
+    return LINESEARCH[linesearch]
+
+
+@pytest.fixture
+def tol(precision):
+    return TOLERANCES[precision]
+
+
+@pytest.fixture
+def reset_torch_state():
+    """Fixture to reset torch default dtype after each test"""
+    original_dtype = torch.get_default_dtype()
+    yield
+    torch.set_default_dtype(original_dtype)
+
+
+# ============================================================================
+# Data Generation Helpers
+# ============================================================================
+
+
+def generate_least_squares_data(n=1024, p=256, precision=torch.float32, seed=0):
+    """Generate random data for least squares problems."""
+    torch.manual_seed(seed)
+    A = torch.randn(n, p, dtype=precision) / (n**0.5)
+    b = torch.randn(n, dtype=precision) / (n**0.5)
+    x = Variable(torch.zeros(p, dtype=precision))
+    return A, b, x
+
+
+def generate_lasso_data(n=1024, p=128, s=32, precision=torch.float32, seed=0):
+    """Generate random data for LASSO problems with sparse ground truth."""
+    torch.manual_seed(seed)
+    np.random.seed(seed)
+
+    # Generate sparse ground truth
+    J = np.random.choice(p, s, replace=False)
+    x_star = torch.zeros(p, dtype=precision)
+    x_star[J] = torch.randn(s, dtype=precision) / (s**0.5)
+
+    # Generate measurement matrix and noisy observations
+    A = torch.randn(n, p, dtype=precision) / (n**0.5)
+    b = A @ x_star + 0.001 * torch.randn(n, dtype=precision)
+
+    x = Variable(torch.zeros(p, dtype=precision))
+    return A, b, x, x_star
+
+
+def generate_matrix_sensing_data(n=64, p=16, precision=torch.float32, seed=0):
+    """Generate random data for matrix sensing/completion problems."""
+    torch.manual_seed(seed)
+
+    M_star = torch.randn(n, 8)
+    N_star = torch.randn(8, p)
+    X_Star = M_star @ N_star
+    A = torch.randn(2 * n, n)
+    B = A @ X_Star + 10**-4 * torch.randn((2 * n, p))
+    X = Variable(torch.zeros_like(X_Star))
+    return A, B, X
+
+
+def compute_lipschitz_stepsize(A, scaling=0.5):
+    """Compute stepsize based on Lipschitz constant of gradient."""
+    return scaling / (torch.linalg.norm(A, ord=2) ** 2)
+
+
+# ============================================================================
+# Test Class
+# ============================================================================
+
+
+class TestProxGrad:
+    def test_least_squares(self, reset_torch_state, precision, tol, acceleration, ls):
+        torch.set_default_dtype(precision)
+
+        A, b, x = generate_least_squares_data(n=1024, p=256, precision=precision)
+        obj = SumSquares(A @ x - b)
+        eta = compute_lipschitz_stepsize(A)
+
+        _solve_and_verify(obj, eta, tol, acceleration, ls)
+
+    def test_box(self, reset_torch_state, precision, tol, acceleration, ls):
+        torch.set_default_dtype(precision)
+
+        A, b, x = generate_least_squares_data(n=1024, p=256, precision=precision)
+        l = -torch.tensor(2.0)
+        u = torch.tensor(1.0)
+        obj = SumSquares(A @ x - b) + Box(x, l=l, u=u)
+        eta = compute_lipschitz_stepsize(A)
+
+        _solve_and_verify(obj, eta, tol, acceleration, ls)
+
+    def test_nonnegative(self, reset_torch_state, precision, tol, acceleration, ls):
+        torch.set_default_dtype(precision)
+
+        A, b, x = generate_least_squares_data(n=1024, p=256, precision=precision)
+        obj = SumSquares(A @ x - b) + NonNegative(x)
+        eta = compute_lipschitz_stepsize(A)
+
+        _solve_and_verify(obj, eta, tol, acceleration, ls)
+
+    def test_lasso(self, reset_torch_state, precision, tol, acceleration, ls):
+        torch.set_default_dtype(precision)
+
+        A, b, x, _ = generate_lasso_data(n=1024, p=128, s=32, precision=precision)
+        mu = 0.1 * torch.linalg.norm(A.T @ b, ord=torch.inf)
+        obj = SumSquares(A @ x - b) + L1Norm(x, scaling=mu)
+        eta = compute_lipschitz_stepsize(A)
+
+        _solve_and_verify(obj, eta, tol, acceleration, ls)
+
+    # def test_nucnorm(self, reset_torch_state, precision, tol, acceleration, ls):
+    #     torch.set_default_dtype(precision)
+
+    #     A, B, X = generate_matrix_sensing_data(n=64, p=16, precision=precision)
+    #     lambd = 1000.0
+    #     obj = SumSquares(A @ X - B) + NucNorm(X, scaling=lambd)
+    #     # eta = compute_lipschitz_stepsize(A)
+
+    #     _solve_and_verify(obj, 1e-3, tol, acceleration, ls)
+
+
+# ============================================================================
+# Helper Functions
+# ============================================================================
+
+
+def _solve_and_verify(obj, eta, tol, use_acceleration, use_linesearch):
+    """Test that optimization problem is solved correctly."""
+    opt = _build_opt(obj, eta, tol, use_acceleration, use_linesearch)
+    params, state = _init_opt(obj, opt)
+
+    # Test solving by step
+    params, err = _loop(params, state, opt)
+    assert err <= tol, f"Step-by-step solving failed: error {err} > tolerance {tol}"
+
+    # Test using solve method
+    params, err = opt.solve(obj)
+    assert err.item() <= tol * sqrt(
+        dict_ops.dim(params)
+    ), f"Solve method failed: error {err.item()} > tolerance {tol}"
+
+
+def _loop(params, state, opt):
+    """Run optimization loop until convergence or max iterations."""
+    for _ in range(opt.config.max_iters):
+        params, state = opt.step(params, state)
+        if state.err.item() <= opt.config.tol:
+            break
+    return params, state.err.item()
+
+
+def _init_opt(obj, opt):
+    """Initialize optimizer state."""
+    params = obj.params
+    return params, opt.init_state(params)
+
+
+def _build_opt(obj, eta, tol, use_acceleration, use_linesearch):
+    """Build proximal gradient optimizer with specified configuration."""
+    config = ProxGradConfig(
+        eta=eta,
+        tol=tol,
+        use_acceleration=use_acceleration,
+        use_linesearch=use_linesearch,
+    )
+    return ProximalGradient(config, obj)
