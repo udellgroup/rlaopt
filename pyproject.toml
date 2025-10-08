@@ -5,8 +5,8 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "rlaopt"
 version = "0.1.0"
-description = "Randomized linear algebra-based methods for optimization in PyTorch."
-keywords = ["optimization", "linear algebra", "randomized algorithms", "PyTorch"]
+description = "Randomized linear algebra-based methods for optimization and scientific computing in PyTorch."
+keywords = ["optimization", "scientific computing", "linear algebra", "randomized algorithms", "PyTorch"]
 readme = "README.md"
 requires-python = ">=3.10"
 license = "Apache-2.0"
@@ -14,11 +14,11 @@ license-files = ["LICENSE"]
 authors = [
     {name = "Pratik Rathore", email = "pratikr@stanford.edu"},
     {name = "Parth Nobel", email = "ptnobel@stanford.edu"},
-    {name = "Zachary Frangella", email = "zfran@stanford.edu"},
-    {name = "Weimu Lei", email = "leiweimu@gmail.com"}
+    {name = "Zachary Frangella", email = "zfran@stanford.edu"}
 ]
 dependencies = [
-    "torch>=2.6.0"
+    "torch>=2.6.0",
+    "cvxpy>=1.7.0",
 ]
 
 [project.urls]
@@ -39,3 +39,19 @@ dev = [
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 python_files = "test_*.py"
+
+[tool.ruff]
+line-length = 88
+target-version = "py310"
+
+[tool.ruff.lint]
+select = [
+    "E",    # pycodestyle errors
+    "W",    # pycodestyle warnings
+    "F",    # pyflakes
+    "I",    # isort
+    "D",    # pydocstyle (docstring conventions)
+]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
