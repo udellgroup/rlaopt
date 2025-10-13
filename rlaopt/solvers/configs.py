@@ -1,16 +1,14 @@
 """Configuration classes for solver algorithms."""
 
-from dataclasses import dataclass
+from pydantic import BaseModel, ConfigDict, Field
 
 
-@dataclass(kw_only=True, frozen=False)
-class SolverConfig:
+class SolverConfig(BaseModel):
     """Base configuration class for solver algorithms."""
 
-    pass
+    model_config = ConfigDict(extra="forbid")
 
 
-@dataclass(kw_only=True, frozen=False)
 class ProxGradConfig(SolverConfig):
     """Configuration for the proximal gradient solver.
 
@@ -22,8 +20,8 @@ class ProxGradConfig(SolverConfig):
         use_linesearch: Whether to use line search for step size selection.
     """
 
-    eta: float | None = None
-    max_iters: int = 5000
-    tol: float = 1e-4
+    eta: float = Field(default=1.0, gt=0)
+    max_iters: int = Field(default=5000, gt=0)
+    tol: float = Field(default=1e-4, gt=0)
     use_acceleration: bool = False
     use_linesearch: bool = True
