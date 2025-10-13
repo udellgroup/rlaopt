@@ -2,8 +2,6 @@
 
 from dataclasses import dataclass
 
-import torch
-
 
 @dataclass(kw_only=True, frozen=False)
 class SolverConfig:
@@ -24,7 +22,7 @@ class ProxGradConfig(SolverConfig):
         use_linesearch: Whether to use line search for step size selection.
     """
 
-    eta: torch.Tensor = None
+    eta: float | None = None
     max_iters: int = 5000
     tol: float = 1e-4
     use_acceleration: bool = False
