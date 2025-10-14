@@ -42,7 +42,7 @@ class TestNucNormBasics:
         self.U, _ = torch.linalg.qr(torch.randn(self.p, self.p, dtype=precision))
         self.V, _ = torch.linalg.qr(torch.randn(self.p, self.p, dtype=precision))
         self.S = torch.tensor([100, 50, 5, 0.1, 0.01], dtype=precision)
-        self.x = Variable(self.U @ (self.S * self.V.T))
+        self.x = Variable(self.U @ (self.S * self.V.T), name="x")
         self.r = NucNorm(self.x, scaling=1.0)
         self.atol = get_atol(precision, self.S)
 

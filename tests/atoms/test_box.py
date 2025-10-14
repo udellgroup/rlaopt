@@ -22,7 +22,7 @@ def test_dim():
 
 @pytest.fixture
 def test_var(test_dim, precision):
-    x = Variable(torch.zeros(test_dim, dtype=precision))
+    x = Variable(torch.zeros(test_dim, dtype=precision), name="x")
     return x
 
 

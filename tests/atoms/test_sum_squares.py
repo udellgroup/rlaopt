@@ -24,7 +24,7 @@ class TestSumSquaresVariable:
         torch.manual_seed(0)
 
         x0 = torch.randn(64, dtype=precision)
-        x = Variable(x0)
+        x = Variable(x0, name="x")
         self.f = SumSquares(x)
         self.x0 = x0
 
@@ -44,7 +44,3 @@ class TestSumSquaresVariable:
         v = torch.randn(64, dtype=precision)
         prox = self.f.prox(v, 1.0)
         assert torch.linalg.norm(prox - v / 2.0) <= tol
-
-
-class TestSumSquaresExpr:
-    pass

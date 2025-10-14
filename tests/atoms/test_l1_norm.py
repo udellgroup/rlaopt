@@ -27,7 +27,7 @@ class TestL1NormBasics:
 
         _x = torch.tensor([100, 50, 10], dtype=precision)
         self._x = _x
-        self.x = Variable(_x)
+        self.x = Variable(_x, name="x")
         self.lambd = 2.0
         self.r = L1Norm(self.x, scaling=self.lambd)
 
