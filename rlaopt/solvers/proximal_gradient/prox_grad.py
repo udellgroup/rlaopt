@@ -1,5 +1,3 @@
-from typing import Dict, Tuple
-
 import torch
 
 from rlaopt.solvers.solver import Solver
@@ -10,28 +8,29 @@ from rlaopt.operator_split import OperatorSplit
 
 from rlaopt._typing import TensorDict
 
+
 class ProximalGradient(Solver):
-    def __init__(self, config: ProxGradConfig, obj: Expression | AddExpression | OperatorSplit):
+    def __init__(
+        self, config: ProxGradConfig, obj: Expression | AddExpression | OperatorSplit
+    ):
         super().__init__(config)
         self._step = prox_grad_func._build_step(
             obj, config.use_acceleration, config.use_linesearch
         )
 
-    def init_state(
-        self, params: TensorDict
-    ) -> prox_grad_func.ProxGradState:
+    def init_state(self, params: TensorDict) -> prox_grad_func.ProxGradState:
         return prox_grad_func._init_state(
             params, self.config.eta, self.config.use_acceleration
         )
 
     def step(
         self, params: TensorDict, state: prox_grad_func.ProxGradState
-    ) -> Tuple[TensorDict, prox_grad_func.ProxGradState]:
+    ) -> tuple[TensorDict, prox_grad_func.ProxGradState]:
         return self._step(params, state)
 
     def solve(
         self,
         obj: Expression | AddExpression | OperatorSplit,
         init_params: TensorDict = None,
-    ) -> Tuple[Dict[str, torch.Tensor], torch.Tensor]:
+    ) -> tuple[dict[str, torch.Tensor], torch.Tensor]:
         return prox_grad_func.proximal_gradient(obj, self.config, init_params)

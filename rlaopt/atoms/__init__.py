@@ -3,6 +3,14 @@ from rlaopt.atoms.affine import Affine
 from rlaopt.atoms.affine_constraint import AffineConstraint
 from rlaopt.atoms.box import Box
 from rlaopt.atoms.halfspace import Halfspace
+from rlaopt.atoms.glm import (
+    HuberRegression,
+    L1Regression,
+    LinearRegression,
+    LogisticRegression,
+    MultinomialRegression,
+    PoissonRegression,
+)
 from rlaopt.atoms.l1norm import L1Norm
 from rlaopt.atoms.non_negative import NonNegative
 from rlaopt.atoms.nuc_norm import NucNorm
@@ -15,6 +23,12 @@ __all__ = [
     "AffineConstraint",
     "Box",
     "Halfspace",
+    "HuberRegression",
+    "L1Regression",
+    "LinearRegression",
+    "LogisticRegression",
+    "MultinomialRegression",
+    "PoissonRegression",
     "L1Norm",
     "NonNegative",
     "NucNorm",

@@ -1,11 +1,9 @@
 from __future__ import annotations
 
-import cvxpy as cp
 import torch
 
 from rlaopt.atoms.atom_expression import AtomExpression
 from rlaopt.expression.expression import Variable
-from rlaopt.atoms._utils import get_variable_value
 
 
 class NucNorm(AtomExpression):
@@ -23,21 +21,17 @@ class NucNorm(AtomExpression):
             )
 
         # Register the variable as a parameter
-        self.register_parameter("x", x.value)
+        self.register_variable(x)
 
         # Register the scaling factor
-        if isinstance(scaling, torch.Tensor):
-            self.register_buffer("scaling", scaling)
-        elif isinstance(scaling, torch.nn.Parameter):
-            self.register_buffer("scaling", scaling.data)
-        else:
-            self.register_buffer("scaling", torch.tensor(float(scaling)))
+        self.register_atom_buffer("scaling", scaling)
 
     def is_smooth(self):
         return False
 
-    def evaluate_at(self, **variable_locations):
-        value = get_variable_value(self.x, **variable_locations)
+    def forward(self):
+        """Evaluates the nuclear norm at the registered variable value."""
+        value = self.get_variable(self.var_name)
         S = torch.linalg.svdvals(value)
         return self.scaling * torch.sum(S)
 

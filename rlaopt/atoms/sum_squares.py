@@ -8,7 +8,7 @@ import torch
 from rlaopt.atoms.atom_expression import AtomExpression
 from rlaopt.atoms.affine import Affine
 from rlaopt.expression.expression import Expression, Variable
-from rlaopt.atoms._utils import get_variable_value
+
 
 class SumSquares(AtomExpression):
     """Sum of squared elements atom."""
@@ -24,38 +24,29 @@ class SumSquares(AtomExpression):
         if not isinstance(x, (Variable, Expression)):
             raise TypeError(f"Expected Variable or Expression, got {type(x)}")
 
-        # Register the variable as a parameter or module if it's an Expression
-        if isinstance(x, Variable):
-            self.register_parameter("x", x.value)
-        elif isinstance(x, Expression):
-            self.add_module("x", x)
+        # Register the input as a parameter if its a variable
+        # or module if it's an Expression
+        self.register_input(x)
 
     def is_smooth(self) -> bool:
         """Returns True depending on the smoothness of the expression."""
-        if isinstance(self.x, Expression):
-            return self.x.is_smooth()
-        elif isinstance(self.x, torch.nn.Parameter):
+        if self.input_type == "expression":
+            return self.get_submodule(self.module_name).is_smooth()
+        else:
             return True
 
-    def evaluate_at(self, **variable_locations):
-        """Evaluate the sum of squares at specific locations.
-
-        Args:
-            **variable_locations: Mapping of variable names to locations
-
-        Returns:
-            Sum of squares
-        """
-        if isinstance(self.x, Expression):
-            value = self.x.evaluate_at(**variable_locations)
+    def forward(self) -> torch.Tensor:
+        """Forward pass to compute the sum of squares."""
+        if self.input_type == "expression":
+            value = self.get_submodule(self.module_name).forward()
         else:
-            value = get_variable_value(self.x, **variable_locations)
-
-        return torch.sum(value ** 2)
+            value = self.get_variable(self.var_name)
+        return torch.sum(value**2)
 
     def is_proxable(self) -> bool:
         """Returns True if the input is a Variable or affine."""
-        if isinstance(self.x, torch.nn.Parameter) or isinstance(self.x, Affine):
+        var = self.get_variable(self.var_name)
+        if isinstance(var, torch.nn.Parameter) or isinstance(var, Affine):
             return True
         else:
             return False
@@ -70,9 +61,9 @@ class SumSquares(AtomExpression):
         Returns:
             Result of the proximal operator
         """
-        if isinstance(self.x, torch.nn.Parameter):
+        if self.input_type == "variable":
             return 1 / (1 + prox_scaling) * location
-        elif isinstance(self.x, Expression):
+        elif self.input_type == "expression":
             # For expressions, we need to handle the proximal operator differently
             # This is a placeholder; actual implementation may vary
             # based on the expression type

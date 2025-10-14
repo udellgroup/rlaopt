@@ -1,12 +1,13 @@
 import torch
 
-from rlaopt.expression.expression import Variable
 
-def get_variable_value(var: torch.nn.Parameter, **variable_locations)->torch.nn.Parameter:
+def get_variable_value(
+    var: torch.nn.Parameter, **variable_locations
+) -> torch.nn.Parameter:
     # Use substituted value if available, otherwise use registered variable
     if variable_locations and var.name in variable_locations:
-         value = var.evaluate_at(**variable_locations)
+        value = var.evaluate_at(**variable_locations)
     else:
-         value = var
-    
+        value = var
+
     return value

@@ -5,7 +5,6 @@ import torch
 
 from rlaopt.atoms.atom_expression import AtomExpression
 from rlaopt.expression.expression import Variable
-from rlaopt.atoms._utils import get_variable_value
 
 
 class ElasticNet(AtomExpression):
@@ -27,39 +26,29 @@ class ElasticNet(AtomExpression):
         if not isinstance(x, Variable):
             raise TypeError(f"Expected Variable, got {type(x)}")
 
-        # Register the variable as a parameter
-        self.register_parameter("x", x.value)
+        # Register the input variable as a parameter
+        self.register_variable(x)
 
-        # Register the L1 scaling factor
-        if isinstance(l1_scaling, torch.Tensor):
-            self.register_buffer("l1_scaling", l1_scaling)
-        elif isinstance(l1_scaling, torch.nn.Parameter):
-            self.register_buffer("l1_scaling", l1_scaling.data)
-        else:
-            self.register_buffer("l1_scaling", torch.tensor(float(l1_scaling)))
-
-        # Register the L2 scaling factor
-        if isinstance(l2_scaling, torch.Tensor):
-            self.register_buffer("l2_scaling", l2_scaling)
-        elif isinstance(l2_scaling, torch.nn.Parameter):
-            self.register_buffer("l2_scaling", l2_scaling.data)
-        else:
-            self.register_buffer("l2_scaling", torch.tensor(float(l2_scaling)))
+        # Register the L1 and L2 scaling factors as buffers
+        self.register_atom_buffer("l1_scaling", l1_scaling)
+        self.register_atom_buffer("l2_scaling", l2_scaling)
 
     def is_smooth(self) -> bool:
         """Returns False because elastic net is not smooth."""
         return False
 
-    def evaluate_at(self, **variable_locations):
-        """Evaluate the elastic net at specific locations.
+    def is_subsamplable(self):
+        return False
 
-        Args:
-            **variable_locations: Mapping of variable names to locations
+    def subsample(self, indices):
+        raise NotImplementedError("Elastic net atom does not support subsampling")
 
-        Returns:
-            Elastic net value
-        """
-        value = get_variable_value(self.x, **variable_locations)
+    def to_cvxpy(self):
+        raise NotImplementedError("Conversion to cvxpy is not supported.")
+
+    def forward(self) -> torch.Tensor:
+        """Evaluates the elastic net penalty at the registered variable value."""
+        value = self.get_variable(self.var_name)
 
         l1_norm = torch.sum(torch.abs(value))
         l2_norm = torch.sum(value**2)
