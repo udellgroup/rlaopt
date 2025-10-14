@@ -4,25 +4,143 @@ Concrete implementations of Generalized Linear Models (GLMs).
 This module provides ready-to-use GLM classes for common regression and
 classification tasks, including linear regression, logistic regression,
 and robust regression methods.
-
-Classes:
-    HuberRegression: Robust regression using Huber loss.
-    L1Regression: Least absolute deviation regression.
-    LinearRegression: Ordinary least squares regression.
-    PoissonRegression: Poisson regression with log link.
-    LogisticRegression: Binary logistic regression.
-    MultinomialRegression: Multinomial (softmax) regression.
 """
 
 import torch
 from rlaopt.expression.expression import Variable
 from rlaopt.dataloader import DataLoader
-from rlaopt._typing import TensorDict
 from ._glm.base import _BaseGLM, _GLMClassifier
 from ._glm.loss_types import LossType
+from ._glm.core import _has_test_data
 
 
-class HuberRegression(_BaseGLM):
+# ============================================================================
+# Helper Functions
+# ============================================================================
+
+
+def _get_true_values(glm: _BaseGLM | _GLMClassifier, X, y) -> torch.Tensor:
+    """Get true target values from test data or dataloader."""
+    return y if _has_test_data(X, y) else glm.dataloader.y
+
+
+def _get_predict(
+    glm: _BaseGLM | _GLMClassifier, beta=None, X=None, y=None, get_proba: bool = False
+) -> torch.Tensor:
+    """Get predictions, optionally as probabilities for classifiers."""
+    if isinstance(glm, _GLMClassifier) and get_proba:
+        return glm.predict_proba(beta, X)
+    else:
+        return glm.predict(beta, X)
+
+
+def _compute_r_squared(y_hat: torch.Tensor, y_true: torch.Tensor) -> float:
+    """Compute R² coefficient of determination."""
+    ss_res = torch.sum((y_hat - y_true) ** 2)
+    ss_tot = torch.sum((y_true - y_true.mean()) ** 2)
+    return (1 - (ss_res / ss_tot)).item()
+
+
+def _compute_classification_accuracy(
+    y_hat: torch.Tensor, y_true: torch.Tensor
+) -> float:
+    """Compute classification accuracy."""
+    return (y_hat == y_true).float().mean().item()
+
+
+def _compute_poisson_deviance_score(y_hat: torch.Tensor, y_true: torch.Tensor) -> float:
+    """Compute D² (deviance explained) for Poisson regression."""
+    # Predicted rates (Poisson uses log link)
+    mu = torch.exp(y_hat)
+
+    # Model deviance: 2 * Σ[y*log(y/μ) - (y-μ)]
+    nonzero = y_true > 0
+    dev_model = 2 * torch.sum(
+        torch.where(nonzero, y_true * torch.log(y_true / mu), torch.zeros_like(y_true))
+        - (y_true - mu)
+    )
+
+    # Null deviance: use mean as prediction
+    mu_null = y_true.mean()
+    dev_null = 2 * torch.sum(
+        torch.where(
+            nonzero, y_true * torch.log(y_true / mu_null), torch.zeros_like(y_true)
+        )
+        - (y_true - mu_null)
+    )
+
+    return (1 - (dev_model / dev_null)).item()
+
+
+# ============================================================================
+# Mixin Classes for Common Scoring Methods
+# ============================================================================
+
+
+class _RSquaredScoringMixin:
+    """Mixin providing R² scoring for regression models."""
+
+    def score(self, beta=None, X=None, y=None) -> float:
+        """Compute R² coefficient of determination.
+
+        R² measures the proportion of variance in the target variable that is
+        predictable from the features. Values range from -∞ to 1, where 1 indicates
+        perfect prediction and 0 indicates the model performs no better than
+        predicting the mean.
+
+        Args:
+            beta: Parameter weights for model. If None, uses the registered
+                model weights. Defaults to None.
+            X: Input features of shape (n_samples, n_features). If None, uses
+                the training dataset. Defaults to None.
+            y: Target values of shape (n_samples,). Required if X is provided.
+                Defaults to None.
+
+        Returns:
+            R² score as a float.
+        """
+        y_hat = _get_predict(self, beta, X)
+        y_true = _get_true_values(self, X, y)
+        return _compute_r_squared(y_hat, y_true)
+
+
+class _AccuracyScoringMixin:
+    """Mixin providing accuracy scoring for classification models."""
+
+    def score(self, beta=None, X=None, y=None) -> float:
+        """Compute classification accuracy.
+
+        Accuracy is the proportion of correct predictions, defined as the number
+        of correct predictions divided by the total number of predictions. Values
+        range from 0 to 1, where 1 indicates perfect classification.
+
+        Args:
+            beta: Parameter weights for model. If None, uses the registered
+                model weights. Defaults to None.
+            X: Input features of shape (n_samples, n_features). If None, uses
+                the training dataset. Defaults to None.
+            y: Target labels of shape (n_samples,). Required if X is provided.
+                Defaults to None.
+
+        Returns:
+            Accuracy score as a float.
+        """
+        probs = _get_predict(self, beta, X, y, get_proba=True)
+        y_hat = self._get_predicted_classes(probs)
+        y_true = _get_true_values(self, X, y)
+        return _compute_classification_accuracy(y_hat, y_true)
+
+    def _get_predicted_classes(self, probs: torch.Tensor) -> torch.Tensor:
+        """Convert probabilities to predicted class labels."""
+        raise NotImplementedError
+
+
+# ============================================================================
+# Regression Models
+# ============================================================================
+
+
+class HuberRegression(_RSquaredScoringMixin, _BaseGLM):
     """Huber regression model (robust to outliers).
 
     Huber regression combines the best properties of L2 (least squares) and L1
@@ -40,84 +158,14 @@ class HuberRegression(_BaseGLM):
         delta: Threshold parameter that defines the point where the loss transitions
             from quadratic to linear. Smaller values increase robustness to outliers.
             Defaults to 1.0.
-
-    Examples:
-        >>> from rlaopt.datasets import Dataset
-        >>> from rlaopt.dataloader import DataLoader
-        >>> from rlaopt.expression import Variable
-        >>> import torch
-        >>>
-        >>> # Create dataset and dataloader
-        >>> X = torch.randn(100, 10)
-        >>> y = torch.randn(100)
-        >>> dataset = Dataset(X, y)
-        >>> dataloader = DataLoader(dataset, batch_size=32, shuffle=True)
-        >>>
-        >>> # Initialize model
-        >>> beta = Variable(10)
-        >>> model = HuberRegression(dataloader, beta)
-        >>>
-        >>> # More robust to outliers with smaller delta
-        >>> robust_model = HuberRegression(dataloader, beta, delta=0.5)
-        >>>
-        >>> # Compute loss
-        >>> loss = model.forward()
     """
 
-    def __init__(
-        self,
-        dataloader: DataLoader,
-        beta: Variable,
-        delta: float = 1.0,
-    ):
+    def __init__(self, dataloader: DataLoader, beta: Variable, delta: float = 1.0):
         super().__init__(dataloader, beta, LossType.HUBER, delta=delta)
         self.delta = delta
 
-    def score(self, beta=None, X=None, y=None) -> float:
-        """Compute R² coefficient of determination.
 
-        R² measures the proportion of variance in the target variable that is
-        predictable from the features. Values range from -∞ to 1, where 1 indicates
-        perfect prediction and 0 indicates the model performs no better than
-        predicting the mean.
-
-        Args:
-            beta: Parameter weights for model. If None, uses the registered
-                model weights. Defaults to None.
-            X: Input features of shape (n_samples, n_features). If None, uses
-                the training dataset. Defaults to None.
-            y: Target values of shape (n_samples,). Required if X is provided.
-                Defaults to None.
-
-        Returns:
-            R² score as a float.
-
-        Examples:
-            >>> # Score on training data
-            >>> r2_train = model.score()
-            >>>
-            >>> # Score on test data
-            >>> X_test = torch.randn(20, 10)
-            >>> y_test = torch.randn(20)
-            >>> r2_test = model.score(X=X_test, y=y_test)
-        """
-        if beta is None:
-            beta = self.get_variable(self.var_name)
-
-        if X is not None:
-            if y is None:
-                raise ValueError("Must provide y when X is specified")
-            predictions = self.predict(beta, X)
-        else:
-            predictions = self.predict(beta)
-            y = self.dataloader.dataset.y
-
-        ss_res = torch.sum((y - predictions) ** 2)
-        ss_tot = torch.sum((y - y.mean()) ** 2)
-        return (1 - (ss_res / ss_tot)).item()
-
-
-class L1Regression(_BaseGLM):
+class L1Regression(_RSquaredScoringMixin, _BaseGLM):
     """Least absolute deviation (LAD) regression model.
 
     L1 regression minimizes the sum of absolute residuals, making it highly robust
@@ -130,83 +178,13 @@ class L1Regression(_BaseGLM):
     Args:
         dataloader: DataLoader containing the training data with features and targets.
         beta: Model parameters variable representing regression coefficients.
-
-    Examples:
-        >>> from rlaopt.datasets import Dataset
-        >>> from rlaopt.dataloader import DataLoader
-        >>> from rlaopt.expression import Variable
-        >>> import torch
-        >>>
-        >>> # Create dataset and dataloader
-        >>> X = torch.randn(100, 10)
-        >>> y = torch.randn(100)
-        >>> dataset = Dataset(X, y)
-        >>> dataloader = DataLoader(dataset, batch_size=32)
-        >>>
-        >>> # Initialize model
-        >>> beta = Variable(10)
-        >>> model = L1Regression(dataloader, beta)
-        >>>
-        >>> # Compute loss
-        >>> loss = model.forward()
-        >>>
-        >>> # Make predictions on test data
-        >>> X_test = torch.randn(20, 10)
-        >>> predictions = model.predict(X=X_test)
     """
 
-    def __init__(
-        self,
-        dataloader: DataLoader,
-        beta: Variable,
-    ):
+    def __init__(self, dataloader: DataLoader, beta: Variable):
         super().__init__(dataloader, beta, LossType.L1_LOSS)
 
-    def score(self, beta=None, X=None, y=None) -> float:
-        """Compute R² coefficient of determination.
 
-        R² measures the proportion of variance in the target variable that is
-        predictable from the features. Values range from -∞ to 1, where 1 indicates
-        perfect prediction and 0 indicates the model performs no better than
-        predicting the mean.
-
-        Args:
-            beta: Parameter weights for model. If None, uses the registered
-                model weights. Defaults to None.
-            X: Input features of shape (n_samples, n_features). If None, uses
-                the training dataset. Defaults to None.
-            y: Target values of shape (n_samples,). Required if X is provided.
-                Defaults to None.
-
-        Returns:
-            R² score as a float.
-
-        Examples:
-            >>> # Score on training data
-            >>> r2_train = model.score()
-            >>>
-            >>> # Score on test data
-            >>> X_test = torch.randn(20, 10)
-            >>> y_test = torch.randn(20)
-            >>> r2_test = model.score(X=X_test, y=y_test)
-        """
-        if beta is None:
-            beta = self.get_variable(self.var_name)
-
-        if X is not None:
-            if y is None:
-                raise ValueError("Must provide y when X is specified")
-            predictions = self.predict(beta, X)
-        else:
-            predictions = self.predict(beta)
-            y = self.dataloader.dataset.y
-
-        ss_res = torch.sum((y - predictions) ** 2)
-        ss_tot = torch.sum((y - y.mean()) ** 2)
-        return (1 - (ss_res / ss_tot)).item()
-
-
-class LinearRegression(_BaseGLM):
+class LinearRegression(_RSquaredScoringMixin, _BaseGLM):
     """Ordinary least squares (OLS) linear regression model.
 
     Linear regression models the relationship between features and a continuous
@@ -219,84 +197,10 @@ class LinearRegression(_BaseGLM):
     Args:
         dataloader: DataLoader containing the training data with features and targets.
         beta: Model parameters variable representing regression coefficients.
-
-    Examples:
-        >>> from rlaopt.datasets import Dataset
-        >>> from rlaopt.dataloader import DataLoader
-        >>> from rlaopt.expression import Variable
-        >>> import torch
-        >>>
-        >>> # Create dataset and dataloader
-        >>> X = torch.randn(100, 10)
-        >>> y = X @ torch.randn(10) + 0.1 * torch.randn(100)  # Linear relation
-        >>> dataset = Dataset(X, y)
-        >>> dataloader = DataLoader(dataset, batch_size=32, shuffle=True)
-        >>>
-        >>> # Initialize model
-        >>> beta = Variable(10)
-        >>> model = LinearRegression(dataloader, beta)
-        >>>
-        >>> # Compute loss on training data
-        >>> loss = model.forward()
-        >>>
-        >>> # Make predictions
-        >>> predictions = model.predict()
-        >>>
-        >>> # Evaluate on test data
-        >>> X_test = torch.randn(20, 10)
-        >>> y_test = torch.randn(20)
-        >>> test_loss = model.loss(X=X_test, y=y_test)
     """
 
-    def __init__(
-        self,
-        dataloader: DataLoader,
-        beta: Variable,
-    ):
+    def __init__(self, dataloader: DataLoader, beta: Variable):
         super().__init__(dataloader, beta, LossType.LEAST_SQUARES)
-
-    def score(self, beta=None, X=None, y=None) -> float:
-        """Compute R² coefficient of determination.
-
-        R² measures the proportion of variance in the target variable that is
-        predictable from the features. Values range from -∞ to 1, where 1 indicates
-        perfect prediction and 0 indicates the model performs no better than
-        predicting the mean.
-
-        Args:
-            beta: Parameter weights for model. If None, uses the registered
-                model weights. Defaults to None.
-            X: Input features of shape (n_samples, n_features). If None, uses
-                the training dataset. Defaults to None.
-            y: Target values of shape (n_samples,). Required if X is provided.
-                Defaults to None.
-
-        Returns:
-            R² score as a float.
-
-        Examples:
-            >>> # Score on training data
-            >>> r2_train = model.score()
-            >>>
-            >>> # Score on test data
-            >>> X_test = torch.randn(20, 10)
-            >>> y_test = torch.randn(20)
-            >>> r2_test = model.score(X=X_test, y=y_test)
-        """
-        if beta is None:
-            beta = self.get_variable(self.var_name)
-
-        if X is not None:
-            if y is None:
-                raise ValueError("Must provide y when X is specified")
-            predictions = self.predict(beta, X)
-        else:
-            predictions = self.predict(beta)
-            y = self.dataloader.dataset.y
-
-        ss_res = torch.sum((y - predictions) ** 2)
-        ss_tot = torch.sum((y - y.mean()) ** 2)
-        return (1 - (ss_res / ss_tot)).item()
 
 
 class PoissonRegression(_BaseGLM):
@@ -315,37 +219,9 @@ class PoissonRegression(_BaseGLM):
         dataloader: DataLoader containing the training data with features and count
             targets (must be non-negative).
         beta: Model parameters variable representing regression coefficients.
-
-    Examples:
-        >>> from rlaopt.datasets import Dataset
-        >>> from rlaopt.dataloader import DataLoader
-        >>> from rlaopt.expression import Variable
-        >>> import torch
-        >>>
-        >>> # Create dataset with count data
-        >>> X = torch.randn(100, 10)
-        >>> # Generate Poisson-distributed counts
-        >>> y = torch.poisson(torch.exp(X @ torch.randn(10)))
-        >>> dataset = Dataset(X, y)
-        >>> dataloader = DataLoader(dataset, batch_size=32)
-        >>>
-        >>> # Initialize model
-        >>> beta = Variable(10)
-        >>> model = PoissonRegression(dataloader, beta)
-        >>>
-        >>> # Compute loss
-        >>> loss = model.forward()
-        >>>
-        >>> # Make predictions (returns log rates by default)
-        >>> log_rates = model.predict()
-        >>> rates = torch.exp(log_rates)
     """
 
-    def __init__(
-        self,
-        dataloader: DataLoader,
-        beta: Variable,
-    ):
+    def __init__(self, dataloader: DataLoader, beta: Variable):
         super().__init__(dataloader, beta, LossType.POISSON)
 
     def score(self, beta=None, X=None, y=None) -> float:
@@ -369,48 +245,18 @@ class PoissonRegression(_BaseGLM):
 
         Returns:
             D² score as a float.
-
-        Examples:
-            >>> # Score on training data
-            >>> d2_train = model.score()
-            >>>
-            >>> # Score on test data
-            >>> X_test = torch.randn(20, 10)
-            >>> y_test = torch.poisson(torch.exp(torch.randn(20)))
-            >>> d2_test = model.score(X=X_test, y=y_test)
         """
-        if beta is None:
-            beta = self.get_variable(self.var_name)
-
-        if X is not None:
-            if y is None:
-                raise ValueError("Must provide y when X is specified")
-            predictions = self.predict(beta, X)
-        else:
-            predictions = self.predict(beta)
-            y = self.dataloader.dataset.y
-
-        # Predicted rates (Poisson uses log link)
-        mu = torch.exp(predictions)
-
-        # Model deviance: 2 * Σ[y*log(y/μ) - (y-μ)]
-        # Handle y=0 case: 0*log(0/μ) = 0
-        nonzero = y > 0
-        dev_model = 2 * torch.sum(
-            torch.where(nonzero, y * torch.log(y / mu), torch.zeros_like(y)) - (y - mu)
-        )
-
-        # Null deviance: use mean as prediction
-        mu_null = y.mean()
-        dev_null = 2 * torch.sum(
-            torch.where(nonzero, y * torch.log(y / mu_null), torch.zeros_like(y))
-            - (y - mu_null)
-        )
-
-        return (1 - (dev_model / dev_null)).item()
+        y_hat = _get_predict(self, beta, X)
+        y_true = _get_true_values(self, X, y)
+        return _compute_poisson_deviance_score(y_hat, y_true)
 
 
-class LogisticRegression(_GLMClassifier):
+# ============================================================================
+# Classification Models
+# ============================================================================
+
+
+class LogisticRegression(_AccuracyScoringMixin, _GLMClassifier):
     """Binary logistic regression model.
 
     Logistic regression is used for binary classification tasks. It models the
@@ -426,41 +272,9 @@ class LogisticRegression(_GLMClassifier):
         dataloader: DataLoader containing the training data with features and binary
             targets (0 or 1).
         beta: Model parameters variable representing regression coefficients.
-
-    Examples:
-        >>> from rlaopt.datasets import Dataset
-        >>> from rlaopt.dataloader import DataLoader
-        >>> from rlaopt.expression import Variable
-        >>> import torch
-        >>>
-        >>> # Create dataset with binary labels
-        >>> X = torch.randn(100, 10)
-        >>> # Generate binary labels
-        >>> y = (torch.sigmoid(X @ torch.randn(10)) > 0.5).float()
-        >>> dataset = Dataset(X, y)
-        >>> dataloader = DataLoader(dataset, batch_size=32, shuffle=True)
-        >>>
-        >>> # Initialize model
-        >>> beta = Variable(10)
-        >>> model = LogisticRegression(dataloader, beta)
-        >>>
-        >>> # Compute loss
-        >>> loss = model.forward()
-        >>>
-        >>> # Get class probabilities
-        >>> probs = model.predict_proba()
-        >>>
-        >>> # Make predictions on test data
-        >>> X_test = torch.randn(20, 10)
-        >>> test_probs = model.predict_proba(X=X_test)
-        >>> predictions = (test_probs > 0.5).long()
     """
 
-    def __init__(
-        self,
-        dataloader: DataLoader,
-        beta: Variable,
-    ):
+    def __init__(self, dataloader: DataLoader, beta: Variable):
         super().__init__(dataloader, beta, LossType.LOGISTIC)
 
     def predict_proba(
@@ -479,70 +293,16 @@ class LogisticRegression(_GLMClassifier):
         Returns:
             Predicted probabilities for the positive class, shape (n_samples,).
             Values are in the range [0, 1].
-
-        Examples:
-            >>> # Predictions on training data
-            >>> probs = model.predict_proba()
-            >>>
-            >>> # Predictions with custom parameters
-            >>> custom_beta = torch.randn(10)
-            >>> probs = model.predict_proba(beta=custom_beta)
-            >>>
-            >>> # Predictions on test data
-            >>> X_test = torch.randn(20, 10)
-            >>> test_probs = model.predict_proba(X=X_test)
-            >>> predictions = (test_probs > 0.5).long()
         """
-        if X is not None:
-            logits = self.predict(beta, X)
-        else:
-            logits = self.predict(beta)
+        logits = self.predict(beta, X)
         return torch.sigmoid(logits)
 
-    def score(self, beta=None, X=None, y=None) -> float:
-        """Compute classification accuracy.
-
-        Accuracy is the proportion of correct predictions, defined as the number
-        of correct predictions divided by the total number of predictions. Values
-        range from 0 to 1, where 1 indicates perfect classification.
-
-        Args:
-            beta: Parameter weights for model. If None, uses the registered
-                model weights. Defaults to None.
-            X: Input features of shape (n_samples, n_features). If None, uses
-                the training dataset. Defaults to None.
-            y: Target binary labels of shape (n_samples,). Required if X is provided.
-                Defaults to None.
-
-        Returns:
-            Accuracy score as a float.
-
-        Examples:
-            >>> # Score on training data
-            >>> acc_train = model.score()
-            >>>
-            >>> # Score on test data
-            >>> X_test = torch.randn(20, 10)
-            >>> y_test = torch.randint(0, 2, (20,)).float()
-            >>> acc_test = model.score(X=X_test, y=y_test)
-        """
-        if beta is None:
-            beta = self.get_variable(self.var_name)
-
-        if X is not None:
-            if y is None:
-                raise ValueError("Must provide y when X is specified")
-            probs = self.predict_proba(beta, X)
-        else:
-            probs = self.predict_proba(beta)
-            y = self.dataloader.dataset.y
-
-        predictions = (probs > 0.5).float()
-        accuracy = (predictions == y).float().mean()
-        return accuracy.item()
+    def _get_predicted_classes(self, probs: torch.Tensor) -> torch.Tensor:
+        """Convert probabilities to binary class predictions."""
+        return (probs > 0.5).float()
 
 
-class MultinomialRegression(_GLMClassifier):
+class MultinomialRegression(_AccuracyScoringMixin, _GLMClassifier):
     """Multinomial (softmax) regression model for multi-class classification.
 
     Multinomial regression extends logistic regression to handle more than two
@@ -563,35 +323,6 @@ class MultinomialRegression(_GLMClassifier):
             labels (integers from 0 to n_classes-1).
         beta: Model parameters variable representing regression coefficients.
             Shape should be (n_features, n_classes) for multi-class classification.
-
-    Examples:
-        >>> from rlaopt.datasets import Dataset
-        >>> from rlaopt.dataloader import DataLoader
-        >>> from rlaopt.expression import Variable
-        >>> import torch
-        >>>
-        >>> # Create dataset with multi-class labels
-        >>> X = torch.randn(100, 10)
-        >>> # Generate multi-class labels (3 classes)
-        >>> y = torch.randint(0, 3, (100,))
-        >>> dataset = Dataset(X, y)
-        >>> dataloader = DataLoader(dataset, batch_size=32, shuffle=True)
-        >>>
-        >>> # Initialize model with matrix beta: n_features × n_classes
-        >>> beta = Variable(10, 3)
-        >>> model = MultinomialRegression(dataloader, beta)
-        >>>
-        >>> # Compute loss
-        >>> loss = model.forward()
-        >>>
-        >>> # Get class probabilities
-        >>> probs = model.predict_proba()  # Shape: (100, 3)
-        >>> predictions = probs.argmax(dim=1)  # Predicted class labels
-        >>>
-        >>> # Predictions on test data
-        >>> X_test = torch.randn(20, 10)
-        >>> test_probs = model.predict_proba(X=X_test)
-        >>> top_2_classes = test_probs.topk(2, dim=1).indices
     """
 
     def __init__(self, dataloader: DataLoader, beta: Variable):
@@ -613,65 +344,10 @@ class MultinomialRegression(_GLMClassifier):
         Returns:
             Predicted probabilities for each class, shape (n_samples, n_classes).
             Each row sums to 1.0, representing a probability distribution over classes.
-
-        Examples:
-            >>> # Predictions on training data
-            >>> probs = model.predict_proba()
-            >>>
-            >>> # Predictions with custom parameters
-            >>> custom_beta = torch.randn(10, 3)
-            >>> probs = model.predict_proba(beta=custom_beta)
-            >>>
-            >>> # Predictions on test data
-            >>> X_test = torch.randn(20, 10)
-            >>> test_probs = model.predict_proba(X=X_test)  # Shape: (20, 3)
-            >>> predicted_classes = test_probs.argmax(dim=1)
-            >>> confidence = test_probs.max(dim=1).values
         """
-        if X is not None:
-            logits = self.predict(beta, X)
-        else:
-            logits = self.predict(beta)
+        logits = self.predict(beta, X)
         return torch.softmax(logits, dim=1)
 
-    def score(self, beta=None, X=None, y=None) -> float:
-        """Compute classification accuracy.
-
-        Accuracy is the proportion of correct predictions, defined as the number
-        of correct predictions divided by the total number of predictions. Values
-        range from 0 to 1, where 1 indicates perfect classification.
-
-        Args:
-            beta: Parameter weights for model. If None, uses the registered
-                model weights. Defaults to None.
-            X: Input features of shape (n_samples, n_features). If None, uses
-                the training dataset. Defaults to None.
-            y: Target class labels of shape (n_samples,) with values in
-                [0, n_classes-1]. Required if X is provided. Defaults to None.
-
-        Returns:
-            Accuracy score as a float.
-
-        Examples:
-            >>> # Score on training data
-            >>> acc_train = model.score()
-            >>>
-            >>> # Score on test data
-            >>> X_test = torch.randn(20, 10)
-            >>> y_test = torch.randint(0, 3, (20,))
-            >>> acc_test = model.score(X=X_test, y=y_test)
-        """
-        if beta is None:
-            beta = self.get_variable(self.var_name)
-
-        if X is not None:
-            if y is None:
-                raise ValueError("Must provide y when X is specified")
-            probs = self.predict_proba(beta, X)
-        else:
-            probs = self.predict_proba(beta)
-            y = self.dataloader.dataset.y
-
-        predictions = probs.argmax(dim=1)
-        accuracy = (predictions == y).float().mean()
-        return accuracy.item()
+    def _get_predicted_classes(self, probs: torch.Tensor) -> torch.Tensor:
+        """Convert probabilities to predicted class labels."""
+        return probs.argmax(dim=1)

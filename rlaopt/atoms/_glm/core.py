@@ -26,10 +26,8 @@ def compute_loss(
         Loss value
     """
     # Case 1: Test data provided
-    if X is not None:
-        if y is None:
-            raise ValueError("Must provide y when X is specified")
-        predictions = compute_prediction(beta, X=X)
+    if _has_test_data(X, y):
+        predictions = compute_prediction(beta, dataloader, X=X)
         return loss_fn(predictions, y)
 
     # Case 2: Training data - in-memory Dataset
@@ -54,7 +52,7 @@ def compute_loss(
 
 def compute_prediction(
     beta: torch.nn.Parameter | torch.Tensor,
-    dataloader: torch.Tensor | None = None,
+    dataloader: DataLoader,
     X: torch.Tensor | None = None,
 ) -> torch.Tensor:
     """
@@ -143,3 +141,13 @@ def batch_predict(
     else:
         X_batch = move_to_source_device(X_batch, beta)
     return X_batch @ beta, y_batch
+
+
+def _has_test_data(X: torch.Tensor | None, y: torch.Tensor | None) -> bool:
+    if X is not None:
+        if y is None:
+            raise ValueError("Must provide y when X is specified")
+        else:
+            return True
+    else:
+        return False

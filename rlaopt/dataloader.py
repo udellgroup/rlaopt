@@ -1,3 +1,5 @@
+from functools import partial
+
 import torch
 
 from .datasets import Dataset, BatchedDataset
@@ -29,6 +31,12 @@ class DataLoader(torch.utils.data.DataLoader):
             raise TypeError(
                 f"Dataset must be of type Dataset or BatchedDataset but recieved {type(dataset)}"
             )
+
+        if isinstance(dataset, Dataset):
+            self._y = partial(get_training_labels, loader=self, in_memory=True)
+        else:
+            self._y = partial(get_training_labels, loader=self, in_memory=False)
+
         super().__init__(
             dataset,
             batch_size,
@@ -48,3 +56,17 @@ class DataLoader(torch.utils.data.DataLoader):
             pin_memory_device=pin_memory_device,
             in_order=in_order,
         )
+
+    @property
+    def y(self):
+        return self._y()
+
+
+def get_training_labels(loader: "DataLoader", in_memory: bool):
+    if in_memory:
+        return loader.dataset.y
+    else:
+        training_labels = []
+        for _, y_batch in loader:
+            training_labels.append(y_batch)
+        return torch.cat(training_labels, dim=0)
