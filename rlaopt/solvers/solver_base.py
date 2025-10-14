@@ -1,5 +1,4 @@
 from abc import ABC, abstractmethod
-from typing import Optional, Tuple
 
 from rlaopt._typing import OptimState, TensorDict
 from rlaopt.expression.expression import Expression
@@ -38,7 +37,7 @@ class OptimSolver(ABC):
     def solve(
         self,
         problem: Expression | OperatorSplit,
-        initial_params: Optional[TensorDict] = None,
+        initial_params: TensorDict | None = None,
     ) -> TensorDict:
         """Solve the optimization problem defined by `problem`.
 
@@ -55,7 +54,7 @@ class OptimSolver(ABC):
     @abstractmethod
     def step(
         self, params: TensorDict, optim_state: OptimState
-    ) -> Tuple[TensorDict, OptimState]:
+    ) -> tuple[TensorDict, OptimState]:
         """Performs a single optimization step.
 
         Args:
@@ -63,6 +62,6 @@ class OptimSolver(ABC):
             optim_state (OptimState): Current state of the optimizer.
 
         Returns:
-            Tuple[TensorDict, OptimState]: Updated parameters and optimizer state.
+            tuple[TensorDict, OptimState]: Updated parameters and optimizer state.
         """
         pass
