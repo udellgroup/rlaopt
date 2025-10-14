@@ -1,19 +1,32 @@
+"""Proximal gradient solver implementation."""
+
 from math import sqrt
-from typing import Callable, NamedTuple, Optional, Tuple
+from typing import Callable, NamedTuple
 
 import torch
 
-from rlaopt.solvers.configs import ProxGradConfig
-from rlaopt.solvers.utils import split_objective
+from rlaopt._typing import TensorDict
 from rlaopt.expression.expression import Expression
 from rlaopt.operator_split import OperatorSplit
+from rlaopt.solvers.configs import ProxGradConfig
+from rlaopt.solvers.utils import split_objective
 from rlaopt.utils import tensor_dict_ops as dict_ops
-from rlaopt._typing import TensorDict
 
 
 class ProxGradState(NamedTuple):
-    eta: torch.Tensor
-    params_prev: Optional[TensorDict] = None
+    """State container for the proximal gradient solver.
+
+    Attributes:
+        eta: Step size (learning rate) for the gradient descent step.
+        params_prev: Previous iteration's parameters, used for acceleration methods.
+            None when acceleration is disabled.
+        err: Current error metric, measuring convergence progress.
+            Initialized to infinity.
+        iter_: Current iteration count, starting from 0.
+    """
+
+    eta: float
+    params_prev: TensorDict | None = None
     err: torch.Tensor = torch.inf
     iter_: int = 0
 
@@ -21,9 +34,38 @@ class ProxGradState(NamedTuple):
 def proximal_gradient(
     obj: Expression | OperatorSplit,
     config: ProxGradConfig,
-    init_params: Optional[TensorDict] = None,
-) -> Tuple[TensorDict, torch.Tensor]:
+    init_params: TensorDict | None = None,
+) -> tuple[TensorDict, torch.Tensor]:
+    """Solve an optimization problem using the proximal gradient method.
 
+    The proximal gradient method solves problems of the form:
+        minimize f(x) + g(x)
+    where f is smooth (differentiable) and g is proxable (has an efficient
+    proximal operator).
+
+    This implementation supports several variants:
+    - Basic proximal gradient (fixed step size)
+    - Accelerated proximal gradient (Nesterov momentum)
+    - Backtracking line search for adaptive step sizes
+    - Combinations of acceleration and line search
+
+    Args:
+        obj: The optimization objective. Can be either:
+            - An Expression that will be automatically split into smooth and
+              non-smooth parts
+            - An OperatorSplit with predefined f (smooth) and g (non-smooth) terms
+        config: Configuration parameters for the solver, including step size (eta),
+            maximum iterations, convergence tolerance, and flags for acceleration
+            and line search.
+        init_params: Optional initial parameters. If None, parameters are
+            initialized from the objective function.
+
+    Returns:
+        A tuple containing:
+        - params: The optimized parameters as a TensorDict
+        - err: Final error metric as a torch.Tensor. Lower values indicate
+          better convergence.
+    """
     # Unpack config
     eta, max_iters, tol, use_acceleration, use_linesearch = (
         config.eta,
@@ -32,13 +74,6 @@ def proximal_gradient(
         config.use_acceleration,
         config.use_linesearch,
     )
-
-    # If no stepsize, set initial stepsize:
-    if not eta:
-        eta = 1.0
-        # Use linesearch if it is not enabled
-        if not use_linesearch:
-            use_linesearch = True
 
     # Build step function and initialize optimizer params and state
     step = _build_step(obj, use_acceleration, use_linesearch)
@@ -49,7 +84,7 @@ def proximal_gradient(
 
     elif isinstance(obj, OperatorSplit):
         params = obj.f.params
-    
+
     else:
         params = obj.params
 
@@ -65,7 +100,7 @@ def proximal_gradient(
 
 
 def _init_state(
-    params: TensorDict, eta: torch.Tensor, use_acceleration: bool
+    params: TensorDict, eta: float, use_acceleration: bool
 ) -> ProxGradState:
     if use_acceleration:
         return ProxGradState(params_prev=params, eta=eta)
@@ -77,9 +112,8 @@ def _build_step(
     obj: Expression | OperatorSplit, use_acceleration: bool, use_linesearch: bool
 ) -> Callable[
     [TensorDict, ProxGradState],
-    Tuple[TensorDict, ProxGradState],
+    tuple[TensorDict, ProxGradState],
 ]:
-
     # If the objective is not already an OperatorSplit, split it
     if isinstance(obj, Expression):
         obj = split_objective(obj)
@@ -100,11 +134,9 @@ def _build_step(
 
         def step(
             params: TensorDict, state: ProxGradState
-        ) -> Tuple[TensorDict, ProxGradState]:
+        ) -> tuple[TensorDict, ProxGradState]:
             params_prev = params
-            params, state = _accel_prox_grad_ls_step(
-                params, state, f, grad_f, prox
-            )
+            params, state = _accel_prox_grad_ls_step(params, state, f, grad_f, prox)
             return params, state._replace(
                 iter_=state.iter_ + 1, params_prev=params_prev
             )
@@ -113,7 +145,7 @@ def _build_step(
 
         def step(
             params: TensorDict, state: ProxGradState
-        ) -> Tuple[TensorDict, ProxGradState]:
+        ) -> tuple[TensorDict, ProxGradState]:
             params_prev = params
             params = _accel_prox_grad_step(params, state, grad_f, prox)
             err = err_fn(params, state)
@@ -125,7 +157,7 @@ def _build_step(
 
         def step(
             params: TensorDict, state: ProxGradState
-        ) -> Tuple[TensorDict, ProxGradState]:
+        ) -> tuple[TensorDict, ProxGradState]:
             params, state = _linesearch(params, state, f, grad_f, prox)
             return params, state._replace(iter_=state.iter_ + 1)
 
@@ -133,12 +165,13 @@ def _build_step(
 
         def step(
             params: TensorDict, state: ProxGradState
-        ) -> Tuple[TensorDict, ProxGradState]:
+        ) -> tuple[TensorDict, ProxGradState]:
             params = _prox_grad_step(params, state, grad_f, prox)
             err = err_fn(params, state)
             return params, state._replace(iter_=state.iter_ + 1, err=err)
 
     return step
+
 
 def _prox_grad_step(
     params: TensorDict,
@@ -157,7 +190,7 @@ def _accel_prox_grad_ls_step(
     f: Callable[[TensorDict], torch.Tensor],
     grad_f: Callable[[TensorDict], TensorDict],
     prox: Callable[[TensorDict, float], TensorDict],
-) -> Tuple[TensorDict, ProxGradState]:
+) -> tuple[TensorDict, ProxGradState]:
     y = _accel_step(params, state)
     params, state = _linesearch(y, state, f, grad_f, prox)
     return params, state
@@ -174,12 +207,13 @@ def _accel_prox_grad_step(
     return params
 
 
-def _accel_step(
-    params: TensorDict, state: ProxGradState
-) -> TensorDict:
+def _accel_step(params: TensorDict, state: ProxGradState) -> TensorDict:
     momentum_scale = state.iter_ / (state.iter_ + 3)
-    momentum = dict_ops.scal_mul(dict_ops.sub(params, state.params_prev), momentum_scale)
+    momentum = dict_ops.scal_mul(
+        dict_ops.sub(params, state.params_prev), momentum_scale
+    )
     return dict_ops.add(params, momentum)
+
 
 def _linesearch(
     params: TensorDict,
@@ -187,7 +221,7 @@ def _linesearch(
     f: Callable[[TensorDict], torch.Tensor],
     grad_f: Callable[[TensorDict], TensorDict],
     prox: Callable[[TensorDict, float], TensorDict],
-) -> Tuple[TensorDict, ProxGradState]:
+) -> tuple[TensorDict, ProxGradState]:
     beta = 0.5
     f0 = f(params)
     grads = grad_f(params)
@@ -196,7 +230,11 @@ def _linesearch(
     def linesearch_step(params: TensorDict, state: ProxGradState):
         z = _prox_update(params, grads, state, prox)
         d = dict_ops.sub(z, params)
-        u = f0 + dict_ops.dot(grads, d) + 1 / (2 * state.eta) * (dict_ops.elem_norm(d) ** 2)
+        u = (
+            f0
+            + dict_ops.dot(grads, d)
+            + 1 / (2 * state.eta) * (dict_ops.elem_norm(d) ** 2)
+        )
         if f(z) <= u:
             err_new = dict_ops.elem_norm(d) / state.eta
             return True, z, state._replace(err=err_new)
@@ -217,7 +255,4 @@ def _prox_update(
     prox: Callable[[TensorDict, float], TensorDict],
 ) -> TensorDict:
     # prox(params - state.eta * grads, state.eta)
-    return prox(
-        dict_ops.sub(params, dict_ops.scal_mul(grads, state.eta)), 
-        state.eta
-    )
+    return prox(dict_ops.sub(params, dict_ops.scal_mul(grads, state.eta)), state.eta)
