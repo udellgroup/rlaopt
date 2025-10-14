@@ -1,10 +1,10 @@
 from abc import ABC, abstractmethod
 from typing import Optional, Tuple
 
-from .._typing import OptimState, TensorDict
-from ..expression.expression import Expression
-from ..operator_split import OperatorSplit
-from .configs import SolverConfig
+from rlaopt._typing import OptimState, TensorDict
+from rlaopt.expression.expression import Expression
+from rlaopt.operator_split import OperatorSplit
+from rlaopt.solvers.configs import SolverConfig
 
 
 class OptimSolver(ABC):
