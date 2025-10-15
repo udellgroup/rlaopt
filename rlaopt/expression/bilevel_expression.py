@@ -5,7 +5,8 @@ import torch
 
 from rlaopt.expression.expression import Expression
 from rlaopt.solvers.configs import SolverConfig
-from rlaopt.solvers.solver import Solver
+from rlaopt.solvers.solver_base import OptimSolver
+
 
 class BilevelExpression(Expression):
     """An Expression class that represents a bilevel optimization problem.
@@ -23,7 +24,7 @@ class BilevelExpression(Expression):
         F_in: Callable[[torch.Tensor], Expression],
         F_out: Expression,
         solver_config: SolverConfig,
-        solver: Solver,
+        solver: OptimSolver,
     ):
         """Initializes the bilevel expression.
 

@@ -2,19 +2,19 @@ from abc import ABC, abstractmethod
 from functools import reduce
 from typing import Callable, Dict, Union
 
-
 import cvxpy as cp
 import torch
 
-from rlaopt.settings import VAR_PREFIX
-from rlaopt.utils.counter import get_id
-from rlaopt.utils import tensor_dict_ops as dict_ops
 from rlaopt._typing import TensorDict
+from rlaopt.settings import VAR_PREFIX
+from rlaopt.utils import tensor_dict_ops as dict_ops
+from rlaopt.utils.counter import get_id
+
 
 # ===============================
 # Helper Functions
 # ===============================
-def to_expr(val) -> "Expression":
+def _to_expr(val) -> "Expression":
     """Convert a value to an Expression if it isn't already."""
     if isinstance(val, Expression):
         return val
@@ -199,13 +199,13 @@ class NAryOperatorExpression(Expression, ABC):
             raise ValueError(f"{self.__class__.__name__} requires at least one operand")
         else:
             if exprs[-1] is not None:
-                self.exprs = torch.nn.ModuleList([to_expr(e) for e in exprs])
+                self.exprs = torch.nn.ModuleList([_to_expr(e) for e in exprs])
             else:
                 # If last expr is None, ignore it
                 # This is needed for operator_split in AddExpression
                 # As right can be None there
                 self.exprs = torch.nn.ModuleList(
-                    [to_expr(e) for e in exprs[:-1]]
+                    [_to_expr(e) for e in exprs[:-1]]
                 )  # ignore last None
 
     def is_smooth(self) -> bool:
@@ -254,7 +254,6 @@ class AddExpression(NAryOperatorExpression):
         1. All non-smooth terms are proxable, AND
         2. Non-smooth terms operate on disjoint parameter sets
         """
-
         non_smooth_exprs = [e for e in self.exprs if not e.is_smooth()]
 
         # All non-smooth terms must be proxable
@@ -273,7 +272,6 @@ class AddExpression(NAryOperatorExpression):
 
     def operator_split(self):
         """Splits sum of operators into smooth and non-smooth part."""
-
         smooth = [e for e in self.exprs if e.is_smooth()]
         non_smooth = [e for e in self.exprs if not e.is_smooth()]
         smooth_expr = AddExpression(*smooth) if smooth else None
@@ -410,7 +408,7 @@ class UnaryOpExpression(Expression):
 
     def __init__(self, operand, op: Callable[[torch.Tensor], torch.Tensor]):
         super().__init__()
-        self.operand = to_expr(operand)
+        self.operand = _to_expr(operand)
         # Store as module to ensure proper parameter tracking
         self.add_module("_operand", self.operand)
         self._op = op

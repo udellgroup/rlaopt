@@ -1,11 +1,11 @@
 """Proximal gradient solver implementation."""
 
 from math import sqrt
-from typing import Callable, NamedTuple
+from typing import Callable
 
 import torch
 
-from rlaopt._typing import TensorDict
+from rlaopt._typing import OptimState, TensorDict
 from rlaopt.expression.expression import Expression
 from rlaopt.operator_split import OperatorSplit
 from rlaopt.solvers.configs import ProxGradConfig
@@ -13,7 +13,7 @@ from rlaopt.solvers.utils import split_objective
 from rlaopt.utils import tensor_dict_ops as dict_ops
 
 
-class ProxGradState(NamedTuple):
+class ProxGradState(OptimState):
     """State container for the proximal gradient solver.
 
     Attributes:
