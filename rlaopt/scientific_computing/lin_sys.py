@@ -39,6 +39,17 @@ class LinSys:
         """Regularization parameter."""
         return self._reg
 
+    def __call__(self, v: torch.Tensor) -> torch.Tensor:
+        """Apply the linear operator (A + reg * I) to tensor v.
+
+        Args:
+            v (torch.Tensor): Input tensor.
+
+        Returns:
+            torch.Tensor: Result of applying the linear operator to v.
+        """
+        return self._A @ v + self._reg * v
+
     @staticmethod
     def _check_inputs(A, B, reg):
         if not torch.is_tensor(A):
