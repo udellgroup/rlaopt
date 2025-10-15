@@ -27,25 +27,10 @@ class LinSys(torch.nn.Module):
         if w is None:
             w = torch.zeros_like(B)
 
-        self.register_buffer("_A", A)
-        self.register_buffer("_B", B)
-        self.register_buffer("_reg", torch.tensor(reg))
+        self.register_buffer("A", A)
+        self.register_buffer("B", B)
+        self.register_buffer("reg", torch.tensor(reg))
         self.w = torch.nn.Parameter(w)
-
-    @property
-    def A(self):
-        """Matrix defining the linear system."""
-        return self._A
-
-    @property
-    def B(self):
-        """Right-hand side of the linear system."""
-        return self._B
-
-    @property
-    def reg(self):
-        """Regularization parameter."""
-        return self._reg.item()
 
     def forward(self, v: torch.Tensor) -> torch.Tensor:
         """Apply the linear operator (A + reg * I) to tensor v.
@@ -56,7 +41,7 @@ class LinSys(torch.nn.Module):
         Returns:
             torch.Tensor: Result of applying the linear operator to v.
         """
-        return self._A @ v + self._reg * v
+        return self.A @ v + self.reg * v
 
     def compute_residual_norm(
         self, v: torch.Tensor, relative: bool = False
@@ -71,7 +56,7 @@ class LinSys(torch.nn.Module):
         Returns:
             torch.Tensor: Residual norm of the linear system.
         """
-        B = self._B
+        B = self.B
 
         residual = self.forward(v) - B
         res_norm = torch.linalg.norm(residual, dim=0, ord=2)

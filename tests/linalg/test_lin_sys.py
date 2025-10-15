@@ -90,30 +90,6 @@ class TestLinSysInitialization:
         assert torch.equal(lin_sys.w, expected_w)
 
 
-class TestLinSysProperties:
-    """Test properties of LinSys."""
-
-    def test_property_A(self, valid_A, valid_B_1d):
-        """Test that A property returns the correct matrix."""
-        lin_sys = LinSys(A=valid_A, B=valid_B_1d)
-        assert torch.equal(lin_sys.A, valid_A)
-
-    def test_property_B(self, valid_A, valid_B_1d):
-        """Test that B property returns the correct vector."""
-        lin_sys = LinSys(A=valid_A, B=valid_B_1d)
-        assert torch.equal(lin_sys.B, valid_B_1d)
-
-    def test_property_reg(self, valid_A, valid_B_1d, valid_reg):
-        """Test that reg property returns the correct value."""
-        lin_sys = LinSys(A=valid_A, B=valid_B_1d, reg=valid_reg)
-        assert lin_sys.reg == valid_reg
-
-    def test_property_reg_default(self, valid_A, valid_B_1d):
-        """Test that reg property returns default value when not specified."""
-        lin_sys = LinSys(A=valid_A, B=valid_B_1d)
-        assert lin_sys.reg == 0.0
-
-
 class TestLinSysForward:
     """Test forward method of LinSys."""
 
