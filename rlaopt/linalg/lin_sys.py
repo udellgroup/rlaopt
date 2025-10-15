@@ -11,6 +11,7 @@ class LinSys(torch.nn.Module):
         A: torch.Tensor,
         B: torch.Tensor,
         reg: float = 0.0,
+        w: torch.Tensor | None = None,
     ):
         """Initialize LinSys module.
 
@@ -18,13 +19,18 @@ class LinSys(torch.nn.Module):
             A (torch.Tensor): Positive-definite matrix defining the linear system.
             B (torch.Tensor): Right-hand side of the linear system.
             reg (float): Regularization parameter. Defaults to 0.0.
+            w (torch.Tensor | None): Initial guess for the solution. Defaults to None.
         """
         super().__init__()
-        LinSys._check_inputs(A, B, reg)
+        LinSys._check_inputs(A, B, reg, w)
+
+        if w is None:
+            w = torch.zeros_like(B)
 
         self.register_buffer("_A", A)
         self.register_buffer("_B", B)
         self.register_buffer("_reg", torch.tensor(reg))
+        self.w = torch.nn.Parameter(w)
 
     @property
     def A(self):
@@ -53,7 +59,7 @@ class LinSys(torch.nn.Module):
         return self._A @ v + self._reg * v
 
     @staticmethod
-    def _check_inputs(A, B, reg):
+    def _check_inputs(A, B, reg, w):
         if not torch.is_tensor(A):
             raise TypeError(
                 f"A must be a torch.Tensor, but received {type(A).__name__}."
@@ -68,5 +74,14 @@ class LinSys(torch.nn.Module):
             raise ValueError(
                 "B must be a tensor whose first dimension matches A's size."
             )
+
         if not isinstance(reg, float) or reg < 0:
             raise ValueError(f"reg must be a non-negative float, but received {reg}.")
+
+        if w is not None:
+            if not torch.is_tensor(w):
+                raise TypeError(
+                    f"w must be a torch.Tensor, but received {type(w).__name__}."
+                )
+            if w.shape != B.shape:
+                raise ValueError("w must have the same shape as B.")
