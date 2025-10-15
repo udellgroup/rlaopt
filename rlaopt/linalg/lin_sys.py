@@ -1,10 +1,10 @@
-"""LinSys model for positive-definite linear systems."""
+"""LinSys module for positive-definite linear systems."""
 
 import torch
 
 
-class LinSys:
-    """Model for positive-definite linear systems (A + reg * I)w = B."""
+class LinSys(torch.nn.Module):
+    """Module for positive-definite linear systems (A + reg * I)w = B."""
 
     def __init__(
         self,
@@ -12,17 +12,19 @@ class LinSys:
         B: torch.Tensor,
         reg: float = 0.0,
     ):
-        """Initialize LinSys model.
+        """Initialize LinSys module.
 
         Args:
             A (torch.Tensor): Positive-definite matrix defining the linear system.
             B (torch.Tensor): Right-hand side of the linear system.
             reg (float): Regularization parameter. Defaults to 0.0.
         """
+        super().__init__()
         LinSys._check_inputs(A, B, reg)
-        self._A = A
-        self._B = B
-        self._reg = reg
+
+        self.register_buffer("_A", A)
+        self.register_buffer("_B", B)
+        self.register_buffer("_reg", torch.tensor(reg))
 
     @property
     def A(self):
@@ -37,9 +39,9 @@ class LinSys:
     @property
     def reg(self):
         """Regularization parameter."""
-        return self._reg
+        return self._reg.item()
 
-    def __call__(self, v: torch.Tensor) -> torch.Tensor:
+    def forward(self, v: torch.Tensor) -> torch.Tensor:
         """Apply the linear operator (A + reg * I) to tensor v.
 
         Args:
