@@ -71,10 +71,12 @@ class LinSys(torch.nn.Module):
         Returns:
             torch.Tensor: Residual norm of the linear system.
         """
-        residual = self.forward(v) - self._B
+        B = self._B
+
+        residual = self.forward(v) - B
         res_norm = torch.norm(residual, dim=0, ord=2)
         if relative:
-            b_norm = torch.norm(self._B, dim=0, ord=2)
+            b_norm = torch.norm(B, dim=0, ord=2)
             res_norm /= b_norm
         return res_norm
 
