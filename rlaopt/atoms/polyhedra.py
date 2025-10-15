@@ -1,5 +1,6 @@
-from functools import partial
+"""Polyhedra constraint atom for optimization."""
 
+from functools import partial
 from typing import Callable
 
 import torch
@@ -7,89 +8,222 @@ import torch
 from rlaopt.atoms.atom_expression import AtomExpression
 from rlaopt.expression.expression import Variable
 
-from rlaopt.atoms._utils import get_variable_value
 
 class Polyhedra(AtomExpression):
-   def __init__(self, 
-                x: Variable,
-                A: torch.Tensor=None, 
-                b: torch.Tensor=None, 
-                C: torch.Tensor=None, 
-                l: torch.Tensor=None, 
-                u: torch.Tensor=None
+    """Polyhedral constraint atom for linear equality and inequality constraints.
+
+    A polyhedron is defined by:
+        - Equality constraints: A @ x = b
+        - Inequality constraints: lower <= C @ x <= upper
+
+    The atom evaluates to 0 if all constraints are satisfied, and infinity
+    otherwise (indicator function of the polyhedral set).
+
+    Args:
+        x: Variable to constrain.
+        A: Equality constraint matrix (optional). If provided, b must also
+            be provided.
+        b: Equality constraint vector (optional). Required if A is provided.
+        C: Inequality constraint matrix (optional). If None, uses identity
+            (box constraints).
+        lower: Lower bound vector for inequalities (optional).
+        upper: Upper bound vector for inequalities (optional).
+
+    Raises:
+        ValueError: If A is provided but b is None.
+        ValueError: If constraint dimensions are inconsistent.
+        ValueError: If no constraints are provided (trivial polyhedron).
+
+    Examples:
+        >>> # Box constraints: -1 <= x <= 1
+        >>> x = Variable((5,), name='x')
+        >>> box = Polyhedra(
+        ...     x,
+        ...     lower=torch.full((5,), -1.0),
+        ...     upper=torch.full((5,), 1.0)
+        ... )
+
+        >>> # Equality constraint: A @ x = b
+        >>> A = torch.randn(3, 5)
+        >>> b = torch.randn(3)
+        >>> poly = Polyhedra(x, A=A, b=b)
+
+        >>> # Mixed constraints
+        >>> C = torch.randn(2, 5)
+        >>> poly = Polyhedra(
+        ...     x,
+        ...     A=A,
+        ...     b=b,
+        ...     C=C,
+        ...     lower=torch.zeros(2),
+        ...     upper=torch.ones(2)
+        ... )
+    """
+
+    def __init__(
+        self,
+        x: Variable,
+        A: torch.Tensor = None,
+        b: torch.Tensor = None,
+        C: torch.Tensor = None,
+        lower: torch.Tensor = None,
+        upper: torch.Tensor = None,
     ):
+        """Initialize the polyhedral constraint atom.
+
+        Args:
+            x: Variable to constrain.
+            A: Equality constraint matrix (optional).
+            b: Equality constraint vector (optional).
+            C: Inequality constraint matrix (optional).
+            lower: Lower bound vector for inequalities (optional).
+            upper: Upper bound vector for inequalities (optional).
+
+        Raises:
+            ValueError: If A is provided but b is None.
+            ValueError: If constraint dimensions are inconsistent.
+            ValueError: If no constraints are provided.
+        """
         super().__init__()
         if (A is not None) and (b is None):
-           raise ValueError("b cannot be None when A is not None") 
-        
+            raise ValueError("b cannot be None when A is not None")
+
         # Validate input dimensional consistency
-        _validate(A, C, b, l, u)
-        
-        # if u is provided but not l, set l to -infinity
-        if (u is not None) and (l is None):
-           l = torch.tensor(-torch.inf, device=u.device, dtype=u.dtype)
-        # if l is provided but not u, set u to infinity
-        elif (l is not None) and (u is None):
-            u = torch.tensor(torch.inf, device=l.device, dtype=l.dtype)
-        
+        _validate(A, C, b, lower, upper)
+
+        # if upper is provided but not lower, set lower to -infinity
+        if (upper is not None) and (lower is None):
+            lower = torch.tensor(-torch.inf, device=upper.device, dtype=upper.dtype)
+        # if lower is provided but not upper, set upper to infinity
+        elif (lower is not None) and (upper is None):
+            upper = torch.tensor(torch.inf, device=lower.device, dtype=lower.dtype)
+
         # Register the variable as a parameter
-        self.register_parameter("x", x.value)
+        self.register_variable(x)
 
         # Register constraint data as buffers
         if (A is not None) and (b is not None):
-            self.register_buffer("A", A),
-            self.register_buffer("b", b)
+            self.register_atom_buffer("A", A)
+            self.register_atom_buffer("b", b)
         else:
             self.A = None
             self.b = None
 
         if C is not None:
-            self.register_buffer("C", C)
+            self.register_atom_buffer("C", C)
         else:
             self.C = None
 
-        if l is not None:
-            self.register_buffer("l", l)
-            self.register_buffer("u", u)
+        if lower is not None:
+            self.register_atom_buffer("lower", lower)
+            self.register_atom_buffer("upper", upper)
         else:
-            self.u = None
-            self.l = None
+            self.upper = None
+            self.lower = None
 
         # build evaluation function
-        self._eval = _build_eval(self.A, self.C, self.b, self.l, self.u)
+        self._eval = _build_eval(self.A, self.C, self.b, self.lower, self.upper)
 
-        
-   def evaluate_at(self, **variable_locations):
-       value = get_variable_value(self.x, **variable_locations)
-       return self._eval(value)
+    def forward(self) -> torch.Tensor:
+        """Evaluate the polyhedral constraint at the current variable value.
 
-   def is_smooth(self):
-       return False
+        Returns:
+            torch.Tensor: 0.0 if constraints are satisfied, infinity otherwise.
+        """
+        value = self.get_variable(self.var_name)
+        return self._eval(value)
 
-   def is_proxable(self):
-       return False
-   
-   def is_subsamplable(self):
-       return False
-   
-   def subsample(self, indices):
-       raise NotImplementedError("Polyhedra is not subsamplable")
-   
-   def to_cvxpy(self):
-       return super().to_cvxpy()
+    def is_smooth(self) -> bool:
+        """Check if the polyhedra constraint is smooth.
 
-def _validate(A, C, b, l, u):
-        if A is not None and b is not None:
-            if A.shape[0] != b.shape[0]:
-                raise ValueError("A and b must have matching row counts")
-        if C is not None:
-            if (l is not None and C.shape[0] != l.shape[0]) or \
-               (u is not None and C.shape[0] != u.shape[0]):
-                raise ValueError("C, l, and u must have matching row counts")
+        Returns:
+            bool: Always False, as indicator functions are non-smooth.
+        """
+        return False
 
-def _build_eval(A, C, b, l, u) -> Callable[[torch.Tensor], torch.Tensor]:
-    eq_exists = (A is not None and b is not None)
-    ineq_exists = (l is not None)  # implies u is not None
+    def is_proxable(self) -> bool:
+        """Check if the polyhedra constraint has a computable proximal operator.
+
+        Returns:
+            bool: Always False (general polyhedral projection not implemented).
+        """
+        return False
+
+    def is_subsamplable(self) -> bool:
+        """Check if the polyhedra constraint supports subsampling.
+
+        Returns:
+            bool: Always False, as constraints cannot be subsampled.
+        """
+        return False
+
+    def subsample(self, indices: torch.Tensor) -> "Polyhedra":
+        """Subsample the polyhedra constraint (not supported).
+
+        Args:
+            indices: Indices to subsample (unused).
+
+        Returns:
+            Polyhedra: Not applicable.
+
+        Raises:
+            NotImplementedError: Polyhedra constraints cannot be subsampled.
+        """
+        raise NotImplementedError("Polyhedra is not subsamplable")
+
+    def to_cvxpy(self):
+        """Convert to CVXPY expression.
+
+        Returns:
+            cp.Expression: CVXPY representation (delegates to parent class).
+        """
+        return super().to_cvxpy()
+
+
+def _validate(A, C, b, lower, upper):
+    """Validate dimensional consistency of constraint matrices and vectors.
+
+    Args:
+        A: Equality constraint matrix (optional).
+        C: Inequality constraint matrix (optional).
+        b: Equality constraint vector (optional).
+        lower: Lower bound vector (optional).
+        upper: Upper bound vector (optional).
+
+    Raises:
+        ValueError: If dimensions are inconsistent.
+    """
+    if A is not None and b is not None:
+        if A.shape[0] != b.shape[0]:
+            raise ValueError("A and b must have matching row counts")
+    if C is not None:
+        if (lower is not None and C.shape[0] != lower.shape[0]) or (
+            upper is not None and C.shape[0] != upper.shape[0]
+        ):
+            raise ValueError("C, lower, and upper must have matching row counts")
+
+
+def _build_eval(A, C, b, lower, upper) -> Callable[[torch.Tensor], torch.Tensor]:
+    """Build the constraint evaluation function.
+
+    Constructs a function that evaluates the indicator function for the
+    polyhedron defined by the provided constraints.
+
+    Args:
+        A: Equality constraint matrix (optional).
+        C: Inequality constraint matrix (optional).
+        b: Equality constraint vector (optional).
+        lower: Lower bound vector (optional).
+        upper: Upper bound vector (optional).
+
+    Returns:
+        Callable: Function that evaluates the indicator function.
+
+    Raises:
+        ValueError: If no constraints are provided.
+    """
+    eq_exists = A is not None and b is not None
+    ineq_exists = lower is not None  # implies upper is not None
 
     eval_fns = []
 
@@ -97,48 +231,129 @@ def _build_eval(A, C, b, l, u) -> Callable[[torch.Tensor], torch.Tensor]:
         if A.dim() > 1:
             eval_fns.append(partial(_eval_eq, A=A, b=b))
         else:
-            eval_fns.append(partial(_eval_hyperplane,a=A,b=b))
+            eval_fns.append(partial(_eval_hyperplane, a=A, b=b))
 
     if ineq_exists:
-        if C is not None: 
+        if C is not None:
             if C.dim() > 1:
-                eval_fns.append(partial(_eval_ineq, C=C, l=l, u=u))
+                eval_fns.append(partial(_eval_ineq, C=C, lower=lower, upper=upper))
             else:
-                eval_fns.append(partial(_eval_halfspace, c=C, l=l, u=u ))
+                eval_fns.append(partial(_eval_halfspace, c=C, lower=lower, upper=upper))
         else:
-            eval_fns.append(partial(_eval_id_ineq, l=l, u=u))
+            eval_fns.append(partial(_eval_id_ineq, lower=lower, upper=upper))
 
     if not eval_fns:
         raise ValueError(
             "Provided constraints define a trivial polyhedron (no constraints)."
         )
 
-    def _eval(x: torch.Tensor):
+    def _eval(x: torch.Tensor) -> torch.Tensor:
+        """Evaluate all constraints.
+
+        Args:
+            x: Input vector.
+
+        Returns:
+            torch.Tensor: Sum of indicator functions (0 if all satisfied,
+                inf otherwise).
+        """
         return sum(fn(x) for fn in eval_fns)
 
     return _eval
 
-def _eval_id_ineq(x: torch.Tensor, l: torch.Tensor, u: torch.Tensor):
-    statement = (l <= x) & (x <= u)
+
+def _eval_id_ineq(
+    x: torch.Tensor, lower: torch.Tensor, upper: torch.Tensor
+) -> torch.Tensor:
+    """Evaluate identity inequality constraint: lower <= x <= upper.
+
+    Args:
+        x: Input vector.
+        lower: Lower bound.
+        upper: Upper bound.
+
+    Returns:
+        torch.Tensor: 0.0 if satisfied, infinity otherwise.
+    """
+    statement = (lower <= x) & (x <= upper)
     return _indicator(statement)
 
-def _eval_ineq(x: torch.Tensor, C: torch.Tensor, l: torch.Tensor, u: torch.Tensor):
-    statement = (l <= C @ x) & (C @ x <= u)
+
+def _eval_ineq(
+    x: torch.Tensor, C: torch.Tensor, lower: torch.Tensor, upper: torch.Tensor
+) -> torch.Tensor:
+    """Evaluate matrix inequality constraint: lower <= C @ x <= upper.
+
+    Args:
+        x: Input vector.
+        C: Constraint matrix.
+        lower: Lower bound.
+        upper: Upper bound.
+
+    Returns:
+        torch.Tensor: 0.0 if satisfied, infinity otherwise.
+    """
+    statement = (lower <= C @ x) & (C @ x <= upper)
     return _indicator(statement)
 
-def _eval_halfspace(x: torch.Tensor, c: torch.Tensor, l: torch.Tensor, u: torch.Tensor):
-    statement = (l <= torch.dot(c ,x)) & (torch.dot(c,x) <= u)
+
+def _eval_halfspace(
+    x: torch.Tensor, c: torch.Tensor, lower: torch.Tensor, upper: torch.Tensor
+) -> torch.Tensor:
+    """Evaluate halfspace inequality constraint: lower <= c^T x <= upper.
+
+    Args:
+        x: Input vector.
+        c: Constraint vector.
+        lower: Lower bound.
+        upper: Upper bound.
+
+    Returns:
+        torch.Tensor: 0.0 if satisfied, infinity otherwise.
+    """
+    statement = (lower <= torch.dot(c, x)) & (torch.dot(c, x) <= upper)
     return _indicator(statement)
 
-def _eval_eq(x: torch.Tensor, A: torch.Tensor, b: torch.Tensor):
+
+def _eval_eq(x: torch.Tensor, A: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
+    """Evaluate matrix equality constraint: A @ x = b.
+
+    Args:
+        x: Input vector.
+        A: Constraint matrix.
+        b: Constraint vector.
+
+    Returns:
+        torch.Tensor: 0.0 if satisfied, infinity otherwise.
+    """
     statement = A @ x == b
     return _indicator(statement)
 
-def _eval_hyperplane(x: torch.Tensor, a: torch.Tensor, b: torch.Tensor):
+
+def _eval_hyperplane(x: torch.Tensor, a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
+    """Evaluate hyperplane equality constraint: a^T x = b.
+
+    Args:
+        x: Input vector.
+        a: Constraint vector.
+        b: Constraint scalar.
+
+    Returns:
+        torch.Tensor: 0.0 if satisfied, infinity otherwise.
+    """
     statement = torch.dot(a, x) == b
     return _indicator(statement)
 
-def _indicator(statement: torch.Tensor):
+
+def _indicator(statement: torch.Tensor) -> torch.Tensor:
+    """Compute indicator function value for a boolean statement.
+
+    Args:
+        statement: Boolean tensor representing constraint satisfaction.
+
+    Returns:
+        torch.Tensor: 0.0 if all elements are True, infinity otherwise.
+    """
     if statement.all():
         return torch.tensor(0.0, device=statement.device)
     else:

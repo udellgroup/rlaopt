@@ -3,9 +3,8 @@
 import cvxpy as cp
 import torch
 
-from rlaopt.atoms.atom_expression import AtomExpression
-from rlaopt.expression.expression import Variable
-from rlaopt.atoms._utils import get_variable_value
+from rlaopt.atoms import AtomExpression
+from rlaopt.expression import Variable
 
 
 class L1Norm(AtomExpression):
@@ -26,31 +25,18 @@ class L1Norm(AtomExpression):
             raise TypeError(f"Expected Variable, got {type(x)}")
 
         # Register the variable as a parameter
-        self.register_parameter("x", x.value)
+        self.register_variable(x)
 
-        # Register the scaling factor
-        if isinstance(scaling, torch.Tensor):
-            self.register_buffer("scaling", scaling)
-        elif isinstance(scaling, torch.nn.Parameter):
-            self.register_buffer("scaling", scaling.data)
-        else:
-            self.register_buffer("scaling", torch.tensor(float(scaling)))
+        # Register the scaling factor as a buffer
+        self.register_atom_buffer("scaling", scaling)
 
     def is_smooth(self) -> bool:
         """Returns False because L1-norm is not smooth."""
         return False
 
-    def evaluate_at(self, **variable_locations):
-        """Evaluate the scaled L1-norm at specific locations.
-
-        Args:
-            **variable_locations: Mapping of variable names to locations
-
-        Returns:
-            Scaled sum of absolute values (L1-norm)
-        """
-        value = get_variable_value(self.x, **variable_locations)
-
+    def forward(self) -> torch.Tensor:
+        """Evaluates the scaled L1-norm."""
+        value = self.get_variable(self.var_name)
         return self.scaling * torch.sum(torch.abs(value))
 
     def is_proxable(self) -> bool:
@@ -71,8 +57,9 @@ class L1Norm(AtomExpression):
             Result of soft-thresholding operation
         """
         threshold = self.scaling * prox_scaling
-        return torch.nn.functional.relu(location - threshold) - torch.nn.functional.relu(
-            -location - threshold)
+        return torch.nn.functional.relu(
+            location - threshold
+        ) - torch.nn.functional.relu(-location - threshold)
 
     def is_subsamplable(self) -> bool:
         """Returns False because L1-norm is not subsamplable."""

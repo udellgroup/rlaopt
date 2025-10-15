@@ -1,6 +1,8 @@
-from rlaopt.atoms.atom_expression import AtomExpression
+"""__init__.py file for atoms module."""
+
 from rlaopt.atoms.affine import Affine
 from rlaopt.atoms.affine_constraint import AffineConstraint
+from rlaopt.atoms.atom_expression import AtomExpression, InputType
 from rlaopt.atoms.box import Box
 from rlaopt.atoms.halfspace import Halfspace
 from rlaopt.atoms.l1norm import L1Norm
@@ -15,6 +17,7 @@ __all__ = [
     "AffineConstraint",
     "Box",
     "Halfspace",
+    "InputType",
     "L1Norm",
     "NonNegative",
     "NucNorm",
