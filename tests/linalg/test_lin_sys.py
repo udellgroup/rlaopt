@@ -3,7 +3,7 @@
 import pytest
 import torch
 
-from rlaopt.scientific_computing.lin_sys import LinSys
+from rlaopt.linalg.lin_sys import LinSys
 
 
 @pytest.fixture
