@@ -74,9 +74,9 @@ class LinSys(torch.nn.Module):
         B = self._B
 
         residual = self.forward(v) - B
-        res_norm = torch.norm(residual, dim=0, ord=2)
+        res_norm = torch.linalg.norm(residual, dim=0, ord=2)
         if relative:
-            b_norm = torch.norm(B, dim=0, ord=2)
+            b_norm = torch.linalg.norm(B, dim=0, ord=2)
             res_norm /= b_norm
         return res_norm
 

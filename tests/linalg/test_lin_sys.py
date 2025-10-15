@@ -30,6 +30,18 @@ def valid_reg():
     return 0.5
 
 
+@pytest.fixture
+def valid_w_1d():
+    """Fixture for a valid 1D initial guess vector w."""
+    return torch.tensor([0.5, 1.5])
+
+
+@pytest.fixture
+def valid_w_2d():
+    """Fixture for a valid 2D initial guess matrix w."""
+    return torch.tensor([[0.5, 1.5], [2.5, 3.5]])
+
+
 class TestLinSysInitialization:
     """Test successful initialization of LinSys."""
 
@@ -52,6 +64,30 @@ class TestLinSysInitialization:
         """Test initialization with zero regularization (default)."""
         lin_sys = LinSys(A=valid_A, B=valid_B_1d, reg=0.0)
         assert lin_sys is not None
+
+    def test_init_with_w_1d(self, valid_A, valid_B_1d, valid_w_1d):
+        """Test initialization with 1D initial guess w."""
+        lin_sys = LinSys(A=valid_A, B=valid_B_1d, w=valid_w_1d)
+        assert lin_sys is not None
+        assert torch.equal(lin_sys.w, valid_w_1d)
+
+    def test_init_with_w_2d(self, valid_A, valid_B_2d, valid_w_2d):
+        """Test initialization with 2D initial guess w."""
+        lin_sys = LinSys(A=valid_A, B=valid_B_2d, w=valid_w_2d)
+        assert lin_sys is not None
+        assert torch.equal(lin_sys.w, valid_w_2d)
+
+    def test_init_without_w_defaults_to_zeros(self, valid_A, valid_B_1d):
+        """Test that w defaults to zeros when not provided."""
+        lin_sys = LinSys(A=valid_A, B=valid_B_1d)
+        expected_w = torch.zeros_like(valid_B_1d)
+        assert torch.equal(lin_sys.w, expected_w)
+
+    def test_init_without_w_2d_defaults_to_zeros(self, valid_A, valid_B_2d):
+        """Test that w defaults to zeros for 2D B when not provided."""
+        lin_sys = LinSys(A=valid_A, B=valid_B_2d)
+        expected_w = torch.zeros_like(valid_B_2d)
+        assert torch.equal(lin_sys.w, expected_w)
 
 
 class TestLinSysProperties:
@@ -78,10 +114,10 @@ class TestLinSysProperties:
         assert lin_sys.reg == 0.0
 
 
-class TestLinSysCall:
-    """Test __call__ method of LinSys."""
+class TestLinSysForward:
+    """Test forward method of LinSys."""
 
-    def test_call_without_regularization(self, valid_A, valid_B_1d):
+    def test_forward_without_regularization(self, valid_A, valid_B_1d):
         """Test calling LinSys without regularization."""
         lin_sys = LinSys(A=valid_A, B=valid_B_1d, reg=0.0)
         v = torch.tensor([1.0, 1.0])
@@ -89,7 +125,7 @@ class TestLinSysCall:
         expected = valid_A @ v
         assert torch.allclose(result, expected)
 
-    def test_call_with_regularization(self, valid_A, valid_B_1d):
+    def test_forward_with_regularization(self, valid_A, valid_B_1d):
         """Test calling LinSys with regularization."""
         reg = 0.5
         lin_sys = LinSys(A=valid_A, B=valid_B_1d, reg=reg)
@@ -167,3 +203,58 @@ class TestLinSysCheckInputsErrors:
         """Test error when reg is not numeric."""
         with pytest.raises(ValueError, match="reg must be a non-negative float"):
             LinSys(A=valid_A, B=valid_B_1d, reg="0.5")  # string instead of float
+
+    def test_w_not_tensor(self, valid_A, valid_B_1d):
+        """Test error when w is not a torch.Tensor."""
+        w_invalid = [0.5, 1.5]
+        with pytest.raises(TypeError, match="w must be a torch.Tensor"):
+            LinSys(A=valid_A, B=valid_B_1d, w=w_invalid)
+
+    def test_w_shape_mismatch_1d(self, valid_A, valid_B_1d):
+        """Test error when w shape doesn't match B for 1D case."""
+        w_invalid = torch.tensor([0.5, 1.5, 2.5])
+        with pytest.raises(ValueError, match="w must have the same shape as B"):
+            LinSys(A=valid_A, B=valid_B_1d, w=w_invalid)
+
+    def test_w_shape_mismatch_2d(self, valid_A, valid_B_2d):
+        """Test error when w shape doesn't match B for 2D case."""
+        w_invalid = torch.tensor([[0.5, 1.5]])
+        with pytest.raises(ValueError, match="w must have the same shape as B"):
+            LinSys(A=valid_A, B=valid_B_2d, w=w_invalid)
+
+    def test_w_wrong_ndim(self, valid_A, valid_B_1d):
+        """Test error when w has wrong number of dimensions."""
+        w_invalid = torch.tensor([[0.5], [1.5]])
+        with pytest.raises(ValueError, match="w must have the same shape as B"):
+            LinSys(A=valid_A, B=valid_B_1d, w=w_invalid)
+
+
+class TestLinSysComputeResidualNorm:
+    """Test compute_residual_norm method of LinSys."""
+
+    def test_residual_norm_with_regularization(self, valid_A, valid_B_1d):
+        """Test residual norm with regularization."""
+        reg = 0.5
+        lin_sys = LinSys(A=valid_A, B=valid_B_1d, reg=reg)
+        # Solve (A + reg*I)v = B
+        A_reg = valid_A + reg * torch.eye(2)
+        v_exact = torch.linalg.solve(A_reg, valid_B_1d)
+        res_norm = lin_sys.compute_residual_norm(v_exact)
+        assert torch.allclose(res_norm, torch.tensor(0.0), atol=1e-6)
+
+    def test_relative_residual_norm(self, valid_A, valid_B_1d):
+        """Test relative residual norm."""
+        lin_sys = LinSys(A=valid_A, B=valid_B_1d, reg=0.0)
+        v = torch.tensor([0.0, 0.0])
+        rel_res_norm = lin_sys.compute_residual_norm(v, relative=True)
+        # Relative residual should be ||Av - B|| / ||B|| = ||B|| / ||B|| = 1.0
+        assert torch.allclose(rel_res_norm, torch.tensor(1.0))
+
+    def test_relative_residual_norm_2d_B(self, valid_A, valid_B_2d):
+        """Test relative residual norm with 2D B matrix."""
+        lin_sys = LinSys(A=valid_A, B=valid_B_2d, reg=0.0)
+        v = torch.zeros_like(valid_B_2d)
+        rel_res_norm = lin_sys.compute_residual_norm(v, relative=True)
+        # Should have one relative residual norm per column, all equal to 1.0
+        assert rel_res_norm.shape == (valid_B_2d.shape[1],)
+        assert torch.allclose(rel_res_norm, torch.ones(valid_B_2d.shape[1]))
