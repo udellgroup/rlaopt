@@ -5,7 +5,8 @@ from __future__ import annotations
 import cvxpy as cp
 import torch
 
-from rlaopt.atoms import Affine, AtomExpression, InputType
+from rlaopt.atoms.affine import Affine
+from rlaopt.atoms.atom_expression import AtomExpression, InputType
 from rlaopt.expression import Expression, Variable
 
 

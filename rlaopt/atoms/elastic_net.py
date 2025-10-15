@@ -2,7 +2,7 @@
 
 import torch
 
-from rlaopt.atoms import AtomExpression
+from rlaopt.atoms.atom_expression import AtomExpression
 from rlaopt.expression import Variable
 
 

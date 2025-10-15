@@ -2,7 +2,7 @@
 
 import torch
 
-from rlaopt.atoms import Polyhedra
+from rlaopt.atoms.polyhedra import Polyhedra
 from rlaopt.expression import Variable
 
 

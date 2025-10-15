@@ -2,7 +2,7 @@
 
 import torch
 
-from rlaopt.atoms import Box
+from rlaopt.atoms.box import Box
 from rlaopt.expression import Variable
 
 
