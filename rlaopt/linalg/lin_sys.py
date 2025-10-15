@@ -58,6 +58,26 @@ class LinSys(torch.nn.Module):
         """
         return self._A @ v + self._reg * v
 
+    def compute_residual_norm(
+        self, v: torch.Tensor, relative: bool = False
+    ) -> torch.Tensor:
+        """Compute the residual norm of the linear system for a given tensor v.
+
+        Args:
+            v (torch.Tensor): Input tensor.
+            relative (bool): If True, return the relative residual norm.
+                Defaults to False.
+
+        Returns:
+            torch.Tensor: Residual norm of the linear system.
+        """
+        residual = self.forward(v) - self._B
+        res_norm = torch.norm(residual, dim=0, ord=2)
+        if relative:
+            b_norm = torch.norm(self._B, dim=0, ord=2)
+            res_norm /= b_norm
+        return res_norm
+
     @staticmethod
     def _check_inputs(A, B, reg, w):
         if not torch.is_tensor(A):
