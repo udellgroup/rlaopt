@@ -355,7 +355,7 @@ class Expression(torch.nn.Module, ABC):
         Returns:
             UnaryOpExpression: Result of exponentiation.
         """
-        return UnaryOpExpression(self, lambda t: torch.pow(t, exponent))
+        return _UnaryOpExpression(self, lambda t: torch.pow(t, exponent))
 
 
 class ConstExpression(Expression):
@@ -442,8 +442,8 @@ class ConstExpression(Expression):
         return ConstExpression(-self.value)
 
 
-class NAryOperatorExpression(Expression, ABC):
-    """Base class for n-ary operations (operations on multiple expressions).
+class _NAryOperatorExpression(Expression, ABC):
+    """Private base class for n-ary operations (operations on multiple expressions).
 
     Provides infrastructure for expressions that operate on multiple sub-expressions,
     such as addition and multiplication. Handles parameter tracking, evaluation,
@@ -546,7 +546,7 @@ class NAryOperatorExpression(Expression, ABC):
 # ===============================
 
 
-class AddExpression(NAryOperatorExpression):
+class AddExpression(_NAryOperatorExpression):
     """Sum of multiple expressions.
 
     Represents the sum of two or more expressions. Uses a hybrid approach
@@ -760,7 +760,7 @@ class AddExpression(NAryOperatorExpression):
 # ===============================
 
 
-class ProductExpression(NAryOperatorExpression):
+class ProductExpression(_NAryOperatorExpression):
     """Product of multiple expressions.
 
     Represents either elementwise multiplication (*) or matrix multiplication (@)
@@ -828,7 +828,7 @@ class ProductExpression(NAryOperatorExpression):
             return True
         if isinstance(expr, (ProductExpression, AddExpression)):
             return all(self._is_var_or_const_tree(child) for child in expr.exprs)
-        if isinstance(expr, UnaryOpExpression):
+        if isinstance(expr, _UnaryOpExpression):
             return self._is_var_or_const_tree(expr.operand)
         return False
 
@@ -900,7 +900,7 @@ class ProductExpression(NAryOperatorExpression):
 # ===============================
 # Unary ops
 # ===============================
-class UnaryOpExpression(Expression):
+class _UnaryOpExpression(Expression):
     """Unary operation applied to an expression.
 
     Represents the application of a unary function (e.g., abs, exp, sum)
@@ -981,7 +981,7 @@ class UnaryOpExpression(Expression):
         Returns:
             UnaryOpExpression: Expression computing the sum.
         """
-        return UnaryOpExpression(self, lambda t: torch.sum(t, dim=dim))
+        return _UnaryOpExpression(self, lambda t: torch.sum(t, dim=dim))
 
 
 # ===============================
@@ -1243,7 +1243,7 @@ class Variable(Expression):
             >>> x.sum(dim=0).forward().shape
             torch.Size([4])
         """
-        return UnaryOpExpression(self, lambda t: torch.sum(t, dim=dim))
+        return _UnaryOpExpression(self, lambda t: torch.sum(t, dim=dim))
 
     def transpose(self):
         """Create a transpose operation (for 2D variables).
@@ -1267,7 +1267,7 @@ class Variable(Expression):
         """
         if self.value.ndim == 1:
             return self
-        return UnaryOpExpression(self, lambda t: t.transpose(-2, -1))
+        return _UnaryOpExpression(self, lambda t: t.transpose(-2, -1))
 
     @property
     def T(self):
