@@ -116,6 +116,7 @@ class LinSysSolver(ABC):
         """
         pass
 
+    @abstractmethod
     def solve(self, lin_sys: LinSys) -> torch.Tensor:
         """Solve the linear system.
 
@@ -128,26 +129,4 @@ class LinSysSolver(ABC):
         Returns:
             Solution tensor w satisfying (A + reg*I)w = B.
         """
-        state = self.init_state(lin_sys)
-
-        for _ in range(self.config.max_iters):
-            if self._converged(lin_sys, state):
-                break
-            state = self.step(lin_sys, state)
-
-        return state.w
-
-    def _converged(self, lin_sys, state: LinSysState) -> bool:
-        """Check if the solver has converged.
-
-        Default convergence criterion: relative residual norm < tolerance.
-
-        Args:
-            lin_sys: The linear system being solved.
-            state: Current solver state (must have 'w' attribute).
-
-        Returns:
-            True if convergence criteria are met, False otherwise.
-        """
-        rel_res_norm = lin_sys.compute_residual_norm(state.w, relative=True)
-        return torch.all(rel_res_norm < self.config.tol).item()
+        pass
