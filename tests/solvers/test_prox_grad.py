@@ -6,7 +6,7 @@ import torch
 
 from rlaopt.atoms import Box, L1Norm, NonNegative, SumSquares
 from rlaopt.expression.expression import Variable
-from rlaopt.solvers.prox_grad import ProxGradConfig, ProximalGradient
+from rlaopt.solvers.prox_grad import ProxGrad, ProxGradConfig
 from rlaopt.utils import tensor_dict_ops as dict_ops
 
 ACCEL = {"accel": True, "no_accel": False}
@@ -204,4 +204,4 @@ def _build_opt(obj, eta, tol, use_acceleration, use_linesearch):
         use_acceleration=use_acceleration,
         use_linesearch=use_linesearch,
     )
-    return ProximalGradient(config, obj)
+    return ProxGrad(config, obj)

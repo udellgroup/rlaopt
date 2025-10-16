@@ -51,7 +51,7 @@ class ProxGradState(OptimState):
     iter_: int = 0
 
 
-class ProximalGradient(OptimSolver):
+class ProxGrad(OptimSolver):
     """Proximal gradient solver for optimization problems.
 
     Solves problems of the form:

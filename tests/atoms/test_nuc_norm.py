@@ -4,7 +4,7 @@ import torch
 from rlaopt.atoms.nuc_norm import NucNorm
 from rlaopt.atoms.sum_squares import SumSquares
 from rlaopt.expression.expression import Variable
-from rlaopt.solvers.prox_grad import ProxGradConfig, ProximalGradient
+from rlaopt.solvers.prox_grad import ProxGrad, ProxGradConfig
 
 TOLERANCES = {torch.float32: 1e-6, torch.float64: 1e-10}
 
@@ -94,7 +94,7 @@ class TestNucNormProxGrad:
         config = ProxGradConfig(
             eta=10**-3, use_acceleration=False, use_linesearch=False
         )
-        opt = ProximalGradient(config, obj)
+        opt = ProxGrad(config, obj)
         params = obj.params
         state = opt.init_state(params)
 

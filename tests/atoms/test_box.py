@@ -4,7 +4,7 @@ import torch
 from rlaopt.atoms.non_negative import Box
 from rlaopt.atoms.sum_squares import SumSquares
 from rlaopt.expression.expression import Variable
-from rlaopt.solvers.prox_grad import ProxGradConfig, ProximalGradient
+from rlaopt.solvers.prox_grad import ProxGrad, ProxGradConfig
 
 TOLERANCES = {torch.float32: 1e-6, torch.float64: 1e-10}
 
@@ -91,7 +91,7 @@ class TestBoxSolve:
         eta = 0.5 / torch.linalg.norm(A, ord=2) ** 2
 
         config = ProxGradConfig(eta=eta, use_acceleration=True, use_linesearch=False)
-        opt = ProximalGradient(config, obj)
+        opt = ProxGrad(config, obj)
         params = obj.params
         state = opt.init_state(params)
 
