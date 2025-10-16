@@ -1,16 +1,36 @@
 """Proximal gradient solver implementation."""
 
 from math import sqrt
-from typing import Callable
+from typing import Callable, Dict, Tuple
 
 import torch
+from pydantic import Field
 
 from rlaopt._typing import OptimState, TensorDict
-from rlaopt.expression.expression import Expression
+from rlaopt.expression.expression import AddExpression, Expression
 from rlaopt.operator_split import OperatorSplit
-from rlaopt.solvers.proximal_gradient.prox_grad import ProxGradConfig
+from rlaopt.solvers.configs import SolverConfig
+from rlaopt.solvers.solver_base import OptimSolver
 from rlaopt.solvers.utils import split_objective
 from rlaopt.utils import tensor_dict_ops as dict_ops
+
+
+class ProxGradConfig(SolverConfig):
+    """Configuration for the proximal gradient solver.
+
+    Attributes:
+        eta: Step size for the gradient update.
+        max_iters: Maximum number of iterations.
+        tol: Tolerance for convergence.
+        use_acceleration: Whether to use acceleration techniques.
+        use_linesearch: Whether to use line search for step size selection.
+    """
+
+    eta: float = Field(default=1.0, gt=0)
+    max_iters: int = Field(default=5000, gt=0)
+    tol: float = Field(default=1e-4, gt=0)
+    use_acceleration: bool = False
+    use_linesearch: bool = True
 
 
 class ProxGradState(OptimState):
@@ -31,7 +51,76 @@ class ProxGradState(OptimState):
     iter_: int = 0
 
 
-def proximal_gradient(
+class ProximalGradient(OptimSolver):
+    """Proximal gradient solver for optimization problems.
+
+    Solves problems of the form:
+        minimize f(x) + g(x)
+    where f is smooth (differentiable) and g is proxable (has an efficient
+    proximal operator).
+
+    Supports multiple variants:
+    - Basic proximal gradient (fixed step size)
+    - Accelerated proximal gradient (Nesterov momentum)
+    - Backtracking line search for adaptive step sizes
+    - Combinations of acceleration and line search
+    """
+
+    def __init__(
+        self, config: ProxGradConfig, obj: Expression | AddExpression | OperatorSplit
+    ):
+        """Initialize the proximal gradient solver.
+
+        Args:
+            config: Configuration for the solver.
+            obj: The optimization objective.
+        """
+        super().__init__(config)
+        self._step = _build_step(obj, config.use_acceleration, config.use_linesearch)
+
+    def init_state(self, params: TensorDict) -> ProxGradState:
+        """Initialize the solver state.
+
+        Args:
+            params: Initial parameters.
+
+        Returns:
+            Initial solver state.
+        """
+        return _init_state(params, self.config.eta, self.config.use_acceleration)
+
+    def step(
+        self, params: TensorDict, state: ProxGradState
+    ) -> Tuple[TensorDict, ProxGradState]:
+        """Perform a single optimization step.
+
+        Args:
+            params: Current parameters.
+            state: Current solver state.
+
+        Returns:
+            Tuple of updated parameters and state.
+        """
+        return self._step(params, state)
+
+    def solve(
+        self,
+        obj: Expression | AddExpression | OperatorSplit,
+        init_params: TensorDict = None,
+    ) -> Tuple[Dict[str, torch.Tensor], torch.Tensor]:
+        """Solve the optimization problem.
+
+        Args:
+            obj: The optimization objective.
+            init_params: Optional initial parameters.
+
+        Returns:
+            Tuple of optimized parameters and final error.
+        """
+        return _proximal_gradient(obj, self.config, init_params)
+
+
+def _proximal_gradient(
     obj: Expression | OperatorSplit,
     config: ProxGradConfig,
     init_params: TensorDict | None = None,
@@ -102,6 +191,7 @@ def proximal_gradient(
 def _init_state(
     params: TensorDict, eta: float, use_acceleration: bool
 ) -> ProxGradState:
+    """Initialize the solver state."""
     if use_acceleration:
         return ProxGradState(params_prev=params, eta=eta)
     else:
@@ -114,6 +204,7 @@ def _build_step(
     [TensorDict, ProxGradState],
     tuple[TensorDict, ProxGradState],
 ]:
+    """Build the step function based on configuration."""
     # If the objective is not already an OperatorSplit, split it
     if isinstance(obj, Expression):
         obj = split_objective(obj)
@@ -179,6 +270,7 @@ def _prox_grad_step(
     grad_f: Callable[[TensorDict], TensorDict],
     prox: Callable[[TensorDict, float], TensorDict],
 ) -> TensorDict:
+    """Perform a basic proximal gradient step."""
     grads = grad_f(params)
     params = _prox_update(params, grads, state, prox)
     return params
@@ -191,6 +283,7 @@ def _accel_prox_grad_ls_step(
     grad_f: Callable[[TensorDict], TensorDict],
     prox: Callable[[TensorDict, float], TensorDict],
 ) -> tuple[TensorDict, ProxGradState]:
+    """Perform an accelerated proximal gradient step with line search."""
     y = _accel_step(params, state)
     params, state = _linesearch(y, state, f, grad_f, prox)
     return params, state
@@ -202,12 +295,14 @@ def _accel_prox_grad_step(
     grad_f: Callable[[TensorDict], TensorDict],
     prox: Callable[[TensorDict, float], TensorDict],
 ) -> TensorDict:
+    """Perform an accelerated proximal gradient step."""
     y = _accel_step(params, state)
     params = _prox_grad_step(y, state, grad_f, prox)
     return params
 
 
 def _accel_step(params: TensorDict, state: ProxGradState) -> TensorDict:
+    """Compute the accelerated (momentum) step."""
     momentum_scale = state.iter_ / (state.iter_ + 3)
     momentum = dict_ops.scal_mul(
         dict_ops.sub(params, state.params_prev), momentum_scale
@@ -222,6 +317,7 @@ def _linesearch(
     grad_f: Callable[[TensorDict], TensorDict],
     prox: Callable[[TensorDict, float], TensorDict],
 ) -> tuple[TensorDict, ProxGradState]:
+    """Perform backtracking line search to find appropriate step size."""
     beta = 0.5
     f0 = f(params)
     grads = grad_f(params)
@@ -254,5 +350,5 @@ def _prox_update(
     state: ProxGradState,
     prox: Callable[[TensorDict, float], TensorDict],
 ) -> TensorDict:
-    # prox(params - state.eta * grads, state.eta)
+    """Apply the proximal update: prox(params - eta * grads, eta)."""
     return prox(dict_ops.sub(params, dict_ops.scal_mul(grads, state.eta)), state.eta)

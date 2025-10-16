@@ -6,7 +6,7 @@ import torch
 
 from rlaopt.atoms import Box, L1Norm, NonNegative, SumSquares
 from rlaopt.expression.expression import Variable
-from rlaopt.solvers.proximal_gradient.prox_grad import ProxGradConfig, ProximalGradient
+from rlaopt.solvers.prox_grad import ProxGradConfig, ProximalGradient
 from rlaopt.utils import tensor_dict_ops as dict_ops
 
 ACCEL = {"accel": True, "no_accel": False}
