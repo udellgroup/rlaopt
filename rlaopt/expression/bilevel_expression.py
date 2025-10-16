@@ -4,7 +4,7 @@ import cvxpy as cp
 import torch
 
 from rlaopt.expression.expression import Expression
-from rlaopt.solvers.configs import SolverConfig
+from rlaopt.solvers.configs_base import SolverConfig
 from rlaopt.solvers.solver_base import OptimSolver
 
 

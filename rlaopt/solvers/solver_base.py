@@ -8,7 +8,7 @@ from rlaopt._typing import LinSysState, OptimState, TensorDict
 from rlaopt.expression.expression import Expression
 from rlaopt.linalg import LinSys
 from rlaopt.operator_split import OperatorSplit
-from rlaopt.solvers.configs import LinSysSolverConfig, SolverConfig
+from rlaopt.solvers.configs_base import LinSysSolverConfig, SolverConfig
 
 
 class OptimSolver(ABC):

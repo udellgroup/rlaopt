@@ -9,7 +9,7 @@ from pydantic import Field
 from rlaopt._typing import OptimState, TensorDict
 from rlaopt.expression.expression import AddExpression, Expression
 from rlaopt.operator_split import OperatorSplit
-from rlaopt.solvers.configs import SolverConfig
+from rlaopt.solvers.configs_base import SolverConfig
 from rlaopt.solvers.solver_base import OptimSolver
 from rlaopt.solvers.utils import split_objective
 from rlaopt.utils import tensor_dict_ops as dict_ops
