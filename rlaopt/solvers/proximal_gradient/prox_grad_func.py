@@ -8,7 +8,7 @@ import torch
 from rlaopt._typing import OptimState, TensorDict
 from rlaopt.expression.expression import Expression
 from rlaopt.operator_split import OperatorSplit
-from rlaopt.solvers.configs import ProxGradConfig
+from rlaopt.solvers.proximal_gradient.prox_grad import ProxGradConfig
 from rlaopt.solvers.utils import split_objective
 from rlaopt.utils import tensor_dict_ops as dict_ops
 

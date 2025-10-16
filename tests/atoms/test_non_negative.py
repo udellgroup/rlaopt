@@ -1,11 +1,10 @@
 import pytest
 import torch
 
-from rlaopt.atoms.sum_squares import SumSquares
 from rlaopt.atoms.non_negative import NonNegative
+from rlaopt.atoms.sum_squares import SumSquares
 from rlaopt.expression.expression import Variable
-from rlaopt.solvers.configs import ProxGradConfig
-from rlaopt.solvers.proximal_gradient.prox_grad import ProximalGradient
+from rlaopt.solvers.proximal_gradient.prox_grad import ProxGradConfig, ProximalGradient
 
 TOLERANCES = {torch.float32: 1e-6, torch.float64: 1e-10}
 
@@ -57,8 +56,9 @@ class TestNonNegativeBasics:
         torch.manual_seed(0)
         r = NonNegative(test_var)
 
-        v, zero = torch.ones(test_dim, dtype=precision), torch.zeros(
-            test_dim, dtype=precision
+        v, zero = (
+            torch.ones(test_dim, dtype=precision),
+            torch.zeros(test_dim, dtype=precision),
         )
         scaling_factor = 1.0
 

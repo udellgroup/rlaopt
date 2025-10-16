@@ -1,11 +1,10 @@
 import pytest
 import torch
 
-from rlaopt.atoms.sum_squares import SumSquares
 from rlaopt.atoms.non_negative import Box
+from rlaopt.atoms.sum_squares import SumSquares
 from rlaopt.expression.expression import Variable
-from rlaopt.solvers.configs import ProxGradConfig
-from rlaopt.solvers.proximal_gradient.prox_grad import ProximalGradient
+from rlaopt.solvers.proximal_gradient.prox_grad import ProxGradConfig, ProximalGradient
 
 TOLERANCES = {torch.float32: 1e-6, torch.float64: 1e-10}
 

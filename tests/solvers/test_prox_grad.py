@@ -1,13 +1,12 @@
+from math import sqrt
+
 import numpy as np
 import pytest
 import torch
-from math import sqrt
 
-from rlaopt.atoms import SumSquares, Box, L1Norm, NonNegative
-
+from rlaopt.atoms import Box, L1Norm, NonNegative, SumSquares
 from rlaopt.expression.expression import Variable
-from rlaopt.solvers.configs import ProxGradConfig
-from rlaopt.solvers.proximal_gradient.prox_grad import ProximalGradient
+from rlaopt.solvers.proximal_gradient.prox_grad import ProxGradConfig, ProximalGradient
 from rlaopt.utils import tensor_dict_ops as dict_ops
 
 ACCEL = {"accel": True, "no_accel": False}
@@ -177,9 +176,9 @@ def _solve_and_verify(obj, eta, tol, use_acceleration, use_linesearch):
 
     # Test using solve method
     params, err = opt.solve(obj)
-    assert err.item() <= tol * sqrt(
-        dict_ops.dim(params)
-    ), f"Solve method failed: error {err.item()} > tolerance {tol}"
+    assert err.item() <= tol * sqrt(dict_ops.dim(params)), (
+        f"Solve method failed: error {err.item()} > tolerance {tol}"
+    )
 
 
 def _loop(params, state, opt):

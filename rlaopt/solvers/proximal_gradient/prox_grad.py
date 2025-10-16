@@ -1,13 +1,32 @@
 from typing import Dict, Tuple
 
 import torch
+from pydantic import Field
 
 from rlaopt._typing import TensorDict
 from rlaopt.expression.expression import AddExpression, Expression
 from rlaopt.operator_split import OperatorSplit
-from rlaopt.solvers.configs import ProxGradConfig
+from rlaopt.solvers.configs import SolverConfig
 from rlaopt.solvers.proximal_gradient import prox_grad_func
 from rlaopt.solvers.solver_base import OptimSolver
+
+
+class ProxGradConfig(SolverConfig):
+    """Configuration for the proximal gradient solver.
+
+    Attributes:
+        eta: Step size for the gradient update.
+        max_iters: Maximum number of iterations.
+        tol: Tolerance for convergence.
+        use_acceleration: Whether to use acceleration techniques.
+        use_linesearch: Whether to use line search for step size selection.
+    """
+
+    eta: float = Field(default=1.0, gt=0)
+    max_iters: int = Field(default=5000, gt=0)
+    tol: float = Field(default=1e-4, gt=0)
+    use_acceleration: bool = False
+    use_linesearch: bool = True
 
 
 class ProximalGradient(OptimSolver):
