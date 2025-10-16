@@ -29,8 +29,9 @@ class PCGState(LinSysState):
         r: Residual vector (B - (A + reg*I)w).
         z: Preconditioned residual (P_inv @ r).
         p: Search direction.
-        rz: Inner product r^T @ z.
-        res_norm: Current residual norm.
+        rz: Inner product r^T @ z (for non-converged components).
+        res_norm: Current residual norm per component.
+        mask: Boolean mask indicating which components have not yet converged.
         iter_: Current iteration count, starting from 0.
     """
 
@@ -39,6 +40,7 @@ class PCGState(LinSysState):
     p: torch.Tensor
     rz: torch.Tensor
     res_norm: torch.Tensor
+    mask: torch.Tensor
     iter_: int = 0
 
 
@@ -71,7 +73,7 @@ class PCG(LinSysSolver):
         Returns:
             Initial solver state.
         """
-        return _init_pcg_state(lin_sys, self.config.P_inv)
+        return _init_pcg_state(lin_sys, self.config.P_inv, self.config.tol)
 
     def step(self, lin_sys: LinSys, state: PCGState) -> PCGState:
         """Perform a single PCG iteration step.
@@ -83,7 +85,7 @@ class PCG(LinSysSolver):
         Returns:
             Updated state after one iteration.
         """
-        return _pcg_step(lin_sys, state, self.config.P_inv)
+        return _pcg_step(lin_sys, state, self.config.P_inv, self.config.tol)
 
     def solve(self, lin_sys: LinSys) -> torch.Tensor:
         """Solve the linear system using PCG.
@@ -119,24 +121,24 @@ def _pcg(lin_sys: LinSys, config: PCGConfig) -> torch.Tensor:
     max_iters, tol, P_inv = config.max_iters, config.tol, config.P_inv
 
     # Initialize state
-    state = _init_pcg_state(lin_sys, P_inv)
+    state = _init_pcg_state(lin_sys, P_inv, tol)
 
-    # Get convergence tolerance
-    epsilon = tol * torch.linalg.norm(lin_sys.B, dim=0, ord=2)
-
-    # Solver loop
-    while (state.res_norm > epsilon).any() and state.iter_ < max_iters:
-        state = _pcg_step(lin_sys, state, P_inv)
+    # Solver loop - continue while any component hasn't converged
+    while state.mask.any() and state.iter_ < max_iters:
+        state = _pcg_step(lin_sys, state, P_inv, tol)
 
     return lin_sys.w.data
 
 
-def _init_pcg_state(lin_sys: LinSys, P_inv: torch.Tensor | None = None) -> PCGState:
+def _init_pcg_state(
+    lin_sys: LinSys, P_inv: torch.Tensor | None = None, tol: float = 1e-6
+) -> PCGState:
     """Initialize the PCG solver state.
 
     Args:
         lin_sys: The linear system to solve.
         P_inv: Inverse of the preconditioner matrix. If None, uses identity.
+        tol: Tolerance for convergence.
 
     Returns:
         Initial PCG state with residuals and search directions.
@@ -153,19 +155,24 @@ def _init_pcg_state(lin_sys: LinSys, P_inv: torch.Tensor | None = None) -> PCGSt
     # Initialize search direction
     p = z.clone()
 
-    # Compute r^T @ z
-    rz = (r * z).sum(dim=0, keepdim=True)
-    if rz.ndim == 2:
-        rz = rz.squeeze(0)
-
-    # Compute initial residual norm
+    # Compute initial residual norm per component
     res_norm = torch.linalg.norm(r, dim=0, ord=2)
 
-    return PCGState(r=r, z=z, p=p, rz=rz, res_norm=res_norm, iter_=0)
+    # Initialize mask - all components start as not converged
+    epsilon = tol * torch.linalg.norm(lin_sys.B, dim=0, ord=2)
+    mask = res_norm > epsilon
+
+    # Compute r^T @ z as a matrix (rz[i,j] corresponds to components i and j)
+    rz = r.T @ z
+
+    return PCGState(r=r, z=z, p=p, rz=rz, res_norm=res_norm, mask=mask, iter_=0)
 
 
 def _pcg_step(
-    lin_sys: LinSys, state: PCGState, P_inv: torch.Tensor | None = None
+    lin_sys: LinSys,
+    state: PCGState,
+    P_inv: torch.Tensor | None = None,
+    tol: float = 1e-6,
 ) -> PCGState:
     """Perform a single PCG iteration.
 
@@ -173,53 +180,76 @@ def _pcg_step(
         lin_sys: The linear system to solve.
         state: Current solver state.
         P_inv: Inverse of the preconditioner matrix. If None, uses identity.
+        tol: Tolerance for convergence.
 
     Returns:
         Updated state after one PCG iteration.
     """
-    # Compute A @ p (apply linear operator to search direction)
-    Ap = lin_sys.forward(state.p)
+    # Get current mask
+    mask = state.mask
 
-    # Compute step size: alpha = (r^T @ z) / (p^T @ A @ p)
-    pAp = (state.p * Ap).sum(dim=0, keepdim=True)
-    if pAp.ndim == 2:
-        pAp = pAp.squeeze(0)
+    # If all components have converged, return unchanged state
+    if not mask.any():
+        return state
 
-    alpha = state.rz / pAp
+    # Apply mask to work only with non-converged components
+    p_masked = state.p[:, mask]
+    rz_masked = state.rz[mask][:, mask]
 
-    # Expand alpha for broadcasting if needed
-    if alpha.ndim == 1 and lin_sys.w.ndim == 2:
-        alpha = alpha.unsqueeze(0)
+    # Compute A @ p only for non-converged directions
+    Ap_masked = lin_sys.forward(p_masked)
 
-    # Update solution: w = w + alpha * p (update in place)
-    lin_sys.w.data.add_(alpha * state.p)
+    # Compute alpha for active components
+    pAp_masked = (p_masked * Ap_masked).sum(dim=0)
+    alpha_masked = torch.linalg.solve(
+        torch.diag(pAp_masked), torch.diag(rz_masked)
+    ).diag()
 
-    # Update residual: r = r - alpha * A @ p
-    r_new = state.r - alpha * Ap
+    # Expand alpha for broadcasting
+    if alpha_masked.ndim == 1 and lin_sys.w.ndim == 2:
+        alpha_masked = alpha_masked.unsqueeze(0)
 
-    # Apply preconditioner to new residual: z = P_inv @ r
+    # Only update the active parts of the solution
+    lin_sys.w.data[:, mask] += p_masked * alpha_masked
+
+    # Update residual for active components
+    r_new = state.r.clone()
+    r_new[:, mask] -= Ap_masked * alpha_masked
+
+    # Apply preconditioner to new residual for active components
     if P_inv is not None:
-        z_new = P_inv @ r_new
+        z_new_masked = P_inv @ r_new[:, mask]
     else:
-        z_new = r_new.clone()
+        z_new_masked = r_new[:, mask].clone()
 
-    # Compute new r^T @ z
-    rz_new = (r_new * z_new).sum(dim=0, keepdim=True)
-    if rz_new.ndim == 2:
-        rz_new = rz_new.squeeze(0)
+    # Update z with new values for active components
+    z_new = state.z.clone()
+    z_new[:, mask] = z_new_masked
 
-    # Compute beta = (r_new^T @ z_new) / (r^T @ z)
-    beta = rz_new / state.rz
+    # Compute new rz for active components
+    rz_new_masked = r_new[:, mask].T @ z_new_masked
 
-    # Expand beta for broadcasting if needed
-    if beta.ndim == 1 and state.p.ndim == 2:
-        beta = beta.unsqueeze(0)
+    # Compute beta for active components
+    beta_masked = torch.linalg.solve(rz_masked, rz_new_masked).diag()
 
-    # Update search direction: p = z + beta * p
-    p_new = z_new + beta * state.p
+    # Expand beta for broadcasting
+    if beta_masked.ndim == 1 and state.p.ndim == 2:
+        beta_masked = beta_masked.unsqueeze(0)
+
+    # Update search direction for active components
+    p_new = state.p.clone()
+    p_new[:, mask] = z_new_masked + p_masked * beta_masked
+
+    # Update rz matrix
+    rz_new = torch.zeros_like(state.rz)
+    rz_new[torch.outer(mask, mask)] = rz_new_masked.flatten()
 
     # Compute new residual norm
     res_norm_new = torch.linalg.norm(r_new, dim=0, ord=2)
+
+    # Update mask based on convergence
+    epsilon = tol * torch.linalg.norm(lin_sys.B, dim=0, ord=2)
+    mask_new = res_norm_new > epsilon
 
     return PCGState(
         r=r_new,
@@ -227,5 +257,6 @@ def _pcg_step(
         p=p_new,
         rz=rz_new,
         res_norm=res_norm_new,
+        mask=mask_new,
         iter_=state.iter_ + 1,
     )
