@@ -4,7 +4,7 @@ import torch
 from rlaopt.atoms.non_negative import NonNegative
 from rlaopt.atoms.sum_squares import SumSquares
 from rlaopt.expression.expression import Variable
-from rlaopt.solvers.prox_grad import ProxGrad, ProxGradConfig
+from rlaopt.solvers import ProxGrad, ProxGradConfig
 
 TOLERANCES = {torch.float32: 1e-6, torch.float64: 1e-10}
 
