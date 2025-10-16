@@ -1,9 +1,8 @@
 import pytest
 import torch
 
-from rlaopt.atoms.sum_squares import SumSquares
-from rlaopt.atoms.non_negative import Box
-from rlaopt.expression.expression import Variable
+from rlaopt.atoms import Box, SumSquares
+from rlaopt.expression import Variable
 from rlaopt.solvers.configs import ProxGradConfig
 from rlaopt.solvers.proximal_gradient.prox_grad import ProximalGradient
 
@@ -22,7 +21,7 @@ def test_dim():
 
 @pytest.fixture
 def test_var(test_dim, precision):
-    x = Variable(torch.zeros(test_dim, dtype=precision))
+    x = Variable(torch.zeros(test_dim, dtype=precision), name="x")
     return x
 
 
@@ -52,12 +51,12 @@ def reset_torch_state():
 class TestBoxBasics:
     def test_init(self, test_var, l, u):
         torch.manual_seed(0)
-        r = Box(test_var, l=l, u=u)
+        r = Box(test_var, lower=l, upper=u)
         assert r.x is not None
 
     def test_forward(self, test_var, l, u, test_dim, precision):
         torch.manual_seed(0)
-        r = Box(test_var, l=l, u=u)
+        r = Box(test_var, lower=l, upper=u)
         assert r.forward() == 0.0
 
         params = {"x": -3 * torch.ones(test_dim, dtype=precision)}
@@ -65,7 +64,7 @@ class TestBoxBasics:
 
     def test_prox(self, test_var, l, u, test_dim, precision):
         torch.manual_seed(0)
-        r = Box(test_var, l=l, u=u)
+        r = Box(test_var, lower=l, upper=u)
 
         v = torch.ones(test_dim, dtype=precision)
         scaling_factor = 1.0
@@ -85,9 +84,9 @@ class TestBoxSolve:
         n, p = 1024, 256
         A = torch.randn((n, p)) / n ** (0.5)
         b = torch.randn(n) / n ** (0.5)
-        x = Variable(torch.zeros(p))
+        x = Variable(torch.zeros(p), name="x")
 
-        obj = SumSquares(A @ x - b) + Box(x, l=l, u=u)
+        obj = SumSquares(A @ x - b) + Box(x, lower=l, upper=u)
 
         eta = 0.5 / torch.linalg.norm(A, ord=2) ** 2
 

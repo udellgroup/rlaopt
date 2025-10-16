@@ -1,9 +1,8 @@
 import pytest
 import torch
 
-from rlaopt.atoms.sum_squares import SumSquares
-from rlaopt.atoms.nuc_norm import NucNorm
-from rlaopt.expression.expression import Variable
+from rlaopt.atoms import NucNorm, SumSquares
+from rlaopt.expression import Variable
 from rlaopt.solvers.configs import ProxGradConfig
 from rlaopt.solvers.proximal_gradient.prox_grad import ProximalGradient
 
@@ -42,7 +41,7 @@ class TestNucNormBasics:
         self.U, _ = torch.linalg.qr(torch.randn(self.p, self.p, dtype=precision))
         self.V, _ = torch.linalg.qr(torch.randn(self.p, self.p, dtype=precision))
         self.S = torch.tensor([100, 50, 5, 0.1, 0.01], dtype=precision)
-        self.x = Variable(self.U @ (self.S * self.V.T))
+        self.x = Variable(self.U @ (self.S * self.V.T), name="x")
         self.r = NucNorm(self.x, scaling=1.0)
         self.atol = get_atol(precision, self.S)
 
@@ -89,7 +88,7 @@ class TestNucNormProxGrad:
         B = A @ W_Star + 10**-4 * torch.randn((128, 16))
         lambd = 1000.0
 
-        W = Variable(torch.zeros_like(W_Star))
+        W = Variable(torch.zeros_like(W_Star), name="W")
         obj = SumSquares(A @ W - B) + NucNorm(W, scaling=lambd)
 
         config = ProxGradConfig(

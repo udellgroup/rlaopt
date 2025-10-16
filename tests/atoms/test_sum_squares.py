@@ -1,8 +1,8 @@
 import pytest
 import torch
 
-from rlaopt.atoms.sum_squares import SumSquares
-from rlaopt.expression.expression import Variable
+from rlaopt.atoms import SumSquares
+from rlaopt.expression import Variable
 
 TOLERANCES = {torch.float32: 1e-5, torch.float64: 1e-10}
 
@@ -24,7 +24,7 @@ class TestSumSquaresVariable:
         torch.manual_seed(0)
 
         x0 = torch.randn(64, dtype=precision)
-        x = Variable(x0)
+        x = Variable(x0, name="x")
         self.f = SumSquares(x)
         self.x0 = x0
 

@@ -1,9 +1,8 @@
 import pytest
 import torch
 
-from rlaopt.atoms.sum_squares import SumSquares
-from rlaopt.atoms.non_negative import NonNegative
-from rlaopt.expression.expression import Variable
+from rlaopt.atoms import NonNegative, SumSquares
+from rlaopt.expression import Variable
 from rlaopt.solvers.configs import ProxGradConfig
 from rlaopt.solvers.proximal_gradient.prox_grad import ProximalGradient
 
@@ -22,7 +21,7 @@ def test_dim():
 
 @pytest.fixture
 def test_var(test_dim, precision):
-    x = Variable(torch.zeros(test_dim, dtype=precision))
+    x = Variable(torch.zeros(test_dim, dtype=precision), name="x")
     return x
 
 
@@ -57,8 +56,9 @@ class TestNonNegativeBasics:
         torch.manual_seed(0)
         r = NonNegative(test_var)
 
-        v, zero = torch.ones(test_dim, dtype=precision), torch.zeros(
-            test_dim, dtype=precision
+        v, zero = (
+            torch.ones(test_dim, dtype=precision),
+            torch.zeros(test_dim, dtype=precision),
         )
         scaling_factor = 1.0
 
@@ -77,7 +77,7 @@ class TestNonNegativeSolve:
         n, p = 1024, 256
         A = torch.randn((n, p)) / n ** (0.5)
         b = torch.randn(n) / n ** (0.5)
-        x = Variable(torch.zeros(p))
+        x = Variable(torch.zeros(p), name="x")
 
         obj = SumSquares(A @ x - b) + NonNegative(x)
 

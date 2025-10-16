@@ -1,8 +1,8 @@
 import pytest
 import torch
 
-from rlaopt.atoms.l1norm import L1Norm
-from rlaopt.expression.expression import Variable
+from rlaopt.atoms import L1Norm
+from rlaopt.expression import Variable
 
 TOLERANCES = {torch.float32: 1e-6, torch.float64: 1e-10}
 
@@ -27,7 +27,7 @@ class TestL1NormBasics:
 
         _x = torch.tensor([100, 50, 10], dtype=precision)
         self._x = _x
-        self.x = Variable(_x)
+        self.x = Variable(_x, name="x")
         self.lambd = 2.0
         self.r = L1Norm(self.x, scaling=self.lambd)
 

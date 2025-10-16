@@ -1,16 +1,16 @@
-"""Affine equality constraint atom for optimization."""
+"""Linear equality constraint atom for optimization."""
 
 import torch
 
-from rlaopt.atoms.polyhedra import Polyhedra
+from rlaopt.atoms.polyhedron import Polyhedron
 from rlaopt.expression import Variable
 
 
-class AffineConstraint(Polyhedra):
-    """Affine equality constraint atom enforcing A @ x = b.
+class LinEqConstraint(Polyhedron):
+    """Linear equality constraint atom enforcing A @ x = b.
 
     Represents a system of linear equality constraints. Unlike the general
-    Polyhedra class, this provides an efficient closed-form proximal operator
+    Polyhedron class, this provides an efficient closed-form proximal operator
     (projection onto the affine subspace) via Cholesky factorization.
 
     The projection solves: argmin_z ||z - location||² subject to A @ z = b
@@ -25,13 +25,13 @@ class AffineConstraint(Polyhedra):
         >>> x = Variable((2,), name='x')
         >>> A = torch.tensor([[1.0, 1.0]])
         >>> b = torch.tensor([1.0])
-        >>> constraint = AffineConstraint(x, A, b)
+        >>> constraint = LinEqConstraint(x, A, b)
 
         >>> # Multiple equality constraints
         >>> x = Variable((5,), name='x')
         >>> A = torch.randn(3, 5)
         >>> b = torch.randn(3)
-        >>> constraint = AffineConstraint(x, A, b)
+        >>> constraint = LinEqConstraint(x, A, b)
 
         >>> # Use proximal operator for projection onto affine subspace
         >>> unconstrained_point = torch.randn(5)

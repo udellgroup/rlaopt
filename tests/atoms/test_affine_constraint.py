@@ -26,7 +26,7 @@ class TestAffineConstraint:
         A = torch.randn((16, 64), dtype=precision) / 4.0
         x0 = torch.randn(64, dtype=precision)
         b = A @ x0
-        x = Variable(torch.zeros(64, dtype=precision))
+        x = Variable(torch.zeros(64, dtype=precision), name="x")
         self.r = AffineConstraint(x, A, b)
         self.x0 = x0
 

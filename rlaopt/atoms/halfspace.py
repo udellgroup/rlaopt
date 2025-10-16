@@ -2,11 +2,11 @@
 
 import torch
 
-from rlaopt.atoms.polyhedra import Polyhedra
+from rlaopt.atoms.polyhedron import Polyhedron
 from rlaopt.expression import Variable
 
 
-class Halfspace(Polyhedra):
+class Halfspace(Polyhedron):
     """Halfspace constraint atom representing a linear inequality.
 
     A halfspace constraint restricts a variable to satisfy a linear inequality:

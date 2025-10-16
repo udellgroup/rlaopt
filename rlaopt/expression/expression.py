@@ -14,10 +14,9 @@ Classes:
     UnaryOpExpression: Unary operation applied to an expression.
 """
 
-import inspect
 from abc import ABC, abstractmethod
 from functools import reduce
-from typing import Any, Callable, Union
+from typing import Callable, Union
 
 import cvxpy as cp
 import torch
@@ -133,15 +132,11 @@ class Expression(torch.nn.Module, ABC):
         pass
 
     @abstractmethod
-    def forward(self, **kwargs) -> torch.Tensor:
+    def forward(self) -> torch.Tensor:
         """Evaluate the expression using current parameter values.
 
         This method evaluates the expression with the current values of all
-        registered parameters. Additional keyword arguments can be passed
-        for expressions that require extra context (e.g., data for loss functions).
-
-        Args:
-            **kwargs: Additional keyword arguments for evaluating the expression.
+        registered parameters. 
 
         Returns:
             torch.Tensor: The evaluated result.
@@ -155,7 +150,7 @@ class Expression(torch.nn.Module, ABC):
         """
         pass
 
-    def evaluate(self, params: TensorDict, **kwargs: Any) -> torch.Tensor:
+    def evaluate(self, params: TensorDict) -> torch.Tensor:
         """Evaluate the expression at specified parameter values.
 
         Unlike forward(), this method evaluates the expression at parameter
@@ -164,8 +159,7 @@ class Expression(torch.nn.Module, ABC):
 
         Args:
             params: Dictionary mapping parameter names to their values.
-            **kwargs: Additional keyword arguments for evaluation.
-
+        
         Returns:
             torch.Tensor: The evaluated result.
 
@@ -176,7 +170,7 @@ class Expression(torch.nn.Module, ABC):
             >>> torch.equal(result, torch.ones(5))
             True
         """
-        return torch.func.functional_call(self, params, args=None, kwargs=kwargs)
+        return torch.func.functional_call(self, params, args=None, kwargs=None)
 
     def params_dict(self) -> TensorDict:
         """Get all parameters as a dictionary.
@@ -490,9 +484,6 @@ class _NAryOperatorExpression(Expression, ABC):
                 # This is needed for operator_split in AddExpression
                 self.exprs = torch.nn.ModuleList([_to_expr(e) for e in exprs[:-1]])
 
-        # Cache expression signatures for kwargs filtering
-        self._expr_signatures = {e: inspect.signature(e.forward) for e in self.exprs}
-
     def is_smooth(self) -> bool:
         """Check if all sub-expressions are smooth.
 
@@ -501,36 +492,16 @@ class _NAryOperatorExpression(Expression, ABC):
         """
         return all(expr.is_smooth() for expr in self.exprs)
 
-    def forward(self, **kwargs) -> torch.Tensor:
+    def forward(self) -> torch.Tensor:
         """Evaluate the operation with current parameters.
 
-        Evaluates each sub-expression and applies the operator. Automatically
-        filters kwargs to only pass relevant arguments to each sub-expression.
-
-        Args:
-            **kwargs: Keyword arguments for sub-expression evaluation.
+        Evaluates each sub-expression and applies the operation. 
 
         Returns:
             torch.Tensor: Result of the operation.
         """
-        vals = [self._eval_expr(expr, **kwargs) for expr in self.exprs]
+        vals = [expr.forward() for expr in self.exprs]
         return self.op(vals, torch)
-
-    def _eval_expr(self, expr: Expression, **kwargs):
-        """Evaluate a sub-expression with filtered kwargs.
-
-        Filters kwargs to only those accepted by the expression's forward method.
-
-        Args:
-            expr: Expression to evaluate.
-            **kwargs: All available keyword arguments.
-
-        Returns:
-            torch.Tensor: Evaluated expression.
-        """
-        sig = self._expr_signatures[expr]
-        relevant_kwargs = {k: v for k, v in kwargs.items() if k in sig.parameters}
-        return expr.forward(**relevant_kwargs)
 
     def to_cvxpy(self):
         """Convert to CVXPY expression.
@@ -936,16 +907,13 @@ class _UnaryOpExpression(Expression):
         self.add_module("_operand", self.operand)
         self._op = op
 
-    def forward(self, **kwargs) -> torch.Tensor:
+    def forward(self) -> torch.Tensor:
         """Evaluate the unary operation.
-
-        Args:
-            **kwargs: Keyword arguments for operand evaluation.
 
         Returns:
             torch.Tensor: Result of applying operation to operand.
         """
-        val = self.operand.forward(**kwargs)
+        val = self.operand.forward()
         return self._op(val)
 
     def is_smooth(self) -> bool:

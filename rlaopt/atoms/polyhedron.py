@@ -1,4 +1,4 @@
-"""Polyhedra constraint atom for optimization."""
+"""Polyhedron constraint atom for optimization."""
 
 from functools import partial
 from typing import Callable
@@ -9,7 +9,7 @@ from rlaopt.atoms.atom_expression import AtomExpression
 from rlaopt.expression.expression import Variable
 
 
-class Polyhedra(AtomExpression):
+class Polyhedron(AtomExpression):
     """Polyhedral constraint atom for linear equality and inequality constraints.
 
     A polyhedron is defined by:
@@ -37,7 +37,7 @@ class Polyhedra(AtomExpression):
     Examples:
         >>> # Box constraints: -1 <= x <= 1
         >>> x = Variable((5,), name='x')
-        >>> box = Polyhedra(
+        >>> box = Polyhedron(
         ...     x,
         ...     lower=torch.full((5,), -1.0),
         ...     upper=torch.full((5,), 1.0)
@@ -50,7 +50,7 @@ class Polyhedra(AtomExpression):
 
         >>> # Mixed constraints
         >>> C = torch.randn(2, 5)
-        >>> poly = Polyhedra(
+        >>> poly = Polyhedron(
         ...     x,
         ...     A=A,
         ...     b=b,
@@ -134,7 +134,7 @@ class Polyhedra(AtomExpression):
         return self._eval(value)
 
     def is_smooth(self) -> bool:
-        """Check if the polyhedra constraint is smooth.
+        """Check if the polyhedral constraint is smooth.
 
         Returns:
             bool: Always False, as indicator functions are non-smooth.
@@ -142,7 +142,7 @@ class Polyhedra(AtomExpression):
         return False
 
     def is_proxable(self) -> bool:
-        """Check if the polyhedra constraint has a computable proximal operator.
+        """Check if the polyhedral constraint has a computable proximal operator.
 
         Returns:
             bool: Always False (general polyhedral projection not implemented).
@@ -150,26 +150,26 @@ class Polyhedra(AtomExpression):
         return False
 
     def is_subsamplable(self) -> bool:
-        """Check if the polyhedra constraint supports subsampling.
+        """Check if the polyhedral constraint supports subsampling.
 
         Returns:
             bool: Always False, as constraints cannot be subsampled.
         """
         return False
 
-    def subsample(self, indices: torch.Tensor) -> "Polyhedra":
-        """Subsample the polyhedra constraint (not supported).
+    def subsample(self, indices: torch.Tensor) -> "Polyhedron":
+        """Subsample the polyhedral constraint (not supported).
 
         Args:
             indices: Indices to subsample (unused).
 
         Returns:
-            Polyhedra: Not applicable.
+            Polyhedron: Not applicable.
 
         Raises:
-            NotImplementedError: Polyhedra constraints cannot be subsampled.
+            NotImplementedError: Polyhedron constraints cannot be subsampled.
         """
-        raise NotImplementedError("Polyhedra is not subsamplable")
+        raise NotImplementedError("Polyhedron is not subsamplable")
 
     def to_cvxpy(self):
         """Convert to CVXPY expression.

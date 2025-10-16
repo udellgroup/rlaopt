@@ -2,11 +2,11 @@
 
 import torch
 
-from rlaopt.atoms.polyhedra import Polyhedra
+from rlaopt.atoms.polyhedron import Polyhedron
 from rlaopt.expression import Variable
 
 
-class Box(Polyhedra):
+class Box(Polyhedron):
     """Box constraint atom representing elementwise bounds.
 
     A box constraint restricts each element of a variable to lie within
