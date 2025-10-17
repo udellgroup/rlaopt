@@ -2,9 +2,16 @@
 
 from rlaopt.expression.expression import (
     AddExpression,
+    ConstExpression,
     Expression,
     ProductExpression,
     Variable,
 )
 
-__all__ = ["Expression", "AddExpression", "ProductExpression", "Variable"]
+__all__ = [
+    "Expression",
+    "AddExpression",
+    "ConstExpression",
+    "ProductExpression",
+    "Variable",
+]
