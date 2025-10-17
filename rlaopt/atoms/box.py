@@ -24,13 +24,13 @@ class Box(Polyhedron):
     Examples:
         >>> # Standard box constraint: 0 <= x <= 1
         >>> x = Variable((10,), name='x')
-        >>> box = Box(x, lower=torch.zeros(10), upper=torch.ones(10))
+        >>> box = Box(x, lower=0.0, upper=1.0)
 
         >>> # One-sided constraint: x >= 0 (non-negativity)
-        >>> box_nonneg = Box(x, lower=torch.zeros(10))
+        >>> box_nonneg = Box(x, lower=0.0)
 
         >>> # One-sided constraint: x <= 1
-        >>> box_upper = Box(x, upper=torch.ones(10))
+        >>> box_upper = Box(x, upper=1.0)
 
         >>> # Use proximal operator for projection
         >>> out_of_bounds = torch.randn(10)
@@ -40,15 +40,15 @@ class Box(Polyhedron):
     def __init__(
         self,
         x: Variable,
-        lower: torch.Tensor = None,
-        upper: torch.Tensor = None,
+        lower: torch.Tensor | float = None,
+        upper: torch.Tensor | float = None,
     ):
         """Initialize the box constraint atom.
 
         Args:
             x: Variable to constrain.
-            lower: Lower bound vector (optional).
-            upper: Upper bound vector (optional).
+            lower (torch.Tensor | float): Lower bound vector (optional).
+            upper: (torch.Tensor | float): Upper bound vector (optional).
         """
         super().__init__(x, A=None, b=None, C=None, lower=lower, upper=upper)
 

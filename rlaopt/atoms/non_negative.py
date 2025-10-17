@@ -1,7 +1,5 @@
 """Non-negativity constraint atom for optimization."""
 
-import torch
-
 from rlaopt.atoms.box import Box
 from rlaopt.expression import Variable
 
@@ -40,5 +38,4 @@ class NonNegative(Box):
         Args:
             x: Variable to constrain to be non-negative.
         """
-        lower = torch.zeros_like(x.value.data, device=x.value.device)
-        super().__init__(x, lower=lower, upper=None)
+        super().__init__(x, lower=0.0, upper=None)

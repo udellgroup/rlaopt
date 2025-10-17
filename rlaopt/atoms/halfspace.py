@@ -25,7 +25,7 @@ class Halfspace(Polyhedron):
         >>> # Constraint: c^T x <= 1
         >>> x = Variable((5,), name='x')
         >>> c = torch.randn(5)
-        >>> halfspace = Halfspace(x, c=c, upper=torch.tensor(1.0))
+        >>> halfspace = Halfspace(x, c=c, upper=1.0)
 
         >>> # Non-negativity for first coordinate: x[0] >= 0
         >>> # Rewritten as: -x[0] <= 0, so c = [-1, 0, 0, ...], upper = 0
@@ -38,7 +38,7 @@ class Halfspace(Polyhedron):
         >>> projected = halfspace.prox(violating_point, prox_scaling=1.0)
     """
 
-    def __init__(self, x: Variable, c: torch.Tensor, upper: torch.Tensor):
+    def __init__(self, x: Variable, c: torch.Tensor, upper: float):
         """Initialize the halfspace constraint atom.
 
         Args:

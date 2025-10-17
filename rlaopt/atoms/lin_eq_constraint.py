@@ -120,5 +120,7 @@ def _build_prox(A: torch.Tensor, b: torch.Tensor, prox_mode: str):
             return location - A.T @ temp.reshape(
                 temp.shape[0],
             )
+    else:
+        raise NotImplementedError("Inexact prox is currently not supported.")
 
     return prox

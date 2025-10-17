@@ -88,9 +88,16 @@ class Polyhedron(AtomExpression):
         if (A is not None) and (b is None):
             raise ValueError("b cannot be None when A is not None")
 
+        ## Convert float/int bounds to tensors FIRST (before using .device/.dtype)
+        if isinstance(lower, (int, float)):
+            lower = torch.tensor(float(lower))
+        if isinstance(upper, (int, float)):
+            upper = torch.tensor(float(upper))
+
         # Validate input dimensional consistency
         _validate(A, C, b, lower, upper)
 
+        # NOW we can safely use .device and .dtype since they're tensors
         # if upper is provided but not lower, set lower to -infinity
         if (upper is not None) and (lower is None):
             lower = torch.tensor(-torch.inf, device=upper.device, dtype=upper.dtype)
@@ -194,13 +201,36 @@ def _validate(A, C, b, lower, upper):
         ValueError: If dimensions are inconsistent.
     """
     if A is not None and b is not None:
-        if A.shape[0] != b.shape[0]:
-            raise ValueError("A and b must have matching row counts")
+        # Handle different dimensions
+        if A.dim() == 0:  # Scalar A (shouldn't happen)
+            raise ValueError("A must be at least 1-dimensional")
+
+        if A.dim() == 1:  # Vector A (hyperplane: a^T x = b)
+            if b.dim() != 0:  # b should be scalar
+                raise ValueError("For 1D A (hyperplane), b must be a scalar")
+        else:  # Matrix A (multiple constraints: A @ x = b)
+            if b.dim() != 1:
+                raise ValueError("For 2D A, b must be 1D")
+            if A.shape[0] != b.shape[0]:
+                raise ValueError("A and b must have matching row counts")
+
     if C is not None:
-        if (lower is not None and C.shape[0] != lower.shape[0]) or (
-            upper is not None and C.shape[0] != upper.shape[0]
-        ):
-            raise ValueError("C, lower, and upper must have matching row counts")
+        if C.dim() == 0:
+            raise ValueError("C must be at least 1-dimensional")
+
+        if C.dim() == 1:  # Vector C (halfspace: lower <= c^T x <= upper)
+            # lower and upper should be scalars
+            if lower is not None and lower.dim() != 0:
+                raise ValueError("For 1D C (halfspace), lower must be a scalar")
+            if upper is not None and upper.dim() != 0:
+                raise ValueError("For 1D C (halfspace), upper must be a scalar")
+        else:  # Matrix C (multiple inequalities: lower <= C @ x <= upper)
+            if lower is not None and lower.dim() > 0:
+                if C.shape[0] != lower.shape[0]:
+                    raise ValueError("C and lower must have matching row counts")
+            if upper is not None and upper.dim() > 0:
+                if C.shape[0] != upper.shape[0]:
+                    raise ValueError("C and upper must have matching row counts")
 
 
 def _build_eval(A, C, b, lower, upper) -> Callable[[torch.Tensor], torch.Tensor]:
@@ -262,99 +292,58 @@ def _build_eval(A, C, b, lower, upper) -> Callable[[torch.Tensor], torch.Tensor]
     return _eval
 
 
-def _eval_id_ineq(
-    x: torch.Tensor, lower: torch.Tensor, upper: torch.Tensor
+def _indicator(
+    satisfied: bool, device: torch.device, dtype: torch.dtype
 ) -> torch.Tensor:
-    """Evaluate identity inequality constraint: lower <= x <= upper.
+    """Return 0 if constraint satisfied, infinity otherwise.
 
     Args:
-        x: Input vector.
-        lower: Lower bound.
-        upper: Upper bound.
+        satisfied: Whether the constraint is satisfied.
+        device: Device for result tensor.
+        dtype: Data type for result tensor.
 
     Returns:
         torch.Tensor: 0.0 if satisfied, infinity otherwise.
     """
-    statement = (lower <= x) & (x <= upper)
-    return _indicator(statement)
+    if satisfied:
+        return torch.tensor(0.0, device=device, dtype=dtype)
+    else:
+        return torch.tensor(torch.inf, device=device, dtype=dtype)
+
+
+def _eval_id_ineq(
+    x: torch.Tensor, lower: torch.Tensor, upper: torch.Tensor
+) -> torch.Tensor:
+    """Evaluate identity inequality constraint: lower <= x <= upper."""
+    satisfied = torch.all((lower <= x) & (x <= upper))
+    return _indicator(satisfied, x.device, x.dtype)
 
 
 def _eval_ineq(
     x: torch.Tensor, C: torch.Tensor, lower: torch.Tensor, upper: torch.Tensor
 ) -> torch.Tensor:
-    """Evaluate matrix inequality constraint: lower <= C @ x <= upper.
-
-    Args:
-        x: Input vector.
-        C: Constraint matrix.
-        lower: Lower bound.
-        upper: Upper bound.
-
-    Returns:
-        torch.Tensor: 0.0 if satisfied, infinity otherwise.
-    """
-    statement = (lower <= C @ x) & (C @ x <= upper)
-    return _indicator(statement)
+    """Evaluate matrix inequality constraint: lower <= C @ x <= upper."""
+    Cx = C @ x
+    satisfied = torch.all((lower <= Cx) & (Cx <= upper))
+    return _indicator(satisfied, x.device, x.dtype)
 
 
 def _eval_halfspace(
     x: torch.Tensor, c: torch.Tensor, lower: torch.Tensor, upper: torch.Tensor
 ) -> torch.Tensor:
-    """Evaluate halfspace inequality constraint: lower <= c^T x <= upper.
-
-    Args:
-        x: Input vector.
-        c: Constraint vector.
-        lower: Lower bound.
-        upper: Upper bound.
-
-    Returns:
-        torch.Tensor: 0.0 if satisfied, infinity otherwise.
-    """
-    statement = (lower <= torch.dot(c, x)) & (torch.dot(c, x) <= upper)
-    return _indicator(statement)
+    """Evaluate halfspace inequality constraint: lower <= c^T x <= upper."""
+    ctx = torch.dot(c, x)
+    satisfied = (lower <= ctx) and (ctx <= upper)
+    return _indicator(satisfied, x.device, x.dtype)
 
 
 def _eval_eq(x: torch.Tensor, A: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
-    """Evaluate matrix equality constraint: A @ x = b.
-
-    Args:
-        x: Input vector.
-        A: Constraint matrix.
-        b: Constraint vector.
-
-    Returns:
-        torch.Tensor: 0.0 if satisfied, infinity otherwise.
-    """
-    statement = A @ x == b
-    return _indicator(statement)
+    """Evaluate matrix equality constraint: A @ x = b."""
+    satisfied = torch.all(A @ x == b)
+    return _indicator(satisfied, x.device, x.dtype)
 
 
 def _eval_hyperplane(x: torch.Tensor, a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
-    """Evaluate hyperplane equality constraint: a^T x = b.
-
-    Args:
-        x: Input vector.
-        a: Constraint vector.
-        b: Constraint scalar.
-
-    Returns:
-        torch.Tensor: 0.0 if satisfied, infinity otherwise.
-    """
-    statement = torch.dot(a, x) == b
-    return _indicator(statement)
-
-
-def _indicator(statement: torch.Tensor) -> torch.Tensor:
-    """Compute indicator function value for a boolean statement.
-
-    Args:
-        statement: Boolean tensor representing constraint satisfaction.
-
-    Returns:
-        torch.Tensor: 0.0 if all elements are True, infinity otherwise.
-    """
-    if statement.all():
-        return torch.tensor(0.0, device=statement.device)
-    else:
-        return torch.tensor(torch.inf, device=statement.device)
+    """Evaluate hyperplane equality constraint: a^T x = b."""
+    satisfied = torch.dot(a, x) == b
+    return _indicator(satisfied, x.device, x.dtype)

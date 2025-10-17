@@ -119,7 +119,8 @@ class Affine(AtomExpression):
             >>> sub_affine.A.shape
             torch.Size([3, 5])
         """
-        return Affine(getattr(self, self.var_name), self.A[indices], self.b[indices])
+        x = Variable(getattr(self, self.var_name), name=self.var_name)
+        return Affine(x, self.A[indices], self.b[indices])
 
     def to_cvxpy(self) -> cp.Expression:
         """Convert to CVXPY expression (not implemented).
