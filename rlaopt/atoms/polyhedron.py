@@ -201,36 +201,64 @@ def _validate(A, C, b, lower, upper):
         ValueError: If dimensions are inconsistent.
     """
     if A is not None and b is not None:
-        # Handle different dimensions
-        if A.dim() == 0:  # Scalar A (shouldn't happen)
-            raise ValueError("A must be at least 1-dimensional")
-
-        if A.dim() == 1:  # Vector A (hyperplane: a^T x = b)
-            if b.dim() != 0:  # b should be scalar
-                raise ValueError("For 1D A (hyperplane), b must be a scalar")
-        else:  # Matrix A (multiple constraints: A @ x = b)
-            if b.dim() != 1:
-                raise ValueError("For 2D A, b must be 1D")
-            if A.shape[0] != b.shape[0]:
-                raise ValueError("A and b must have matching row counts")
+        _validate_equality_constraints(A, b)
 
     if C is not None:
-        if C.dim() == 0:
-            raise ValueError("C must be at least 1-dimensional")
+        _validate_inequality_constraints(C, lower, upper)
 
-        if C.dim() == 1:  # Vector C (halfspace: lower <= c^T x <= upper)
-            # lower and upper should be scalars
-            if lower is not None and lower.dim() != 0:
-                raise ValueError("For 1D C (halfspace), lower must be a scalar")
-            if upper is not None and upper.dim() != 0:
-                raise ValueError("For 1D C (halfspace), upper must be a scalar")
-        else:  # Matrix C (multiple inequalities: lower <= C @ x <= upper)
-            if lower is not None and lower.dim() > 0:
-                if C.shape[0] != lower.shape[0]:
-                    raise ValueError("C and lower must have matching row counts")
-            if upper is not None and upper.dim() > 0:
-                if C.shape[0] != upper.shape[0]:
-                    raise ValueError("C and upper must have matching row counts")
+
+def _validate_equality_constraints(A, b):
+    """Validate equality constraint dimensions (A @ x = b)."""
+    if A.dim() == 0:
+        raise ValueError("A must be at least 1-dimensional")
+
+    if A.dim() == 1:
+        _validate_hyperplane(b)
+    else:
+        _validate_equality_matrix(A, b)
+
+
+def _validate_hyperplane(b):
+    """Validate hyperplane constraint (a^T x = b)."""
+    if b.dim() != 0:
+        raise ValueError("For 1D A (hyperplane), b must be a scalar")
+
+
+def _validate_equality_matrix(A, b):
+    """Validate matrix equality constraints (A @ x = b)."""
+    if b.dim() != 1:
+        raise ValueError("For 2D A, b must be 1D")
+    if A.shape[0] != b.shape[0]:
+        raise ValueError("A and b must have matching row counts")
+
+
+def _validate_inequality_constraints(C, lower, upper):
+    """Validate inequality constraint dimensions (lower <= C @ x <= upper)."""
+    if C.dim() == 0:
+        raise ValueError("C must be at least 1-dimensional")
+
+    if C.dim() == 1:
+        _validate_halfspace(lower, upper)
+    else:
+        _validate_inequality_matrix(C, lower, upper)
+
+
+def _validate_halfspace(lower, upper):
+    """Validate halfspace constraint (lower <= c^T x <= upper)."""
+    if lower is not None and lower.dim() != 0:
+        raise ValueError("For 1D C (halfspace), lower must be a scalar")
+    if upper is not None and upper.dim() != 0:
+        raise ValueError("For 1D C (halfspace), upper must be a scalar")
+
+
+def _validate_inequality_matrix(C, lower, upper):
+    """Validate matrix inequality constraints (lower <= C @ x <= upper)."""
+    if lower is not None and lower.dim() > 0:
+        if C.shape[0] != lower.shape[0]:
+            raise ValueError("C and lower must have matching row counts")
+    if upper is not None and upper.dim() > 0:
+        if C.shape[0] != upper.shape[0]:
+            raise ValueError("C and upper must have matching row counts")
 
 
 def _build_eval(A, C, b, lower, upper) -> Callable[[torch.Tensor], torch.Tensor]:
