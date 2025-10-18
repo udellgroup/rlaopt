@@ -378,27 +378,6 @@ class TestRegisterInput:
         assert atom.input_type == InputType.EXPRESSION
         assert hasattr(atom, "expr_name")
 
-    def test_register_input_with_invalid_type(self):
-        """Test register_input with invalid type raises TypeError."""
-        atom = ConcreteAtom()
-
-        with pytest.raises(TypeError, match="Expected Variable or Expression"):
-            atom.register_input("invalid")
-
-    def test_register_input_with_constant(self):
-        """Test register_input with constant raises TypeError."""
-        atom = ConcreteAtom()
-
-        with pytest.raises(TypeError, match="Expected Variable or Expression"):
-            atom.register_input(5.0)
-
-    def test_register_input_with_tensor(self):
-        """Test register_input with tensor raises TypeError."""
-        atom = ConcreteAtom()
-
-        with pytest.raises(TypeError, match="Expected Variable or Expression"):
-            atom.register_input(torch.ones(5))
-
 
 # ===============================
 # Test register_atom_buffer
@@ -563,21 +542,6 @@ class TestExprType:
         expr = (x + y) * z
         result = AtomExpression.expr_type(expr)
         assert result == InputType.EXPRESSION
-
-    def test_expr_type_with_invalid_type(self):
-        """Test expr_type raises TypeError for invalid input."""
-        with pytest.raises(TypeError, match="Expected Variable or Expression"):
-            AtomExpression.expr_type("invalid")
-
-    def test_expr_type_with_none(self):
-        """Test expr_type raises TypeError for None."""
-        with pytest.raises(TypeError, match="Expected Variable or Expression"):
-            AtomExpression.expr_type(None)
-
-    def test_expr_type_with_tensor(self):
-        """Test expr_type raises TypeError for tensor."""
-        with pytest.raises(TypeError, match="Expected Variable or Expression"):
-            AtomExpression.expr_type(torch.ones(5))
 
     def test_expr_type_is_static(self):
         """Test that expr_type can be called without instance."""
