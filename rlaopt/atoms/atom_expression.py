@@ -178,10 +178,8 @@ class AtomExpression(Expression, ABC):
         self.input_type = self.expr_type(x)
         if self.input_type == InputType.VARIABLE:
             self.register_variable(x)
-        elif self.input_type == InputType.EXPRESSION:
-            self.register_expression(x)
         else:
-            raise TypeError(f"Expected Variable or Expression, got {type(x)}")
+            self.register_expression(x)
 
     def register_variable(self, x: Variable):
         """Register a Variable with the atom.
