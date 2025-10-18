@@ -302,8 +302,8 @@ class TestRegisterExpression:
 
         atom.register_expression(expr)
 
-        assert hasattr(atom, "module_name")
-        assert atom.module_name == "AddExpression"
+        assert hasattr(atom, "expr_name")
+        assert atom.expr_name == "AddExpression"
 
     def test_registered_expression_is_submodule(self):
         """Test that registered expression becomes a submodule."""
@@ -341,7 +341,7 @@ class TestRegisterExpression:
 
         atom.register_expression(expr)
 
-        assert hasattr(atom, "module_name")
+        assert hasattr(atom, "expr_name")
         # Should track all three parameters
         params = list(atom.parameters())
         assert len(params) == 3
@@ -376,7 +376,7 @@ class TestRegisterInput:
         atom.register_input(expr)
 
         assert atom.input_type == InputType.EXPRESSION
-        assert hasattr(atom, "module_name")
+        assert hasattr(atom, "expr_name")
 
     def test_register_input_with_invalid_type(self):
         """Test register_input with invalid type raises TypeError."""
@@ -732,7 +732,7 @@ class TestAtomIntegration:
 
             def forward(self):
                 """Compute forward."""
-                expr_module = getattr(self, self.module_name)
+                expr_module = getattr(self, self.expr_name)
                 return expr_module.forward().sum()
 
             def is_subsamplable(self):
@@ -910,10 +910,10 @@ class TestEdgeCases:
         expr2 = x * y
 
         atom.register_expression(expr1)
-        assert atom.module_name == "AddExpression"
+        assert atom.expr_name == "AddExpression"
 
         atom.register_expression(expr2)
-        assert atom.module_name == "ProductExpression"  # Overwrites!
+        assert atom.expr_name == "ProductExpression"  # Overwrites!
 
     def test_buffer_with_zero_value(self):
         """Test registering buffer with zero value."""
@@ -1239,7 +1239,7 @@ class TestConcreteUseCases:
 
             def forward(self):
                 """Compute forward."""
-                expr_module = getattr(self, self.module_name)
+                expr_module = getattr(self, self.expr_name)
                 val = expr_module.forward()
                 return torch.norm(val)
 

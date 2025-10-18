@@ -1,10 +1,10 @@
+from math import sqrt
+
 import numpy as np
 import pytest
 import torch
-from math import sqrt
 
-from rlaopt.atoms import SumSquares, Box, L1Norm, NonNegative
-
+from rlaopt.atoms import Box, L1Norm, NonNegative, SumSquares
 from rlaopt.expression.expression import Variable
 from rlaopt.solvers.configs import ProxGradConfig
 from rlaopt.solvers.proximal_gradient.prox_grad import ProximalGradient
@@ -126,7 +126,7 @@ class TestProxGrad:
         A, b, x = generate_least_squares_data(n=1024, p=256, precision=precision)
         l = -torch.tensor(2.0)
         u = torch.tensor(1.0)
-        obj = SumSquares(A @ x - b) + Box(x, l=l, u=u)
+        obj = SumSquares(A @ x - b) + Box(x, lower=l, upper=u)
         eta = compute_lipschitz_stepsize(A)
 
         _solve_and_verify(obj, eta, tol, acceleration, ls)
@@ -177,9 +177,9 @@ def _solve_and_verify(obj, eta, tol, use_acceleration, use_linesearch):
 
     # Test using solve method
     params, err = opt.solve(obj)
-    assert err.item() <= tol * sqrt(
-        dict_ops.dim(params)
-    ), f"Solve method failed: error {err.item()} > tolerance {tol}"
+    assert err.item() <= tol * sqrt(dict_ops.dim(params)), (
+        f"Solve method failed: error {err.item()} > tolerance {tol}"
+    )
 
 
 def _loop(params, state, opt):

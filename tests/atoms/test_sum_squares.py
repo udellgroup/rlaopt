@@ -47,10 +47,10 @@ class TestSumSquaresInit:
 
     def test_initialization_with_affine(self, affine_expression):
         """Test initialization with Affine expression."""
-        sumsq, affine, _ = affine_expression
+        sumsq, _, _ = affine_expression
 
         assert sumsq is not None
-        assert hasattr(sumsq, "module_name")
+        assert hasattr(sumsq, "expr_name")
 
     def test_initialization_with_matrix_variable(self, matrix_variable):
         """Test initialization with matrix variable."""
