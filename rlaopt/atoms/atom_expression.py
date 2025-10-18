@@ -199,8 +199,8 @@ class AtomExpression(Expression, ABC):
             >>> atom.var_name
             'x'
         """
-        self.var_name = x.name
-        self.register_parameter(self.var_name, x.value)
+        self._var_name = x.name
+        self.register_parameter(self._var_name, x.value)
 
     def register_expression(self, expr: Expression):
         """Register an Expression as a submodule of the atom.
@@ -220,8 +220,8 @@ class AtomExpression(Expression, ABC):
             >>> atom.module_name
             'AddExpression'
         """
-        self.module_name = expr._get_name()
-        self.add_module(self.module_name, expr)
+        self._expr_name = expr._get_name()
+        self.add_module(self._expr_name, expr)
 
     @staticmethod
     def expr_type(x: Variable | Expression) -> InputType:
@@ -252,3 +252,13 @@ class AtomExpression(Expression, ABC):
             return InputType.EXPRESSION
         else:
             raise TypeError(f"Expected Variable or Expression, got {type(x)}")
+
+    @property
+    def var_name(self):
+        """Get the registered variable's name."""
+        return getattr(self, "_var_name", None)
+
+    @property
+    def expr_name(self) -> Expression:
+        """Get the expression registered with the atom."""
+        return getattr(self, "_expr_name", None)

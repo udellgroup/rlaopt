@@ -31,14 +31,14 @@ class SumSquares(AtomExpression):
     def is_smooth(self) -> bool:
         """Returns True depending on the smoothness of the expression."""
         if self.input_type == InputType.EXPRESSION:
-            return self.get_submodule(self.module_name).is_smooth()
+            return self.get_submodule(self.expr_name).is_smooth()
         else:
             return True
 
     def forward(self) -> torch.Tensor:
         """Forward pass to compute the sum of squares."""
         if self.input_type == InputType.EXPRESSION:
-            value = self.get_submodule(self.module_name).forward()
+            value = self.get_submodule(self.expr_name).forward()
         else:
             value = self.get_variable(self.var_name)
         return torch.sum(value**2)
