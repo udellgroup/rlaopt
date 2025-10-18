@@ -248,10 +248,8 @@ class AtomExpression(Expression, ABC):
         """
         if isinstance(x, Variable):
             return InputType.VARIABLE
-        elif isinstance(x, Expression):
-            return InputType.EXPRESSION
         else:
-            raise TypeError(f"Expected Variable or Expression, got {type(x)}")
+            return InputType.EXPRESSION
 
     @property
     def var_name(self):
