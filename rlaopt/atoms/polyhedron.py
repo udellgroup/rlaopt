@@ -253,12 +253,10 @@ def _validate_halfspace(lower, upper):
 
 def _validate_inequality_matrix(C, lower, upper):
     """Validate matrix inequality constraints (lower <= C @ x <= upper)."""
-    if lower is not None and lower.dim() > 0:
-        if C.shape[0] != lower.shape[0]:
-            raise ValueError("C and lower must have matching row counts")
-    if upper is not None and upper.dim() > 0:
-        if C.shape[0] != upper.shape[0]:
-            raise ValueError("C and upper must have matching row counts")
+    if lower is not None and lower.dim() > 0 and C.shape[0] != lower.shape[0]:
+        raise ValueError("C and lower must have matching row counts")
+    if upper is not None and upper.dim() > 0 and C.shape[0] != upper.shape[0]:
+        raise ValueError("C and upper must have matching row counts")
 
 
 def _build_eval(A, C, b, lower, upper) -> Callable[[torch.Tensor], torch.Tensor]:
