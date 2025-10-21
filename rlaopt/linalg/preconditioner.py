@@ -49,3 +49,64 @@ class Preconditioner(ABC):
             **kwargs: Additional keyword arguments.
         """
         pass
+
+    @abstractmethod
+    def _matmul_impl(self, x: torch.Tensor) -> torch.Tensor:
+        """Apply the preconditioner to the input tensor x.
+
+        Args:
+            x (torch.Tensor): Input tensor to which the preconditioner is applied.
+
+        Returns:
+            torch.Tensor: Result of applying the preconditioner to x.
+        """
+        pass
+
+    @abstractmethod
+    def _inverse_matmul_impl(self, x: torch.Tensor) -> torch.Tensor:
+        """Apply the inverse of the preconditioner to the input tensor x.
+
+        Args:
+            x (torch.Tensor): Input tensor to which the inverse preconditioner
+            is applied.
+
+        Returns:
+            torch.Tensor: Result of applying the inverse preconditioner to x.
+        """
+        pass
+
+    def __matmul__(self, x: torch.Tensor) -> torch.Tensor:
+        """Overload the matrix multiplication operator to apply the preconditioner.
+
+        Args:
+            x (torch.Tensor): Input tensor to which the preconditioner is applied.
+
+        Returns:
+            torch.Tensor: Result of applying the preconditioner to x.
+        """
+        _is_torch_tensor_1d_2d(x)
+        return self._matmul_impl(x)
+
+    def _inverse_matmul(self, x: torch.Tensor) -> torch.Tensor:
+        """Apply the inverse of the preconditioner to the input tensor x.
+
+        Args:
+            x (torch.Tensor): Input tensor to which the inverse preconditioner
+            is applied.
+
+        Returns:
+            torch.Tensor: Result of applying the inverse preconditioner to x.
+        """
+        _is_torch_tensor_1d_2d(x)
+        return self._inverse_matmul_impl(x)
+
+    def _update_damping(self, damping: float):
+        """Update the damping parameter of the preconditioner if applicable.
+
+        For most preconditioners, this is a no-op.
+        The only exception is the Nyström preconditioner.
+
+        Args:
+            damping (float): Baseline damping parameter.
+        """
+        pass
