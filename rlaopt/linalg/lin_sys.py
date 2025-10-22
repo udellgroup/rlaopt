@@ -51,6 +51,17 @@ class LinSys(torch.nn.Module):
         """
         return self.A @ v + self.reg * v
 
+    def compute_residual(self, v: torch.Tensor) -> torch.Tensor:
+        """Compute the residual of the linear system for a given tensor v.
+
+        Args:
+            v (torch.Tensor): Input tensor.
+
+        Returns:
+            torch.Tensor: Residual of the linear system.
+        """
+        return self.B - self.forward(v)
+
     def compute_residual_norm(
         self, v: torch.Tensor, relative: bool = False
     ) -> torch.Tensor:
@@ -64,14 +75,29 @@ class LinSys(torch.nn.Module):
         Returns:
             torch.Tensor: Residual norm of the linear system.
         """
-        B = self.B
-
-        residual = self.forward(v) - B
+        residual = self.compute_residual(v)
         res_norm = torch.linalg.norm(residual, dim=0, ord=2)
         if relative:
-            b_norm = torch.linalg.norm(B, dim=0, ord=2)
-            res_norm /= b_norm
+            res_norm /= self.rhs_norm
         return res_norm
+
+    @property
+    def device(self) -> torch.device:
+        """Get the device of the LinSys module.
+
+        Returns:
+            torch.device: Device where the module's tensors are located.
+        """
+        return self.A.device
+
+    @property
+    def rhs_norm(self) -> torch.Tensor:
+        """Get the norm of the right-hand side B.
+
+        Returns:
+            torch.Tensor: Norm of B.
+        """
+        return torch.linalg.norm(self.B, dim=0, ord=2)
 
     @staticmethod
     def _check_inputs(A, B, reg, w):

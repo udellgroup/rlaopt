@@ -81,7 +81,7 @@ class PCG(LinSysSolver):
             Initial solver state.
         """
         self.P = get_preconditioner(
-            self.config.preconditioner_config, lin_sys.A, lin_sys.A.device
+            self.config.preconditioner_config, lin_sys.A, lin_sys.device
         )
         return _init_pcg_state(lin_sys, self.P, self.config.tol)
 
@@ -113,7 +113,7 @@ def _init_pcg_state(lin_sys: LinSys, P: Preconditioner, tol: float = 1e-6) -> PC
     w = lin_sys.w.clone()
 
     # Compute initial residual: r = B - (A + reg*I)w
-    r = lin_sys.B - lin_sys(w)
+    r = lin_sys.compute_residual(w)
 
     # Apply preconditioner
     z = P.inv @ r
@@ -125,7 +125,7 @@ def _init_pcg_state(lin_sys: LinSys, P: Preconditioner, tol: float = 1e-6) -> PC
     res_norm = torch.linalg.norm(r, dim=0, ord=2)
 
     # Initialize mask - all components start as not converged
-    epsilon = tol * torch.linalg.norm(lin_sys.B, dim=0, ord=2)
+    epsilon = tol * lin_sys.rhs_norm
     mask = res_norm > epsilon
 
     # Compute r^T @ z as a matrix (rz[i,j] corresponds to components i and j)
@@ -201,7 +201,7 @@ def _pcg_step(
     res_norm_new = torch.linalg.norm(r_new, dim=0, ord=2)
 
     # Update mask based on convergence
-    epsilon = tol * torch.linalg.norm(lin_sys.B, dim=0, ord=2)
+    epsilon = tol * lin_sys.rhs_norm
     mask_new = res_norm_new > epsilon
 
     return PCGState(
