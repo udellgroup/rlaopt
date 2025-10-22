@@ -66,6 +66,37 @@ class Nystrom(Preconditioner):
         self.U, self.S, _ = torch.linalg.svd(B.T, full_matrices=False)
         self.S = torch.nn.functional.relu(self.S**2 - shift)
 
+    def _matmul_impl(self, x: torch.Tensor) -> torch.Tensor:
+        """Apply the Nyström preconditioner to the input tensor x."""
+        S_safe = self.S if x.ndim == 1 else self.S.unsqueeze(-1)
+        return self.U @ (S_safe * (self.U.T @ x)) + self._config.damping * x
+
+    def _inverse_matmul_impl(self, x: torch.Tensor) -> torch.Tensor:
+        """Apply the inverse of the Nyström preconditioner to the input tensor x."""
+        x_in = x.unsqueeze(-1) if x.ndim == 1 else x
+        damping = self._config.damping
+
+        UTx = self.U.T @ x_in
+
+        # If we are not in double precision, we try to take a more numerically
+        # stable approach that requires an additional Cholesky factorization.
+        if self.using_low_precision:
+            if self.L is None:
+                self.L = torch.linalg.cholesky(
+                    damping * torch.diag(self.S**-1) + self.U.T @ self.U,
+                )
+            L_inv_UTx = torch.linalg.solve_triangular(self.L, UTx, upper=False)
+            LT_inv_L_inv_UTx = torch.linalg.solve_triangular(
+                self.L.T, L_inv_UTx, upper=True
+            )
+            x_in = 1 / damping * (x_in - self.U @ LT_inv_L_inv_UTx)
+        else:
+            x_in = 1 / damping * (x_in - self.U @ UTx) + self.U @ torch.divide(
+                UTx, (self.S + damping).unsqueeze(-1)
+            )
+
+        return x_in.squeeze(-1) if x.ndim == 1 else x_in
+
 
 def _generate_ortho_embedding(
     dimension: int, sketch_size: int, dtype: torch.dtype, device: torch.device
