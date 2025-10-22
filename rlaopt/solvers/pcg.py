@@ -81,7 +81,7 @@ class PCG(LinSysSolver):
             Initial solver state.
         """
         self.P = get_preconditioner(
-            self.config.preconditioner_config, lin_sys.A, lin_sys.device
+            self.config.preconditioner_config, lin_sys.A, lin_sys.A.device
         )
         return _init_pcg_state(lin_sys, self.P, self.config.tol)
 

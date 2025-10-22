@@ -12,7 +12,13 @@ from rlaopt.linalg.preconditioners.preconditioner import (
 
 
 class NystromConfig(PreconditionerConfig):
-    """Configuration for the Nyström preconditioner."""
+    """Configuration for the Nyström preconditioner.
+
+    Attributes:
+        rank: Rank of the Nyström approximation.
+        base_damping: Base damping parameter.
+        damping_mode: Damping mode, either 'adaptive' or 'non_adaptive'.
+    """
 
     # TODO(pratik): add option for sketching method
 
