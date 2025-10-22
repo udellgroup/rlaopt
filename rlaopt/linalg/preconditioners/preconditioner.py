@@ -1,4 +1,4 @@
-"""Abstract base classes for preconditioners."""
+"""Abstract base classes for preconditioners and configurations."""
 
 from __future__ import annotations
 
