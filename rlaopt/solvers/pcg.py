@@ -54,8 +54,8 @@ class PCG(LinSysSolver):
     """Preconditioned Conjugate Gradient solver for linear systems.
 
     Solves linear systems of the form:
-        (A + reg*I)w = B
-    where A is a positive-definite matrix and reg is a regularization parameter.
+        Aw = B
+    where A is a symmetric positive-definite matrix.
 
     The PCG method uses a preconditioner to improve convergence. The algorithm
     iteratively refines the solution by moving along conjugate search directions
@@ -98,6 +98,14 @@ class PCG(LinSysSolver):
         return _pcg_step(lin_sys, state, self.P, self.config.tol)
 
 
+def _compute_convergence_mask(
+    res_norm: torch.Tensor, lin_sys: LinSys, tol: float
+) -> torch.Tensor:
+    epsilon = tol * lin_sys.rhs_norm
+    mask = res_norm > epsilon
+    return mask
+
+
 def _init_pcg_state(lin_sys: LinSys, P: Preconditioner, tol: float = 1e-6) -> PCGState:
     """Initialize the PCG solver state.
 
@@ -112,7 +120,7 @@ def _init_pcg_state(lin_sys: LinSys, P: Preconditioner, tol: float = 1e-6) -> PC
     # Initial solution estimate
     w = lin_sys.w.clone()
 
-    # Compute initial residual: r = B - (A + reg*I)w
+    # Compute initial residual: r = B - A @ w
     r = lin_sys.compute_residual(w)
 
     # Apply preconditioner
@@ -124,9 +132,8 @@ def _init_pcg_state(lin_sys: LinSys, P: Preconditioner, tol: float = 1e-6) -> PC
     # Compute initial residual norm per component
     res_norm = torch.linalg.norm(r, dim=0, ord=2)
 
-    # Initialize mask - all components start as not converged
-    epsilon = tol * lin_sys.rhs_norm
-    mask = res_norm > epsilon
+    # Initialize mask
+    mask = _compute_convergence_mask(res_norm, lin_sys, tol)
 
     # Compute r^T @ z as a matrix (rz[i,j] corresponds to components i and j)
     rz = r.T @ z
@@ -201,8 +208,7 @@ def _pcg_step(
     res_norm_new = torch.linalg.norm(r_new, dim=0, ord=2)
 
     # Update mask based on convergence
-    epsilon = tol * lin_sys.rhs_norm
-    mask_new = res_norm_new > epsilon
+    mask_new = _compute_convergence_mask(res_norm_new, lin_sys, tol)
 
     return PCGState(
         w=w_new,
