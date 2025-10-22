@@ -30,6 +30,7 @@ class PCGState(LinSysState):
     """State container for the PCG solver.
 
     Attributes:
+        w: Current solution estimate.
         r: Residual vector (B - (A + reg*I)w).
         z: Preconditioned residual (P_inv @ r).
         p: Search direction.
@@ -39,6 +40,7 @@ class PCGState(LinSysState):
         iter_: Current iteration count, starting from 0.
     """
 
+    w: torch.Tensor
     r: torch.Tensor
     z: torch.Tensor
     p: torch.Tensor
@@ -107,8 +109,11 @@ def _init_pcg_state(lin_sys: LinSys, P: Preconditioner, tol: float = 1e-6) -> PC
     Returns:
         Initial PCG state with residuals and search directions.
     """
+    # Initial solution estimate
+    w = lin_sys.w.clone()
+
     # Compute initial residual: r = B - (A + reg*I)w
-    r = lin_sys.B - lin_sys(lin_sys.w)
+    r = lin_sys.B - lin_sys(w)
 
     # Apply preconditioner
     z = P.inv @ r
@@ -126,7 +131,7 @@ def _init_pcg_state(lin_sys: LinSys, P: Preconditioner, tol: float = 1e-6) -> PC
     # Compute r^T @ z as a matrix (rz[i,j] corresponds to components i and j)
     rz = r.T @ z
 
-    return PCGState(r=r, z=z, p=p, rz=rz, res_norm=res_norm, mask=mask, iter_=0)
+    return PCGState(w=w, r=r, z=z, p=p, rz=rz, res_norm=res_norm, mask=mask, iter_=0)
 
 
 def _pcg_step(
@@ -167,11 +172,12 @@ def _pcg_step(
     ).diag()
 
     # Expand alpha for broadcasting
-    if alpha_masked.ndim == 1 and lin_sys.w.ndim == 2:
+    if alpha_masked.ndim == 1 and state.w.ndim == 2:
         alpha_masked = alpha_masked.unsqueeze(0)
 
     # Only update the active parts of the solution
-    lin_sys.w.data[:, mask] += p_masked * alpha_masked
+    w_new = state.w.clone()
+    w_new[:, mask] += p_masked * alpha_masked
 
     # Update residual for active components
     r_new = state.r.clone()
@@ -210,6 +216,7 @@ def _pcg_step(
     mask_new = res_norm_new > epsilon
 
     return PCGState(
+        w=w_new,
         r=r_new,
         z=z_new,
         p=p_new,
