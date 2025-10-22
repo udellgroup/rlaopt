@@ -163,7 +163,7 @@ def _pcg_step(
     rz_masked = state.rz[mask][:, mask]
 
     # Compute A @ p only for non-converged directions
-    Ap_masked = lin_sys.forward(p_masked)
+    Ap_masked = lin_sys(p_masked)
 
     # Compute alpha for active components
     pAp_masked = (p_masked * Ap_masked).sum(dim=0)
