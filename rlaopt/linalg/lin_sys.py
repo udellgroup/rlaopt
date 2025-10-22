@@ -27,6 +27,12 @@ class LinSys(torch.nn.Module):
         if w is None:
             w = torch.zeros_like(B)
 
+        # Resize B to 2D for consistent processing
+        # When B is resized, we must also resize w accordingly
+        if B.ndim == 1:
+            B = B.unsqueeze(-1)
+            w = w.unsqueeze(-1)
+
         self.register_buffer("A", A)
         self.register_buffer("B", B)
         self.register_buffer("reg", torch.tensor(reg))

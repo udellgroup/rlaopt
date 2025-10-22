@@ -166,22 +166,15 @@ def _pcg_step(
     Ap_masked = lin_sys(p_masked)
 
     # Compute alpha for active components
-    pAp_masked = (p_masked * Ap_masked).sum(dim=0)
-    alpha_masked = torch.linalg.solve(
-        torch.diag(pAp_masked), torch.diag(rz_masked)
-    ).diag()
-
-    # Expand alpha for broadcasting
-    if alpha_masked.ndim == 1 and state.w.ndim == 2:
-        alpha_masked = alpha_masked.unsqueeze(0)
+    alpha_masked = torch.linalg.solve(p_masked.T @ Ap_masked, rz_masked)
 
     # Only update the active parts of the solution
     w_new = state.w.clone()
-    w_new[:, mask] += p_masked * alpha_masked
+    w_new[:, mask] += p_masked @ alpha_masked
 
     # Update residual for active components
     r_new = state.r.clone()
-    r_new[:, mask] -= Ap_masked * alpha_masked
+    r_new[:, mask] -= Ap_masked @ alpha_masked
 
     # Apply preconditioner to new residual for active components
     z_new_masked = P.inv @ r_new[:, mask]
@@ -194,15 +187,11 @@ def _pcg_step(
     rz_new_masked = r_new[:, mask].T @ z_new_masked
 
     # Compute beta for active components
-    beta_masked = torch.linalg.solve(rz_masked, rz_new_masked).diag()
-
-    # Expand beta for broadcasting
-    if beta_masked.ndim == 1 and state.p.ndim == 2:
-        beta_masked = beta_masked.unsqueeze(0)
+    beta_masked = torch.linalg.solve(rz_masked, rz_new_masked)
 
     # Update search direction for active components
     p_new = state.p.clone()
-    p_new[:, mask] = z_new_masked + p_masked * beta_masked
+    p_new[:, mask] = z_new_masked + p_masked @ beta_masked
 
     # Update rz matrix
     rz_new = torch.zeros_like(state.rz)
