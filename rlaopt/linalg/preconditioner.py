@@ -1,5 +1,7 @@
 """Abstract base classes for preconditioners."""
 
+from __future__ import annotations
+
 from abc import ABC, abstractmethod
 
 import torch
@@ -76,7 +78,7 @@ class Preconditioner(ABC):
         pass
 
     def __matmul__(self, x: torch.Tensor) -> torch.Tensor:
-        """Overload the matrix multiplication operator to apply the preconditioner.
+        """Overload the matrix multiplication operator to apply preconditioner.
 
         Args:
             x (torch.Tensor): Input tensor to which the preconditioner is applied.
@@ -110,3 +112,43 @@ class Preconditioner(ABC):
             damping (float): Baseline damping parameter.
         """
         pass
+
+    @property
+    def inv(self) -> InvPreconditioner:
+        """Get the inverse preconditioner.
+
+        Returns:
+            InvPreconditioner: The inverse preconditioner.
+        """
+        return InvPreconditioner(self)
+
+
+class InvPreconditioner:
+    """Helper class to access the inverse of a preconditioner.
+
+    This class wraps a Preconditioner instance and provides access to its
+    inverse matrix multiplication method.
+
+    Attributes:
+        preconditioner (Preconditioner): The preconditioner instance.
+    """
+
+    def __init__(self, preconditioner: Preconditioner):
+        """Initialize the InvPreconditioner with the given preconditioner.
+
+        Args:
+            preconditioner (Preconditioner): The preconditioner instance.
+        """
+        self.preconditioner = preconditioner
+
+    def __matmul__(self, x: torch.Tensor) -> torch.Tensor:
+        """Overload the matrix multiplication operator to apply inverse preconditioner.
+
+        Args:
+            x (torch.Tensor): Input tensor to which the
+                inverse preconditioner is applied.
+
+        Returns:
+            torch.Tensor: Result of applying the inverse preconditioner to x.
+        """
+        return self.preconditioner._inverse_matmul(x)
