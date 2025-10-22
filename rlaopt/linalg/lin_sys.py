@@ -17,7 +17,9 @@ class LinSys(torch.nn.Module):
 
         Args:
             A (torch.Tensor): Positive-definite matrix defining the linear system.
-            B (torch.Tensor): Right-hand side of the linear system.
+            B (torch.Tensor): Right-hand side of the linear system. Must be 1D or 2D.
+                If 1D with shape (N,), it is automatically resized
+                    to 2D with shape (N, 1).
             reg (float): Regularization parameter. Defaults to 0.0.
             w (torch.Tensor | None): Initial guess for the solution. Defaults to None.
         """
