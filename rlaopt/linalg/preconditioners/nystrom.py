@@ -16,9 +16,13 @@ class NystromConfig(PreconditionerConfig):
 
     # TODO(pratik): add option for sketching method
 
-    rank: int = Field(gt=0)
-    damping: float = Field(ge=0.0)
-    damping_mode: Literal["adaptive", "non_adaptive"] = "adaptive"
+    rank: int = Field(gt=0, description="Rank of the Nyström approximation.")
+    base_damping: float = Field(ge=0.0, description="Base damping parameter.")
+    damping_mode: Literal["adaptive", "non_adaptive"] = Field(
+        default="adaptive",
+        description="Damping mode: 'adaptive' adjusts based on smallest eigenvalue,"
+        " 'non_adaptive' uses base_damping only.",
+    )
 
 
 class Nystrom(Preconditioner):
@@ -34,6 +38,7 @@ class Nystrom(Preconditioner):
         self.U = None
         self.S = None
         self.L = None
+        self.current_damping = None
         self.using_low_precision = False
 
     def _update(self, A: torch.Tensor, device: torch.device):
@@ -66,15 +71,24 @@ class Nystrom(Preconditioner):
         self.U, self.S, _ = torch.linalg.svd(B.T, full_matrices=False)
         self.S = torch.nn.functional.relu(self.S**2 - shift)
 
+        # Recalculate damping
+        if self._config.damping_mode == "adaptive":
+            self.current_damping = self._config.base_damping + self.S[-1]
+        else:
+            self.current_damping = self._config.base_damping
+
+        # Reset L for inverse computations
+        self.L = None
+
     def _matmul_impl(self, x: torch.Tensor) -> torch.Tensor:
         """Apply the Nyström preconditioner to the input tensor x."""
         S_safe = self.S if x.ndim == 1 else self.S.unsqueeze(-1)
-        return self.U @ (S_safe * (self.U.T @ x)) + self._config.damping * x
+        return self.U @ (S_safe * (self.U.T @ x)) + self.current_damping * x
 
     def _inverse_matmul_impl(self, x: torch.Tensor) -> torch.Tensor:
         """Apply the inverse of the Nyström preconditioner to the input tensor x."""
         x_in = x.unsqueeze(-1) if x.ndim == 1 else x
-        damping = self._config.damping
+        damping = self.current_damping
 
         UTx = self.U.T @ x_in
 

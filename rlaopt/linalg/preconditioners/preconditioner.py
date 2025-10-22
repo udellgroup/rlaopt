@@ -102,17 +102,6 @@ class Preconditioner(ABC):
         _is_torch_tensor_1d_2d(x)
         return self._inverse_matmul_impl(x)
 
-    def _update_damping(self, damping: float):
-        """Update the damping parameter of the preconditioner if applicable.
-
-        For most preconditioners, this is a no-op.
-        The only exception is the Nyström preconditioner.
-
-        Args:
-            damping (float): Baseline damping parameter.
-        """
-        pass
-
     @property
     def inv(self) -> InvPreconditioner:
         """Get the inverse preconditioner.
