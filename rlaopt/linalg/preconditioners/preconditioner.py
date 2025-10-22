@@ -41,14 +41,12 @@ class Preconditioner(ABC):
         self._config = config
 
     @abstractmethod
-    def _update(self, A: torch.Tensor, device: torch.device, *args, **kwargs):
+    def _update(self, A: torch.Tensor, device: torch.device):
         """Update the preconditioner based on the matrix A.
 
         Args:
             A (torch.Tensor): The matrix for which to compute the preconditioner.
             device (torch.device): The device on which computations are performed.
-            *args: Additional positional arguments.
-            **kwargs: Additional keyword arguments.
         """
         pass
 

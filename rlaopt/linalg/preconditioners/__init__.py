@@ -6,6 +6,12 @@ from rlaopt.linalg.preconditioners.identity import (
 from rlaopt.linalg.preconditioners.identity import (
     IdentityConfig as IdentityConfig,
 )
+from rlaopt.linalg.preconditioners.nystrom import (
+    Nystrom as Nystrom,
+)
+from rlaopt.linalg.preconditioners.nystrom import (
+    NystromConfig as NystromConfig,
+)
 from rlaopt.linalg.preconditioners.preconditioner import (
     Preconditioner as Preconditioner,
 )
