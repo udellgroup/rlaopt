@@ -2,11 +2,8 @@
 
 from abc import ABC, abstractmethod
 
-import torch
-
 from rlaopt._typing import LinSysState, OptimState, TensorDict
 from rlaopt.expression.expression import Expression
-from rlaopt.linalg import LinSys
 from rlaopt.operator_split import OperatorSplit
 from rlaopt.solvers.configs_base import LinSysSolverConfig, SolverConfig
 
@@ -113,20 +110,5 @@ class LinSysSolver(ABC):
 
         Returns:
             Updated state after one iteration.
-        """
-        pass
-
-    @abstractmethod
-    def solve(self, lin_sys: LinSys) -> torch.Tensor:
-        """Solve the linear system.
-
-        This method performs iterative refinement until convergence criteria
-        are met (either tolerance is achieved or max iterations reached).
-
-        Args:
-            lin_sys: The linear system to solve.
-
-        Returns:
-            Solution tensor w satisfying (A + reg*I)w = B.
         """
         pass

@@ -3,7 +3,13 @@
 import torch
 
 from rlaopt._typing import LinSysState
-from rlaopt.linalg import LinSys
+from rlaopt.linalg import (
+    IdentityConfig,
+    LinSys,
+    Preconditioner,
+    PreconditionerConfig,
+    get_preconditioner,
+)
 from rlaopt.solvers.configs_base import LinSysSolverConfig
 from rlaopt.solvers.solver_base import LinSysSolver
 
@@ -14,12 +20,10 @@ class PCGConfig(LinSysSolverConfig):
     Attributes:
         max_iters: Maximum number of iterations.
         tol: Tolerance for convergence (relative residual norm).
-        P: Preconditioner matrix. If None, uses identity (no preconditioning).
-        P_inv: Inverse of the preconditioner matrix. If None, uses identity.
+        preconditioner_config: Configuration for the preconditioner to use.
     """
 
-    P: torch.Tensor | None = None
-    P_inv: torch.Tensor | None = None
+    preconditioner_config: PreconditionerConfig = IdentityConfig()
 
 
 class PCGState(LinSysState):
@@ -63,6 +67,7 @@ class PCG(LinSysSolver):
             config: Configuration for the solver including preconditioner.
         """
         super().__init__(config)
+        self.P = None
 
     def init_state(self, lin_sys: LinSys) -> PCGState:
         """Initialize the solver state.
@@ -73,7 +78,10 @@ class PCG(LinSysSolver):
         Returns:
             Initial solver state.
         """
-        return _init_pcg_state(lin_sys, self.config.P_inv, self.config.tol)
+        self.P = get_preconditioner(
+            self.config.preconditioner_config, lin_sys.A, lin_sys.device
+        )
+        return _init_pcg_state(lin_sys, self.P, self.config.tol)
 
     def step(self, lin_sys: LinSys, state: PCGState) -> PCGState:
         """Perform a single PCG iteration step.
@@ -85,72 +93,25 @@ class PCG(LinSysSolver):
         Returns:
             Updated state after one iteration.
         """
-        return _pcg_step(lin_sys, state, self.config.P_inv, self.config.tol)
-
-    def solve(self, lin_sys: LinSys) -> torch.Tensor:
-        """Solve the linear system using PCG.
-
-        This method performs iterative refinement until convergence criteria
-        are met (either tolerance is achieved or max iterations reached).
-
-        Args:
-            lin_sys: The linear system to solve.
-
-        Returns:
-            Solution tensor w satisfying (A + reg*I)w = B.
-        """
-        return _pcg(lin_sys, self.config)
+        return _pcg_step(lin_sys, state, self.P, self.config.tol)
 
 
-def _pcg(lin_sys: LinSys, config: PCGConfig) -> torch.Tensor:
-    """Solve a linear system using the Preconditioned Conjugate Gradient method.
-
-    The PCG method iteratively solves systems of the form (A + reg*I)w = B
-    where A is positive-definite. It uses a preconditioner to accelerate
-    convergence by transforming the system to have better conditioning.
-
-    Args:
-        lin_sys: The linear system to solve containing A, B, reg, and initial w.
-        config: Configuration parameters including max iterations, tolerance,
-            and preconditioner.
-
-    Returns:
-        Solution tensor w satisfying (A + reg*I)w = B (within tolerance).
-    """
-    # Unpack config
-    max_iters, tol, P_inv = config.max_iters, config.tol, config.P_inv
-
-    # Initialize state
-    state = _init_pcg_state(lin_sys, P_inv, tol)
-
-    # Solver loop - continue while any component hasn't converged
-    while state.mask.any() and state.iter_ < max_iters:
-        state = _pcg_step(lin_sys, state, P_inv, tol)
-
-    return lin_sys.w.data
-
-
-def _init_pcg_state(
-    lin_sys: LinSys, P_inv: torch.Tensor | None = None, tol: float = 1e-6
-) -> PCGState:
+def _init_pcg_state(lin_sys: LinSys, P: Preconditioner, tol: float = 1e-6) -> PCGState:
     """Initialize the PCG solver state.
 
     Args:
         lin_sys: The linear system to solve.
-        P_inv: Inverse of the preconditioner matrix. If None, uses identity.
+        P: Preconditioner to use.
         tol: Tolerance for convergence.
 
     Returns:
         Initial PCG state with residuals and search directions.
     """
     # Compute initial residual: r = B - (A + reg*I)w
-    r = lin_sys.B - lin_sys.forward(lin_sys.w)
+    r = lin_sys.B - lin_sys(lin_sys.w)
 
-    # Apply preconditioner: z = P_inv @ r
-    if P_inv is not None:
-        z = P_inv @ r
-    else:
-        z = r.clone()
+    # Apply preconditioner
+    z = P.inv @ r
 
     # Initialize search direction
     p = z.clone()
@@ -171,7 +132,7 @@ def _init_pcg_state(
 def _pcg_step(
     lin_sys: LinSys,
     state: PCGState,
-    P_inv: torch.Tensor | None = None,
+    P: Preconditioner,
     tol: float = 1e-6,
 ) -> PCGState:
     """Perform a single PCG iteration.
@@ -179,7 +140,7 @@ def _pcg_step(
     Args:
         lin_sys: The linear system to solve.
         state: Current solver state.
-        P_inv: Inverse of the preconditioner matrix. If None, uses identity.
+        P: Preconditioner to use.
         tol: Tolerance for convergence.
 
     Returns:
@@ -217,10 +178,7 @@ def _pcg_step(
     r_new[:, mask] -= Ap_masked * alpha_masked
 
     # Apply preconditioner to new residual for active components
-    if P_inv is not None:
-        z_new_masked = P_inv @ r_new[:, mask]
-    else:
-        z_new_masked = r_new[:, mask].clone()
+    z_new_masked = P.inv @ r_new[:, mask]
 
     # Update z with new values for active components
     z_new = state.z.clone()
