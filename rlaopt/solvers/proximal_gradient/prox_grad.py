@@ -3,7 +3,7 @@ from typing import Dict, Tuple
 import torch
 
 from rlaopt._typing import TensorDict
-from rlaopt.expression.expression import AddExpression, Expression
+from rlaopt.expression import AddExpression, Expression
 from rlaopt.operator_split import OperatorSplit
 from rlaopt.solvers.configs import ProxGradConfig
 from rlaopt.solvers.proximal_gradient import prox_grad_func

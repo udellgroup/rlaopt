@@ -6,7 +6,7 @@ from typing import Callable
 import torch
 
 from rlaopt._typing import OptimState, TensorDict
-from rlaopt.expression.expression import Expression
+from rlaopt.expression import Expression
 from rlaopt.operator_split import OperatorSplit
 from rlaopt.solvers.configs import ProxGradConfig
 from rlaopt.solvers.utils import split_objective
