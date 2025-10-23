@@ -31,7 +31,7 @@ class PCGState(LinSysState):
     """State container for the PCG solver.
 
     Attributes:
-        r: Residual vector (B - (A + reg*I)w).
+        r: Residual vector (B - AW).
         z: Preconditioned residual (P_inv @ r).
         p: Search direction.
         rz: Inner product r^T @ z (for non-converged components).
@@ -53,7 +53,7 @@ class PCG(LinSysSolver):
     """Preconditioned Conjugate Gradient solver for linear systems.
 
     Solves linear systems of the form:
-        Aw = B
+        AW = B
     where A is a symmetric positive-definite matrix.
 
     The PCG method uses a preconditioner to improve convergence. The algorithm
@@ -119,7 +119,7 @@ def _build_init_state(
         Returns:
             Initial solver state.
         """
-        # Compute initial residual: r = B - A @ w
+        # Compute initial residual: r = B - A @ params
         r = lin_sys.compute_residual(params)
 
         # Apply preconditioner

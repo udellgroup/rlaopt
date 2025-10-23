@@ -5,7 +5,7 @@ from abc import ABC, abstractmethod
 import torch
 
 from rlaopt._typing import LinSysState, OptimState, TensorDict
-from rlaopt.expression.expression import Expression
+from rlaopt.expression.expression import AddExpression, Expression
 from rlaopt.linalg import LinSys
 from rlaopt.operator_split import OperatorSplit
 from rlaopt.solvers.configs_base import LinSysSolverConfig, SolverConfig
@@ -18,7 +18,10 @@ class OptimSolver(ABC):
     Each solver must implement the `solve` method to perform optimization.
     """
 
-    def __init__(self, config: SolverConfig, obj: Expression | OperatorSplit):
+    @abstractmethod
+    def __init__(
+        self, config: SolverConfig, obj: Expression | AddExpression | OperatorSplit
+    ):
         """Initialize the solver with an objective function.
 
         Args:
@@ -26,7 +29,7 @@ class OptimSolver(ABC):
             obj (Expression | AddExpression | OperatorSplit): The objective function
                 to optimize.
         """
-        self.config = config
+        pass
 
     @abstractmethod
     def init_state(self, params: TensorDict) -> OptimState:
@@ -61,7 +64,7 @@ class LinSysSolver(ABC):
 
     This class defines the interface for all linear system solvers in the library.
     Each solver must implement methods to initialize state, perform iteration steps,
-    and solve linear systems of the form (A + reg*I)w = B.
+    and solve linear systems of the form AW = B.
 
     Solvers are iterative methods (e.g., Conjugate Gradient)
     that progressively refine a solution until convergence criteria are met.
@@ -72,8 +75,8 @@ class LinSysSolver(ABC):
         """Initialize the solver.
 
         Args:
-            config: Configuration object for the solver.
-            lin_sys: The linear system to solve.
+            config (LinSysSolverConfig): Configuration object for the solver.
+            lin_sys (LinSys): The linear system to solve.
         """
         pass
 

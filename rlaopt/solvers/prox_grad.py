@@ -74,7 +74,8 @@ class ProxGrad(OptimSolver):
             config: Configuration for the solver.
             obj: The optimization objective.
         """
-        super().__init__(config)
+        super().__init__(config, obj)
+        self._init_state = _build_init_state(config.eta, config.use_acceleration)
         self._step = _build_step(obj, config.use_acceleration, config.use_linesearch)
 
     def init_state(self, params: TensorDict) -> ProxGradState:
@@ -86,7 +87,7 @@ class ProxGrad(OptimSolver):
         Returns:
             Initial solver state.
         """
-        return _init_state(params, self.config.eta, self.config.use_acceleration)
+        return self._init_state(params)
 
     def step(
         self, params: TensorDict, state: ProxGradState
@@ -103,14 +104,19 @@ class ProxGrad(OptimSolver):
         return self._step(params, state)
 
 
-def _init_state(
-    params: TensorDict, eta: float, use_acceleration: bool
-) -> ProxGradState:
-    """Initialize the solver state."""
-    if use_acceleration:
-        return ProxGradState(params_prev=params, eta=eta)
-    else:
-        return ProxGradState(eta=eta)
+def _build_init_state(
+    eta: float, use_acceleration: bool
+) -> Callable[[TensorDict], ProxGradState]:
+    """Build the function to initialize the solver state."""
+
+    def init_state(params: TensorDict) -> ProxGradState:
+        """Initialize the solver state."""
+        if use_acceleration:
+            return ProxGradState(params_prev=params, eta=eta)
+        else:
+            return ProxGradState(eta=eta)
+
+    return init_state
 
 
 def _build_step(
