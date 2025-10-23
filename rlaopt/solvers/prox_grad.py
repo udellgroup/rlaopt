@@ -8,7 +8,7 @@ from pydantic import Field
 from rlaopt._typing import OptimState, TensorDict
 from rlaopt.expression.expression import AddExpression, Expression
 from rlaopt.operator_split import OperatorSplit
-from rlaopt.solvers.configs_base import SolverConfig
+from rlaopt.solvers.configs_base import SolverConfig, StoppingCriteria
 from rlaopt.solvers.solver_base import OptimSolver
 from rlaopt.solvers.utils import split_objective
 from rlaopt.utils import tensor_dict_ops as dict_ops
@@ -19,15 +19,11 @@ class ProxGradConfig(SolverConfig):
 
     Attributes:
         eta: Step size for the gradient update.
-        max_iters: Maximum number of iterations.
-        tol: Tolerance for convergence.
         use_acceleration: Whether to use acceleration techniques.
         use_linesearch: Whether to use line search for step size selection.
     """
 
     eta: float = Field(default=1.0, gt=0)
-    max_iters: int = Field(default=5000, gt=0)
-    tol: float = Field(default=1e-4, gt=0)
     use_acceleration: bool = False
     use_linesearch: bool = True
 
@@ -48,6 +44,17 @@ class ProxGradState(OptimState):
     params_prev: TensorDict | None = None
     err: torch.Tensor = torch.inf
     iter_: int = 0
+
+
+class ProxGradStoppingCriteria(StoppingCriteria):
+    """Stopping criteria specific to the Proximal Gradient solver.
+
+    Attributes:
+        max_iters: Maximum number of iterations.
+        tol: Tolerance for convergence based on the error metric.
+    """
+
+    tol: float = Field(default=1e-4, gt=0)
 
 
 class ProxGrad(OptimSolver):
@@ -77,6 +84,9 @@ class ProxGrad(OptimSolver):
         super().__init__(config, obj)
         self._init_state = _build_init_state(config.eta, config.use_acceleration)
         self._step = _build_step(obj, config.use_acceleration, config.use_linesearch)
+        self._solve = lambda tol, max_iters: _build_solve(
+            obj, self._init_state, self._step, tol, max_iters
+        )
 
     def init_state(self, params: TensorDict) -> ProxGradState:
         """Initialize the solver state.
@@ -103,6 +113,25 @@ class ProxGrad(OptimSolver):
         """
         return self._step(params, state)
 
+    def solve(
+        self,
+        stopping_criteria: ProxGradStoppingCriteria,
+        params: TensorDict | None = None,
+    ) -> tuple[TensorDict, torch.Tensor]:
+        """Solve the optimization problem using the proximal gradient method.
+
+        Args:
+            stopping_criteria: Criteria to determine when to stop the optimization.
+            params: Initial parameters. If None, defaults to zeros.
+
+        Returns:
+            Tuple of optimized parameters and final solver state.
+        """
+        solve_fn = self._solve(
+            tol=stopping_criteria.tol, max_iters=stopping_criteria.max_iters
+        )
+        return solve_fn(params)
+
 
 def _build_init_state(
     eta: float, use_acceleration: bool
@@ -120,7 +149,9 @@ def _build_init_state(
 
 
 def _build_step(
-    obj: Expression | OperatorSplit, use_acceleration: bool, use_linesearch: bool
+    obj: Expression | AddExpression | OperatorSplit,
+    use_acceleration: bool,
+    use_linesearch: bool,
 ) -> Callable[
     [TensorDict, ProxGradState],
     tuple[TensorDict, ProxGradState],
@@ -183,6 +214,36 @@ def _build_step(
             return params, state._replace(iter_=state.iter_ + 1, err=err)
 
     return step
+
+
+def _build_solve(
+    obj: Expression | AddExpression | OperatorSplit,
+    init_state_fn: Callable,
+    step_fn: Callable,
+    tol: float,
+    max_iters: int,
+) -> Callable[[TensorDict | None], tuple[TensorDict, torch.Tensor]]:
+    """Build the solve function with stopping criteria."""
+
+    def solve(params: TensorDict | None = None) -> tuple[TensorDict, torch.Tensor]:
+        """Solve the optimization problem."""
+        if params is None:
+            if isinstance(obj, OperatorSplit):
+                params = obj.f.params
+            else:
+                params = obj.params
+
+        state = init_state_fn(params)
+
+        # Get error tolerance
+        epsilon = tol * dict_ops.dim(params) ** 0.5
+
+        while state.err > epsilon and state.iter_ < max_iters:
+            params, state = step_fn(params, state)
+
+        return params, state.err
+
+    return solve
 
 
 def _prox_grad_step(

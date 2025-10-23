@@ -8,7 +8,7 @@ from rlaopt._typing import LinSysState, OptimState, TensorDict
 from rlaopt.expression.expression import AddExpression, Expression
 from rlaopt.linalg import LinSys
 from rlaopt.operator_split import OperatorSplit
-from rlaopt.solvers.configs_base import LinSysSolverConfig, SolverConfig
+from rlaopt.solvers.configs_base import SolverConfig, StoppingCriteria
 
 
 class OptimSolver(ABC):
@@ -58,6 +58,22 @@ class OptimSolver(ABC):
         """
         pass
 
+    @abstractmethod
+    def solve(
+        self, stopping_criteria: StoppingCriteria, params: TensorDict | None = None
+    ) -> tuple[TensorDict, torch.Tensor]:
+        """Solve the optimization problem.
+
+        Args:
+            stopping_criteria (StoppingCriteria): Criteria to stop the optimization.
+            params (TensorDict | None): Initial parameters.
+                If None, the current parameters in the objective will be used.
+
+        Returns:
+            tuple[TensorDict, torch.Tensor]: Optimized parameters and final error.
+        """
+        pass
+
 
 class LinSysSolver(ABC):
     """Abstract base class for linear system solvers.
@@ -71,11 +87,11 @@ class LinSysSolver(ABC):
     """
 
     @abstractmethod
-    def __init__(self, config: LinSysSolverConfig, lin_sys: LinSys):
+    def __init__(self, config: SolverConfig, lin_sys: LinSys):
         """Initialize the solver.
 
         Args:
-            config (LinSysSolverConfig): Configuration object for the solver.
+            config (SolverConfig): Configuration object for the solver.
             lin_sys (LinSys): The linear system to solve.
         """
         pass

@@ -20,7 +20,6 @@ class PCGConfig(LinSysSolverConfig):
     """Configuration for the Preconditioned Conjugate Gradient solver.
 
     Attributes:
-        tol: Tolerance for convergence (relative residual norm).
         preconditioner_config: Configuration for the preconditioner to use.
     """
 

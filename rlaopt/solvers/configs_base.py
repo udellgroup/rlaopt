@@ -9,11 +9,15 @@ class SolverConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
-class LinSysSolverConfig(SolverConfig):
-    """Base configuration class for linear system solvers.
+class StoppingCriteria(BaseModel):
+    """Configuration for stopping criteria in iterative solvers.
 
     Attributes:
-        tol: Tolerance for convergence (relative residual norm).
+        max_iters: Maximum number of iterations.
+        tol: Tolerance for convergence.
     """
 
+    model_config = ConfigDict(extra="forbid")
+
+    max_iters: int = Field(default=100, gt=0)
     tol: float = Field(default=1e-6, gt=0)
