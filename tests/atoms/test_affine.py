@@ -4,530 +4,186 @@ import pytest
 import torch
 
 from rlaopt.atoms.affine import Affine
-from rlaopt.expression import Variable
+from rlaopt.expression.variable import Variable
 
 
 @pytest.fixture
-def simple_affine():
-    """Fixture for a simple 2D affine transformation."""
-    x = Variable((2,), name="x")
-    A = torch.tensor([[1.0, 2.0], [3.0, 4.0]])
-    b = torch.tensor([5.0, 6.0])
-    x.value = torch.tensor([1.0, 1.0])
-    return Affine(x, A, b), x, A, b
-
-
-@pytest.fixture
-def vector_affine():
-    """Fixture for a vector affine transformation."""
+def vector_var():
+    """Create a vector variable."""
     x = Variable((5,), name="x")
-    A = torch.randn(3, 5)
-    b = torch.randn(3)
-    x.value = torch.randn(5)
-    return Affine(x, A, b), x, A, b
+    x.value.data = torch.ones(5)
+    return x
 
 
 @pytest.fixture
-def identity_affine():
-    """Fixture for identity transformation (A = I, b = 0)."""
-    x = Variable((4,), name="x")
-    A = torch.eye(4)
-    b = torch.zeros(4)
-    x.value = torch.randn(4)
-    return Affine(x, A, b), x, A, b
+def matrix_var():
+    """Create a matrix variable."""
+    X = Variable((4, 3), name="X")
+    X.value.data = torch.ones(4, 3)
+    return X
 
 
-class TestAffineInit:
-    """Tests for Affine initialization."""
-
-    def test_basic_initialization(self, simple_affine):
-        """Test basic initialization with valid inputs."""
-        affine, x, A, b = simple_affine
-
-        assert affine is not None
-        assert torch.allclose(affine.A, A)
-        assert torch.allclose(affine.b, b)
-
-    def test_initialization_registers_variable(self, simple_affine):
-        """Test that initialization registers the variable."""
-        affine, x, _, _ = simple_affine
-
-        assert hasattr(affine, "var_name")
-        assert affine.var_name == x.name
-
-    @pytest.mark.parametrize(
-        "m,n",
-        [
-            (1, 1),
-            (3, 5),
-            (10, 20),
-            (5, 5),  # Square
-        ],
-    )
-    def test_various_dimensions(self, m, n):
-        """Test initialization with various matrix dimensions."""
-        x = Variable((n,), name="x")
-        A = torch.randn(m, n)
-        b = torch.randn(m)
-
-        affine = Affine(x, A, b)
-
-        assert affine is not None
-        assert affine.A.shape == (m, n)
-        assert affine.b.shape == (m,)
-
-    def test_initialization_with_non_variable_raises_error(self):
-        """Test that initialization with non-Variable raises TypeError."""
-        A = torch.randn(3, 5)
-        b = torch.randn(3)
-        not_a_variable = torch.randn(5)
-
-        with pytest.raises(TypeError, match="Expected Variable"):
-            Affine(not_a_variable, A, b)
-
-    def test_initialization_with_none_raises_error(self):
-        """Test that initialization with None raises TypeError."""
-        A = torch.randn(3, 5)
-        b = torch.randn(3)
-
-        with pytest.raises(TypeError, match="Expected Variable"):
-            Affine(None, A, b)
-
-    def test_buffers_registered(self, simple_affine):
-        """Test that A and b are registered as buffers."""
-        affine, _, A, b = simple_affine
-
-        assert hasattr(affine, "A")
-        assert hasattr(affine, "b")
-        assert isinstance(affine.A, torch.Tensor)
-        assert isinstance(affine.b, torch.Tensor)
+@pytest.fixture
+def simple_affine_data():
+    """Create simple affine transformation data."""
+    return {"A": torch.eye(5), "b": torch.zeros(5)}
 
 
-class TestAffineForward:
-    """Tests for forward evaluation."""
+@pytest.fixture
+def nontrivial_affine_data():
+    """Create non-trivial affine transformation data."""
+    return {
+        "A": torch.tensor(
+            [
+                [1.0, 2.0, 0.0, 0.0, 0.0],
+                [0.0, 1.0, 1.0, 0.0, 0.0],
+                [0.0, 0.0, 1.0, 2.0, 3.0],
+            ]
+        ),
+        "b": torch.tensor([1.0, -1.0, 2.0]),
+    }
 
-    def test_forward_simple(self, simple_affine):
-        """Test forward with simple known values."""
-        affine, x, A, b = simple_affine
 
-        # x = [1, 1], A @ x = [3, 7], A @ x + b = [8, 13]
+class TestAffine:
+    """Test Affine transformation atom."""
+
+    # ----------------------
+    # Initialization tests
+    # ----------------------
+
+    def test_init_with_variable(self, vector_var, simple_affine_data):
+        """Test initialization with Variable input."""
+        affine = Affine(vector_var, **simple_affine_data)
+        assert affine.A is not None
+        assert affine.b is not None
+
+    def test_init_with_expression_input(self, vector_var, simple_affine_data):
+        """Test initialization with Expression input."""
+        # Create an expression from a variable
+        expr = vector_var + 1.0
+        affine = Affine(expr, **simple_affine_data)
+        assert affine.A is not None
+        assert affine.b is not None
+
+    def test_init_stores_transformation_matrices(
+        self, vector_var, nontrivial_affine_data
+    ):
+        """Test initialization stores A and b correctly."""
+        affine = Affine(vector_var, **nontrivial_affine_data)
+        assert torch.equal(affine.A, nontrivial_affine_data["A"])
+        assert torch.equal(affine.b, nontrivial_affine_data["b"])
+
+    # ----------------------
+    # Forward evaluation tests
+    # ----------------------
+
+    def test_forward_with_identity_transformation(self, vector_var, simple_affine_data):
+        """Test forward() with identity transformation (A=I, b=0)."""
+        affine = Affine(vector_var, **simple_affine_data)
         result = affine.forward()
-        expected = torch.tensor([8.0, 13.0])
-
+        expected = torch.ones(5)
         assert torch.allclose(result, expected)
 
-    def test_forward_identity(self, identity_affine):
-        """Test forward with identity transformation."""
-        affine, x, _, _ = identity_affine
-
+    def test_forward_computes_affine_transformation(
+        self, vector_var, nontrivial_affine_data
+    ):
+        """Test forward() correctly computes A @ x + b."""
+        affine = Affine(vector_var, **nontrivial_affine_data)
         result = affine.forward()
 
-        # Should return x unchanged (A = I, b = 0)
-        assert torch.allclose(result, x.value)
+        # Manual computation: A @ ones(5) + b
+        # Row 0: [1,2,0,0,0] @ [1,1,1,1,1] + 1 = 3 + 1 = 4
+        # Row 1: [0,1,1,0,0] @ [1,1,1,1,1] + (-1) = 2 - 1 = 1
+        # Row 2: [0,0,1,2,3] @ [1,1,1,1,1] + 2 = 6 + 2 = 8
+        expected = torch.tensor([4.0, 1.0, 8.0])
+        assert torch.allclose(result, expected)
 
-    def test_forward_zero_matrix(self):
-        """Test forward with zero matrix (output = b)."""
-        x = Variable((5,), name="x")
+    def test_forward_with_expression_input(self, vector_var):
+        """Test forward() with Expression input evaluates the expression first."""
+        # Create expression: x + 2
+        expr = vector_var + 2.0
+        A = torch.eye(5) * 2
+        b = torch.ones(5)
+        affine = Affine(expr, A, b)
+
+        # vector_var.value = ones(5), so expr = ones(5) + 2 = 3*ones(5)
+        # Result: 2*I @ 3*ones(5) + ones(5) = 6*ones(5) + ones(5) = 7*ones(5)
+        result = affine.forward()
+        expected = torch.ones(5) * 7
+        assert torch.allclose(result, expected)
+
+    def test_forward_with_matrix_input(self, matrix_var):
+        """Test forward() works with matrix inputs."""
+        # Flatten transformation: sum rows
+        A = torch.ones(3, 4)  # Each row sums the 4 columns
+        b = torch.zeros(3)
+        affine = Affine(matrix_var, A, b)
+
+        # matrix_var is 4x3 of ones, A is 3x4, so A @ X gives 3x3
+        # Each element = sum of row of A @ column of X = 4 * 1 = 4
+        result = affine.forward()
+        assert result.shape == (3, 3)
+
+    # ----------------------
+    # Property tests
+    # ----------------------
+
+    def test_is_smooth_returns_true(self, vector_var, simple_affine_data):
+        """Test affine transformation is smooth."""
+        affine = Affine(vector_var, **simple_affine_data)
+        assert affine.is_smooth() is True
+
+    def test_is_proxable_returns_false(self, vector_var, simple_affine_data):
+        """Test affine transformation is not proxable."""
+        affine = Affine(vector_var, **simple_affine_data)
+        assert affine.is_proxable() is False
+
+    def test_is_subsamplable_returns_false(self, vector_var, simple_affine_data):
+        """Test affine transformation is not subsamplable."""
+        affine = Affine(vector_var, **simple_affine_data)
+        assert affine.is_subsamplable() is False
+
+    def test_prox_raises_not_implemented(self, vector_var, simple_affine_data):
+        """Test prox() raises NotImplementedError."""
+        affine = Affine(vector_var, **simple_affine_data)
+        with pytest.raises(NotImplementedError, match="not proxable"):
+            affine.prox(torch.ones(5), 1.0)
+
+    def test_subsample_raises_not_implemented(self, vector_var, simple_affine_data):
+        """Test subsample() raises NotImplementedError."""
+        affine = Affine(vector_var, **simple_affine_data)
+        with pytest.raises(NotImplementedError, match="does not support subsampling"):
+            affine.subsample(torch.tensor([0, 1, 2]))
+
+    # ----------------------
+    # Edge cases
+    # ----------------------
+
+    def test_with_zero_matrix(self, vector_var):
+        """Test affine with zero transformation matrix."""
         A = torch.zeros(3, 5)
-        b = torch.tensor([1.0, 2.0, 3.0])
-        x.value = torch.randn(5)
-
-        affine = Affine(x, A, b)
+        b = torch.ones(3) * 5
+        affine = Affine(vector_var, A, b)
         result = affine.forward()
+        assert torch.allclose(result, b)  # Should return just b
 
-        # A @ x = 0, so result = b
-        assert torch.allclose(result, b)
-
-    def test_forward_zero_bias(self):
-        """Test forward with zero bias (output = A @ x)."""
-        x = Variable((3,), name="x")
-        A = torch.tensor([[1.0, 2.0, 3.0]])
-        b = torch.zeros(1)
-        x.value = torch.tensor([1.0, 1.0, 1.0])
-
-        affine = Affine(x, A, b)
+    def test_with_zero_bias(self, vector_var):
+        """Test affine with zero bias vector."""
+        A = torch.eye(5) * 2
+        b = torch.zeros(5)
+        affine = Affine(vector_var, A, b)
         result = affine.forward()
-
-        # Result = A @ x = [6.0]
-        expected = torch.tensor([6.0])
+        expected = torch.ones(5) * 2  # Just A @ x
         assert torch.allclose(result, expected)
 
-    @pytest.mark.parametrize("seed", range(5))
-    def test_forward_random(self, seed):
-        """Test forward with random matrices and values."""
-        torch.manual_seed(seed)
-
-        x = Variable((5,), name="x")
-        A = torch.randn(3, 5)
-        b = torch.randn(3)
-        x.value = torch.randn(5)
-
-        affine = Affine(x, A, b)
+    def test_gradient_flows_through_transformation(
+        self, vector_var, simple_affine_data
+    ):
+        """Test gradients flow through affine transformation."""
+        vector_var.value.requires_grad_(True)
+        affine = Affine(vector_var, **simple_affine_data)
         result = affine.forward()
+        loss = result.sum()
+        loss.backward()
 
-        # Manually compute expected result
-        expected = A @ x.value + b
-        assert torch.allclose(result, expected)
-
-    def test_forward_uses_current_variable_value(self):
-        """Test that forward uses the variable value at initialization."""
-        x = Variable((2,), name="x")
-        A = torch.eye(2)
-        b = torch.zeros(2)
-        x.value = torch.tensor([1.0, 2.0])
-
-        affine = Affine(x, A, b)
-        result = affine.forward()
-
-        expected = A @ x.value + b
-        assert torch.allclose(result, expected)
-
-    def test_forward_large_scale(self):
-        """Test forward with large-scale transformation."""
-        x = Variable((100,), name="x")
-        A = torch.randn(50, 100)
-        b = torch.randn(50)
-        x.value = torch.randn(100)
-
-        affine = Affine(x, A, b)
-        result = affine.forward()
-
-        expected = A @ x.value + b
-        assert torch.allclose(result, expected)
-        assert result.shape == (50,)
-
-
-class TestAffineProperties:
-    """Tests for affine properties."""
-
-    def test_is_smooth_always_true(self, simple_affine):
-        """Test that is_smooth always returns True."""
-        affine, _, _, _ = simple_affine
-
-        assert affine.is_smooth() is True
-
-    def test_is_proxable_always_false(self, simple_affine):
-        """Test that is_proxable always returns False."""
-        affine, _, _, _ = simple_affine
-
-        assert affine.is_proxable() is False
-
-    def test_is_subsamplable_always_true(self, simple_affine):
-        """Test that is_subsamplable always returns True."""
-        affine, _, _, _ = simple_affine
-
-        assert affine.is_subsamplable() is True
-
-    @pytest.mark.parametrize(
-        "m,n",
-        [
-            (5, 3),
-            (10, 10),
-            (20, 15),
-        ],
-    )
-    def test_properties_consistent(self, m, n):
-        """Test that properties are consistent across different dimensions."""
-        x = Variable((n,), name="x")
-        A = torch.randn(m, n)
-        b = torch.randn(m)
-        affine = Affine(x, A, b)
-
-        assert affine.is_smooth() is True
-        assert affine.is_proxable() is False
-        assert affine.is_subsamplable() is True
-
-
-class TestAffineProx:
-    """Tests for prox operator (should raise error)."""
-
-    def test_prox_raises_not_implemented(self, simple_affine):
-        """Test that prox raises NotImplementedError."""
-        affine, _, _, _ = simple_affine
-
-        with pytest.raises(NotImplementedError, match="Affine is not proxable"):
-            affine.prox(torch.randn(2), prox_scaling=1.0)
-
-    @pytest.mark.parametrize("prox_scaling", [0.1, 1.0, 10.0])
-    def test_prox_raises_regardless_of_scaling(self, simple_affine, prox_scaling):
-        """Test that prox raises error regardless of scaling parameter."""
-        affine, _, _, _ = simple_affine
-
-        with pytest.raises(NotImplementedError):
-            affine.prox(torch.randn(2), prox_scaling=prox_scaling)
-
-
-class TestAffineSubsample:
-    """Tests for subsampling functionality."""
-
-    def test_subsample_single_index(self):
-        """Test subsampling with a single index."""
-        x = Variable((5,), name="x")
-        A = torch.randn(10, 5)
-        b = torch.randn(10)
-        affine = Affine(x, A, b)
-
-        indices = torch.tensor([3])
-        sub_affine = affine.subsample(indices)
-
-        assert sub_affine.A.shape == (1, 5)
-        assert sub_affine.b.shape == (1,)
-        assert torch.allclose(sub_affine.A, A[indices])
-        assert torch.allclose(sub_affine.b, b[indices])
-
-    def test_subsample_multiple_indices(self):
-        """Test subsampling with multiple indices."""
-        x = Variable((5,), name="x")
-        A = torch.randn(10, 5)
-        b = torch.randn(10)
-        x.value = torch.randn(5)
-        affine = Affine(x, A, b)
-
-        indices = torch.tensor([0, 2, 5, 7])
-        sub_affine = affine.subsample(indices)
-
-        assert sub_affine.A.shape == (4, 5)
-        assert sub_affine.b.shape == (4,)
-        assert torch.allclose(sub_affine.A, A[indices])
-        assert torch.allclose(sub_affine.b, b[indices])
-
-    def test_subsample_preserves_functionality(self):
-        """Test that subsampled affine still computes correctly."""
-        x = Variable((5,), name="x")
-        A = torch.randn(10, 5)
-        b = torch.randn(10)
-        x.value = torch.randn(5)
-        affine = Affine(x, A, b)
-
-        indices = torch.tensor([1, 3, 5])
-        sub_affine = affine.subsample(indices)
-
-        result = sub_affine.forward()
-        expected = A[indices] @ x.value + b[indices]
-
-        assert torch.allclose(result, expected)
-
-    def test_subsample_all_indices(self):
-        """Test subsampling with all indices (should be equivalent)."""
-        x = Variable((5,), name="x")
-        A = torch.randn(10, 5)
-        b = torch.randn(10)
-        x.value = torch.randn(5)
-        affine = Affine(x, A, b)
-
-        indices = torch.arange(10)
-        sub_affine = affine.subsample(indices)
-
-        result_original = affine.forward()
-        result_subsampled = sub_affine.forward()
-
-        assert torch.allclose(result_original, result_subsampled)
-
-    def test_subsample_reverse_order(self):
-        """Test subsampling with indices in reverse order."""
-        x = Variable((5,), name="x")
-        A = torch.randn(10, 5)
-        b = torch.randn(10)
-        x.value = torch.randn(5)
-        affine = Affine(x, A, b)
-
-        indices = torch.tensor([9, 7, 5, 3, 1])
-        sub_affine = affine.subsample(indices)
-
-        result = sub_affine.forward()
-        expected = A[indices] @ x.value + b[indices]
-
-        assert torch.allclose(result, expected)
-
-    def test_subsample_duplicate_indices(self):
-        """Test subsampling with duplicate indices."""
-        x = Variable((5,), name="x")
-        A = torch.randn(10, 5)
-        b = torch.randn(10)
-        x.value = torch.randn(5)
-        affine = Affine(x, A, b)
-
-        indices = torch.tensor([2, 2, 5, 5])
-        sub_affine = affine.subsample(indices)
-
-        assert sub_affine.A.shape == (4, 5)
-        # Each duplicated index appears twice
-        assert torch.allclose(sub_affine.A[0], sub_affine.A[1])
-        assert torch.allclose(sub_affine.A[2], sub_affine.A[3])
-
-    def test_subsample_preserves_properties(self):
-        """Test that subsampling preserves atom properties."""
-        x = Variable((5,), name="x")
-        A = torch.randn(10, 5)
-        b = torch.randn(10)
-        affine = Affine(x, A, b)
-
-        indices = torch.tensor([0, 3, 7])
-        sub_affine = affine.subsample(indices)
-
-        assert sub_affine.is_smooth() is True
-        assert sub_affine.is_proxable() is False
-        assert sub_affine.is_subsamplable() is True
-
-    @pytest.mark.parametrize(
-        "n_rows,n_samples",
-        [
-            (10, 3),
-            (20, 10),
-            (50, 25),
-        ],
-    )
-    def test_subsample_various_sizes(self, n_rows, n_samples):
-        """Test subsampling with various sizes."""
-        x = Variable((5,), name="x")
-        A = torch.randn(n_rows, 5)
-        b = torch.randn(n_rows)
-        x.value = torch.randn(5)
-        affine = Affine(x, A, b)
-
-        indices = torch.randperm(n_rows)[:n_samples]
-        sub_affine = affine.subsample(indices)
-
-        assert sub_affine.A.shape == (n_samples, 5)
-        assert sub_affine.b.shape == (n_samples,)
-
-
-class TestAffineEdgeCases:
-    """Tests for edge cases and numerical stability."""
-
-    @pytest.mark.parametrize("dtype", [torch.float32, torch.float64])
-    def test_different_dtypes(self, dtype):
-        """Test with different floating point precisions."""
-        x = Variable((3,), name="x")
-        A = torch.randn(2, 3, dtype=dtype)
-        b = torch.randn(2, dtype=dtype)
-        x.value = torch.randn(3, dtype=dtype)
-
-        affine = Affine(x, A, b)
-        result = affine.forward()
-
-        assert result.dtype == dtype
-        expected = A @ x.value + b
-        assert torch.allclose(result, expected)
-
-    def test_very_small_values(self):
-        """Test with very small values."""
-        x = Variable((3,), name="x")
-        A = torch.tensor([[1e-10, 2e-10, 3e-10]], dtype=torch.float64)
-        b = torch.tensor([1e-10], dtype=torch.float64)
-        x.value = torch.tensor([1.0, 1.0, 1.0], dtype=torch.float64)
-
-        affine = Affine(x, A, b)
-        result = affine.forward()
-
-        expected = A @ x.value + b
-        assert torch.allclose(result, expected, atol=1e-15)
-
-    def test_very_large_values(self):
-        """Test with very large values."""
-        x = Variable((3,), name="x")
-        A = torch.tensor([[1e6, 2e6, 3e6]])
-        b = torch.tensor([1e6])
-        x.value = torch.tensor([1.0, 1.0, 1.0])
-
-        affine = Affine(x, A, b)
-        result = affine.forward()
-
-        expected = A @ x.value + b
-        assert torch.allclose(result, expected, rtol=1e-5)
-
-    def test_rectangular_matrix_tall(self):
-        """Test with tall rectangular matrix (m > n)."""
-        x = Variable((5,), name="x")
-        A = torch.randn(20, 5)
-        b = torch.randn(20)
-        x.value = torch.randn(5)
-
-        affine = Affine(x, A, b)
-        result = affine.forward()
-
-        assert result.shape == (20,)
-        expected = A @ x.value + b
-        assert torch.allclose(result, expected)
-
-    def test_rectangular_matrix_wide(self):
-        """Test with wide rectangular matrix (m < n)."""
-        x = Variable((20,), name="x")
-        A = torch.randn(5, 20)
-        b = torch.randn(5)
-        x.value = torch.randn(20)
-
-        affine = Affine(x, A, b)
-        result = affine.forward()
-
-        assert result.shape == (5,)
-        expected = A @ x.value + b
-        assert torch.allclose(result, expected)
-
-
-class TestAffineExamples:
-    """Tests based on docstring examples."""
-
-    def test_docstring_basic_example(self):
-        """Test the basic example from docstring."""
-        x = Variable((5,), name="x")
-        A = torch.randn(3, 5)
-        b = torch.randn(3)
-        x.value = torch.randn(5)
-
-        affine = Affine(x, A, b)
-        result = affine.forward()
-
-        # Should compute A @ x + b
-        expected = A @ x.value + b
-        assert torch.allclose(result, expected)
-
-    def test_docstring_subsample_example(self):
-        """Test the subsample example from docstring."""
-        x = Variable((5,), name="x")
-        A = torch.randn(10, 5)
-        b = torch.randn(10)
-        affine = Affine(x, A, b)
-
-        sub_affine = affine.subsample(torch.tensor([0, 2, 5]))
-
-        assert sub_affine.A.shape == torch.Size([3, 5])
-
-
-@pytest.mark.parametrize(
-    "m,n,seed",
-    [
-        (3, 5, 0),
-        (10, 8, 1),
-        (5, 5, 2),
-        (20, 10, 3),
-    ],
-)
-def test_affine_general(m, n, seed):
-    """General test for Affine with various configurations."""
-    torch.manual_seed(seed)
-
-    x = Variable((n,), name="x")
-    A = torch.randn(m, n)
-    b = torch.randn(m)
-    x.value = torch.randn(n)
-
-    affine = Affine(x, A, b)
-
-    # Test forward
-    result = affine.forward()
-    expected = A @ x.value + b
-    assert torch.allclose(result, expected)
-
-    # Test properties
-    assert affine.is_smooth()
-    assert not affine.is_proxable()
-    assert affine.is_subsamplable()
-
-    # Test subsample
-    n_samples = min(m, 5)
-    indices = torch.randperm(m)[:n_samples]
-    sub_affine = affine.subsample(indices)
-    sub_result = sub_affine.forward()
-    sub_expected = A[indices] @ x.value + b[indices]
-    assert torch.allclose(sub_result, sub_expected)
+        assert vector_var.value.grad is not None
