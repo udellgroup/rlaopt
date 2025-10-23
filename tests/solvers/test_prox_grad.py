@@ -1,6 +1,5 @@
-from math import sqrt
+"""Tests for the proximal gradient solver."""
 
-import numpy as np
 import pytest
 import torch
 
@@ -71,10 +70,9 @@ def generate_least_squares_data(n=1024, p=256, precision=torch.float32, seed=0):
 def generate_lasso_data(n=1024, p=128, s=32, precision=torch.float32, seed=0):
     """Generate random data for LASSO problems with sparse ground truth."""
     torch.manual_seed(seed)
-    np.random.seed(seed)
 
     # Generate sparse ground truth
-    J = np.random.choice(p, s, replace=False)
+    J = torch.randperm(p)[:s]
     x_star = torch.zeros(p, dtype=precision)
     x_star[J] = torch.randn(s, dtype=precision) / (s**0.5)
 
@@ -176,7 +174,7 @@ def _solve_and_verify(obj, eta, tol, use_acceleration, use_linesearch):
 
     # Test using solve method
     params, err = opt.solve(obj)
-    assert err.item() <= tol * sqrt(dict_ops.dim(params)), (
+    assert err.item() <= tol * (dict_ops.dim(params) ** 0.5), (
         f"Solve method failed: error {err.item()} > tolerance {tol}"
     )
 
