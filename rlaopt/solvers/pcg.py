@@ -75,7 +75,7 @@ class PCG(LinSysSolver):
         self._init_state = _build_init_state(lin_sys, P, config.tol)
         self._step = _build_step(lin_sys, P, config.tol)
 
-    def init_state(self, params: torch.Tensor | None = None) -> PCGState:
+    def init_state(self, params: torch.Tensor) -> PCGState:
         """Initialize the solver state.
 
         Args:
@@ -111,8 +111,8 @@ def _compute_convergence_mask(
 
 def _build_init_state(
     lin_sys: LinSys, P: Preconditioner, tol: float
-) -> Callable[[torch.Tensor | None], PCGState]:
-    def init_state(params: torch.Tensor | None) -> PCGState:
+) -> Callable[[torch.Tensor], PCGState]:
+    def init_state(params: torch.Tensor) -> PCGState:
         """Initialize the PCG solver state.
 
         Args:
@@ -121,11 +121,8 @@ def _build_init_state(
         Returns:
             Initial solver state.
         """
-        # Initial solution estimate
-        w = params if params is not None else lin_sys.w
-
         # Compute initial residual: r = B - A @ w
-        r = lin_sys.compute_residual(w)
+        r = lin_sys.compute_residual(params)
 
         # Apply preconditioner
         z = P.inv @ r

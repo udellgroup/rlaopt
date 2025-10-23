@@ -75,7 +75,7 @@ class LinSysSolver(ABC):
         self.config = config
 
     @abstractmethod
-    def init_state(self, params: torch.Tensor | None = None) -> LinSysState:
+    def init_state(self, params: torch.Tensor) -> LinSysState:
         """Initialize the state of the solver.
 
         Args:
