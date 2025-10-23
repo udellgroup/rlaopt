@@ -40,8 +40,8 @@ class Box(Polyhedron):
     def __init__(
         self,
         x: Variable,
-        lower: torch.Tensor | float = None,
-        upper: torch.Tensor | float = None,
+        lower: torch.Tensor | float | None = None,
+        upper: torch.Tensor | float | None = None,
     ):
         """Initialize the box constraint atom.
 

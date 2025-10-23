@@ -6,17 +6,16 @@ import cvxpy as cp
 import torch
 
 from rlaopt.atoms.atom_expression import AtomExpression
-from rlaopt.expression import Variable
+from rlaopt.expression import Expression, Variable
 
 
 class Affine(AtomExpression):
     """Affine transformation atom: A @ x + b.
 
-    Represents an affine mapping of a variable, commonly used in linear
-    constraints, feature transformations, and linear models.
+    Represents an affine mapping of a variable or output of an expression.
 
     Args:
-        x: Variable to transform.
+        x: Variable or Expression to transform.
         A: Transformation matrix.
         b: Bias/offset vector.
 
@@ -31,23 +30,20 @@ class Affine(AtomExpression):
         >>> result = affine.forward()  # Computes A @ x + b
     """
 
-    def __init__(self, x: Variable, A: torch.Tensor, b: torch.Tensor):
+    def __init__(self, x: Variable | Expression, A: torch.Tensor, b: torch.Tensor):
         """Initialize the affine transformation atom.
 
         Args:
-            x: Variable to transform.
+            x: Variable or Affine Expression to transform.
             A: Transformation matrix.
             b: Bias/offset vector.
 
         Raises:
-            TypeError: If x is not a Variable.
+            TypeError: If x is not a Variable or Expression.
         """
         super().__init__()
 
-        if not isinstance(x, Variable):
-            raise TypeError(f"Expected Variable, got {type(x)}")
-
-        self.register_variable(x)
+        self.register_input(x)
         self.register_atom_buffer("A", A)
         self.register_atom_buffer("b", b)
 
@@ -65,8 +61,11 @@ class Affine(AtomExpression):
         Returns:
             torch.Tensor: Result of A @ x + b.
         """
-        value = self.get_variable(self.var_name)
-        return self.A @ value + self.b
+        input = self.get_input()
+        if isinstance(input, torch.nn.Parameter):
+            return self.A @ input + self.b
+        elif isinstance(input, Expression):
+            return self.A @ input.forward() + self.b
 
     def is_proxable(self) -> bool:
         """Check if the affine transformation has a computable proximal operator.
@@ -95,32 +94,20 @@ class Affine(AtomExpression):
         """Check if the affine transformation supports subsampling.
 
         Returns:
-            bool: Always True, as rows of A and b can be subsampled.
+            bool: Always False, we do not support subsampling currently.
         """
-        return True
+        return False
 
     def subsample(self, indices: torch.Tensor) -> Affine:
         """Return a subsampled version of the affine transformation.
 
-        Creates a new affine atom with only the rows of A and b specified by indices.
-
-        Args:
-            indices: Row indices to subsample.
-
         Returns:
-            Affine: New affine atom with subsampled transformation.
+            Affine: Not applicable
 
-        Examples:
-            >>> x = Variable((5,), name='x')
-            >>> A = torch.randn(10, 5)
-            >>> b = torch.randn(10)
-            >>> affine = Affine(x, A, b)
-            >>> sub_affine = affine.subsample(torch.tensor([0, 2, 5]))
-            >>> sub_affine.A.shape
-            torch.Size([3, 5])
+        Raises:
+            NotImplementedError: Affine transformations are not proxable.
         """
-        x = Variable(getattr(self, self.var_name), name=self.var_name)
-        return Affine(x, self.A[indices], self.b[indices])
+        raise NotImplementedError("Affine atom does not support subsampling")
 
     def to_cvxpy(self) -> cp.Expression:
         """Convert to CVXPY expression (not implemented).

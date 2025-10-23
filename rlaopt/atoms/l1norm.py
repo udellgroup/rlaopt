@@ -1,5 +1,7 @@
 """Implementation of the L1-norm atom."""
 
+from __future__ import annotations
+
 import cvxpy as cp
 import torch
 
@@ -10,22 +12,23 @@ from rlaopt.expression import Variable
 class L1Norm(AtomExpression):
     """L1-norm atom."""
 
-    def __init__(self, x: Variable, scaling: float = 1.0):
+    def __init__(
+        self, x: Variable, scaling: float | torch.Tensor | torch.nn.Parameter = 1.0
+    ):
         """Initializes the L1-norm atom with optional scaling.
 
         Args:
             x: Variable to apply the L1-norm to.
                Must be an instance of Variable.
             scaling: Scaling factor for the L1-norm (default: 1.0).
-                     Can be a float or a torch.Tensor.
+                     Can be a float, or torch.Tensor, or torch.nn.Parameter.
+                     Scaling factor must be a torch.nn.Parameter if you wish to
+                     differentiate with respect to the scaling factor.
         """
         super().__init__()
 
-        if not isinstance(x, Variable):
-            raise TypeError(f"Expected Variable, got {type(x)}")
-
         # Register the variable as a parameter
-        self.register_variable(x)
+        self.register_input(x)
 
         # Register the scaling factor as a buffer
         self.register_atom_buffer("scaling", scaling)
@@ -36,7 +39,7 @@ class L1Norm(AtomExpression):
 
     def forward(self) -> torch.Tensor:
         """Evaluates the scaled L1-norm."""
-        value = self.get_variable(self.var_name)
+        value = self.get_input()
         return self.scaling * torch.sum(torch.abs(value))
 
     def is_proxable(self) -> bool:
@@ -65,7 +68,7 @@ class L1Norm(AtomExpression):
         """Returns False because L1-norm is not subsamplable."""
         return False
 
-    def subsample(self, indices) -> "L1Norm":
+    def subsample(self, indices) -> L1Norm:
         """Raises NotImplementedError because L1-norm cannot be subsampled."""
         raise NotImplementedError("L1-norm cannot be subsampled.")
 

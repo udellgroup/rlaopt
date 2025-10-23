@@ -1,12 +1,14 @@
 """Polyhedron constraint atom for optimization."""
 
+from __future__ import annotations
+
 from functools import partial
 from typing import Callable
 
 import torch
 
 from rlaopt.atoms.atom_expression import AtomExpression
-from rlaopt.expression.expression import Variable
+from rlaopt.expression import Variable
 
 
 class Polyhedron(AtomExpression):
@@ -39,8 +41,8 @@ class Polyhedron(AtomExpression):
         >>> x = Variable((5,), name='x')
         >>> box = Polyhedron(
         ...     x,
-        ...     lower=torch.full((5,), -1.0),
-        ...     upper=torch.full((5,), 1.0)
+        ...     lower=lower=torch.zeros(2),
+        ...     upper=torch.ones(2)
         ... )
 
         >>> # Equality constraint: A @ x = b
@@ -55,19 +57,19 @@ class Polyhedron(AtomExpression):
         ...     A=A,
         ...     b=b,
         ...     C=C,
-        ...     lower=torch.zeros(2),
-        ...     upper=torch.ones(2)
+        ...     lower=torch.tensor([-1,-2,0,4,5]),
+        ...     upper=torch.tensor([0,1,5,6,10])
         ... )
     """
 
     def __init__(
         self,
         x: Variable,
-        A: torch.Tensor = None,
-        b: torch.Tensor = None,
-        C: torch.Tensor = None,
-        lower: torch.Tensor = None,
-        upper: torch.Tensor = None,
+        A: torch.Tensor | None = None,
+        b: torch.Tensor | None = None,
+        C: torch.Tensor | None = None,
+        lower: torch.Tensor | None = None,
+        upper: torch.Tensor | None = None,
     ):
         """Initialize the polyhedral constraint atom.
 
@@ -87,6 +89,8 @@ class Polyhedron(AtomExpression):
         super().__init__()
         if (A is not None) and (b is None):
             raise ValueError("b cannot be None when A is not None")
+        elif (A is None) and (b is not None):
+            raise ValueError("A cannot be None when b is not None")
 
         ## Convert float/int bounds to tensors FIRST (before using .device/.dtype)
         if isinstance(lower, (int, float)):
@@ -97,7 +101,6 @@ class Polyhedron(AtomExpression):
         # Validate input dimensional consistency
         _validate(A, C, b, lower, upper)
 
-        # NOW we can safely use .device and .dtype since they're tensors
         # if upper is provided but not lower, set lower to -infinity
         if (upper is not None) and (lower is None):
             lower = torch.tensor(-torch.inf, device=upper.device, dtype=upper.dtype)
@@ -106,29 +109,15 @@ class Polyhedron(AtomExpression):
             upper = torch.tensor(torch.inf, device=lower.device, dtype=lower.dtype)
 
         # Register the variable as a parameter
-        self.register_variable(x)
+        self.register_input(x)
 
         # Register constraint data as buffers
-        if (A is not None) and (b is not None):
-            self.register_atom_buffer("A", A)
-            self.register_atom_buffer("b", b)
-        else:
-            self.A = None
-            self.b = None
+        self.register_atom_buffer("A", A)
+        self.register_atom_buffer("b", b)
+        self.register_atom_buffer("C", C)
+        self.register_atom_buffer("lower", lower)
+        self.register_atom_buffer("upper", upper)
 
-        if C is not None:
-            self.register_atom_buffer("C", C)
-        else:
-            self.C = None
-
-        if lower is not None:
-            self.register_atom_buffer("lower", lower)
-            self.register_atom_buffer("upper", upper)
-        else:
-            self.upper = None
-            self.lower = None
-
-        # build evaluation function
         self._eval = _build_eval(self.A, self.C, self.b, self.lower, self.upper)
 
     def forward(self) -> torch.Tensor:
@@ -137,7 +126,7 @@ class Polyhedron(AtomExpression):
         Returns:
             torch.Tensor: 0.0 if constraints are satisfied, infinity otherwise.
         """
-        value = self.get_variable(self.var_name)
+        value = self.get_input()
         return self._eval(value)
 
     def is_smooth(self) -> bool:
@@ -164,7 +153,7 @@ class Polyhedron(AtomExpression):
         """
         return False
 
-    def subsample(self, indices: torch.Tensor) -> "Polyhedron":
+    def subsample(self, indices: torch.Tensor) -> Polyhedron:
         """Subsample the polyhedral constraint (not supported).
 
         Args:
@@ -213,23 +202,29 @@ def _validate_equality_constraints(A, b):
         raise ValueError("A must be at least 1-dimensional")
 
     if A.dim() == 1:
-        _validate_hyperplane(b)
+        _validate_equality_vector(A, b)
     else:
         _validate_equality_matrix(A, b)
 
 
-def _validate_hyperplane(b):
+def _validate_equality_vector(A, b):
     """Validate hyperplane constraint (a^T x = b)."""
     if b.dim() != 0:
         raise ValueError("For 1D A (hyperplane), b must be a scalar")
+    if _is_zero(A):
+        raise ValueError("To define a valid constraint, a must be non-zero.")
 
 
 def _validate_equality_matrix(A, b):
     """Validate matrix equality constraints (A @ x = b)."""
+    if A.shape[0] > A.shape[1]:
+        raise ValueError("Valid A must have more columns than rows!")
     if b.dim() != 1:
         raise ValueError("For 2D A, b must be 1D")
     if A.shape[0] != b.shape[0]:
         raise ValueError("A and b must have matching row counts")
+    if _is_zero(A):
+        raise ValueError("To define a valid constraint, A must be non-zero")
 
 
 def _validate_inequality_constraints(C, lower, upper):
@@ -238,17 +233,19 @@ def _validate_inequality_constraints(C, lower, upper):
         raise ValueError("C must be at least 1-dimensional")
 
     if C.dim() == 1:
-        _validate_halfspace(lower, upper)
+        _validate_inequality_vector(C, lower, upper)
     else:
         _validate_inequality_matrix(C, lower, upper)
 
 
-def _validate_halfspace(lower, upper):
+def _validate_inequality_vector(C, lower, upper):
     """Validate halfspace constraint (lower <= c^T x <= upper)."""
     if lower is not None and lower.dim() != 0:
         raise ValueError("For 1D C (halfspace), lower must be a scalar")
     if upper is not None and upper.dim() != 0:
         raise ValueError("For 1D C (halfspace), upper must be a scalar")
+    if _is_zero(C):
+        raise ValueError("To define a valid constraint, c must be non-zero")
 
 
 def _validate_inequality_matrix(C, lower, upper):
@@ -257,6 +254,13 @@ def _validate_inequality_matrix(C, lower, upper):
         raise ValueError("C and lower must have matching row counts")
     if upper is not None and upper.dim() > 0 and C.shape[0] != upper.shape[0]:
         raise ValueError("C and upper must have matching row counts")
+    if _is_zero(C):
+        raise ValueError("To define a valid inequality constraint, C must be non-zero")
+
+
+def _is_zero(X: torch.Tensor) -> bool:
+    """Checks input if input tensor X is identically 0."""
+    return torch.all(X == 0).item()
 
 
 def _build_eval(A, C, b, lower, upper) -> Callable[[torch.Tensor], torch.Tensor]:
@@ -341,7 +345,7 @@ def _eval_id_ineq(
     x: torch.Tensor, lower: torch.Tensor, upper: torch.Tensor
 ) -> torch.Tensor:
     """Evaluate identity inequality constraint: lower <= x <= upper."""
-    satisfied = torch.all((lower <= x) & (x <= upper))
+    satisfied = torch.all((lower <= x) & (x <= upper)).item()
     return _indicator(satisfied, x.device, x.dtype)
 
 
@@ -350,7 +354,7 @@ def _eval_ineq(
 ) -> torch.Tensor:
     """Evaluate matrix inequality constraint: lower <= C @ x <= upper."""
     Cx = C @ x
-    satisfied = torch.all((lower <= Cx) & (Cx <= upper))
+    satisfied = torch.all((lower <= Cx) & (Cx <= upper)).item()
     return _indicator(satisfied, x.device, x.dtype)
 
 
@@ -360,16 +364,16 @@ def _eval_halfspace(
     """Evaluate halfspace inequality constraint: lower <= c^T x <= upper."""
     ctx = torch.dot(c, x)
     satisfied = (lower <= ctx) and (ctx <= upper)
-    return _indicator(satisfied, x.device, x.dtype)
+    return _indicator(satisfied.item(), x.device, x.dtype)
 
 
 def _eval_eq(x: torch.Tensor, A: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
     """Evaluate matrix equality constraint: A @ x = b."""
-    satisfied = torch.all(A @ x == b)
+    satisfied = torch.all(A @ x == b).item()
     return _indicator(satisfied, x.device, x.dtype)
 
 
 def _eval_hyperplane(x: torch.Tensor, a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
     """Evaluate hyperplane equality constraint: a^T x = b."""
     satisfied = torch.dot(a, x) == b
-    return _indicator(satisfied, x.device, x.dtype)
+    return _indicator(satisfied.item(), x.device, x.dtype)

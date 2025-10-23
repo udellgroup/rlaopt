@@ -1,5 +1,7 @@
 """Elastic net regularization atom."""
 
+from __future__ import annotations
+
 import torch
 
 from rlaopt.atoms.atom_expression import AtomExpression
@@ -11,10 +13,6 @@ class ElasticNet(AtomExpression):
 
     The elastic net penalty is defined as:
         l1_scaling * ||x||₁ + (l2_scaling / 2) * ||x||₂²
-
-    This combines the sparsity-inducing property of L1 regularization with
-    the grouping effect of L2 regularization, making it particularly useful
-    when dealing with correlated features.
 
     Args:
         x: Variable to apply the elastic net penalty to.
@@ -50,11 +48,8 @@ class ElasticNet(AtomExpression):
         """
         super().__init__()
 
-        if not isinstance(x, Variable):
-            raise TypeError(f"Expected Variable, got {type(x)}")
-
         # Register the input variable as a parameter
-        self.register_variable(x)
+        self.register_input(x)
 
         # Register the L1 and L2 scaling factors as buffers
         self.register_atom_buffer("l1_scaling", l1_scaling)
@@ -76,7 +71,7 @@ class ElasticNet(AtomExpression):
         """
         return False
 
-    def subsample(self, indices: torch.Tensor) -> "ElasticNet":
+    def subsample(self, indices: torch.Tensor) -> ElasticNet:
         """Subsample the elastic net (not supported).
 
         Args:
@@ -105,7 +100,7 @@ class ElasticNet(AtomExpression):
             torch.Tensor: The elastic net penalty value:
                 l1_scaling * ||x||₁ + (l2_scaling / 2) * ||x||₂²
         """
-        value = self.get_variable(self.var_name)
+        value = self.get_input()
 
         l1_norm = torch.sum(torch.abs(value))
         l2_norm = torch.sum(value**2)

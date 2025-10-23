@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 import torch
 
 from rlaopt.atoms.atom_expression import AtomExpression
@@ -46,15 +48,16 @@ class NucNorm(AtomExpression):
             ValueError: If x is not a 2D matrix.
         """
         super().__init__()
-        if not isinstance(x, Variable):
-            raise TypeError(f"Expected Variable, got {type(x)}")
+
+        # Register the Variable as a Parameter
+        self.register_input(x)
+
         if x.value.data.dim() != 2:
             raise ValueError(
                 f"Variable value must be 2D Tensor, "
                 f"but got {x.value.data.dim()}D Tensor."
             )
-        # Register the variable as a parameter
-        self.register_variable(x)
+
         # Register the scaling factor
         self.register_atom_buffer("scaling", scaling)
 
@@ -72,7 +75,7 @@ class NucNorm(AtomExpression):
         Returns:
             torch.Tensor: The scaled sum of singular values.
         """
-        value = self.get_variable(self.var_name)
+        value = self.get_input()
         S = torch.linalg.svdvals(value)
         return self.scaling * torch.sum(S)
 
@@ -96,9 +99,11 @@ class NucNorm(AtomExpression):
         Returns:
             torch.Tensor: Result of the proximal operator (soft-thresholded matrix).
         """
-        U, S, Vt = torch.linalg.svd(location, full_matrices=False)
-        S = torch.nn.functional.relu(S - prox_scaling * self.scaling)
-        return (U * S) @ Vt
+        scale = prox_scaling * self.scaling
+        if location.shape[0] >= location.shape[1]:
+            return _prox_nuc_norm.apply(location, scale)
+        else:
+            return _prox_nuc_norm.apply(location.T, scale).T
 
     def is_subsamplable(self) -> bool:
         """Check if the nuclear norm supports subsampling.
@@ -129,3 +134,155 @@ class NucNorm(AtomExpression):
             NotImplementedError: CVXPY conversion not implemented for nuclear norm.
         """
         raise NotImplementedError("NucNorm does not support conversion to cvxpy")
+
+
+class _prox_nuc_norm(torch.autograd.Function):
+    """Proximal operator for the nuclear norm with custom backward pass.
+
+    This implements the proximal operator:
+        prox_{λ||·||_*}(X) = argmin_Z (1/2)||Z - X||_F^2 + λ||Z||_*
+
+    where ||·||_* denotes the nuclear norm (sum of singular values) and ||·||_F
+    denotes the Frobenius norm.
+
+    The solution is given by soft-thresholding the singular values:
+        prox_{λ||·||_*}(X) = U * diag(max(S - λ, 0)) * V^T
+
+    where X = U * diag(S) * V^T is the SVD of X.
+
+    This implementation is adapted from the code accompanying:
+    Nobel, Parth, Emmanuel Candès, and Stephen Boyd. "Tractable Evaluation of
+    Stein's Unbiased Risk Estimate With Convex Regularizers." IEEE Transactions
+    on Signal Processing 71 (2023): 4330-4341.
+
+    Original code: https://github.com/cvxgrp/SURE-CR/blob/main/surecr/prox_lib.py
+    (See _prox_nuc_norm class)
+
+    The custom backward pass allows for efficient and numerically stable gradient
+    computation through the proximal operator of the nuclear norm.
+
+    Args:
+        X (torch.Tensor): Input matrix of shape (m, n) where m >= n
+        lambda_ (torch.Tensor): Regularization parameter (threshold for singular values)
+
+    Returns:
+        torch.Tensor: Result of applying the proximal operator, shape (m, n)
+
+    Note:
+        This implementation assumes m >= n. The full_matrices=True parameter in SVD
+        ensures proper handling of the gradient computation in the backward pass.
+    """
+
+    @staticmethod
+    def forward(ctx: Any, X: torch.Tensor, lambda_: torch.Tensor) -> torch.Tensor:
+        """Forward pass: compute prox_{λ||·||_*}(X) via SVD and soft-thresholding.
+
+        Args:
+            ctx: Context object for saving information needed in backward pass
+            X: Input matrix (m, n) with m >= n
+            lambda_: Regularization threshold parameter
+
+        Returns:
+            Proximal operator applied to X
+        """
+
+        def f(s: torch.Tensor) -> torch.Tensor:
+            return torch.relu(s - lambda_)
+
+        U, S, VT = torch.linalg.svd(X, full_matrices=True)
+        ctx.U = U
+        ctx.S = S
+        ctx.VT = VT
+        ctx.save_for_backward(lambda_)
+        return U[:, : X.shape[1]] @ torch.diag(f(S)) @ VT
+
+    @staticmethod
+    def backward(ctx: Any, grad_output: torch.Tensor) -> tuple[torch.Tensor, None]:
+        """Backward pass: compute gradient using the method from Nobel et al. (2023).
+
+        This implements the tractable differentiation formula for the nuclear norm
+        proximal operator, handling repeated singular values and numerical stability.
+
+        Args:
+            ctx: Context object containing saved tensors and SVD components
+            grad_output: Gradient of loss with respect to the output
+
+        Returns:
+            tuple: (gradient w.r.t. X, None for lambda_)
+        """
+        epsilon = 1e-3
+        (lambda_,) = ctx.saved_tensors
+        U, S, VT = ctx.U, ctx.S, ctx.VT
+        Z = grad_output
+        m, n = Z.shape
+        assert m >= n
+
+        def f(s: torch.Tensor) -> torch.Tensor:
+            """Soft-thresholding function."""
+            return torch.relu(s - lambda_)
+
+        def fp(s: torch.Tensor) -> torch.Tensor:
+            """Derivative of soft-thresholding function."""
+            return (s >= lambda_).float()
+
+        zeta = U.T @ Z @ VT.T
+        Gamma = torch.empty_like(zeta)
+
+        # Handle the case when m > n (extra rows in U)
+        if m > n:
+            R_mask = S >= epsilon
+            R = torch.empty_like(S)
+            R[R_mask] = f(S[R_mask]) / S[R_mask]
+            R[~R_mask] = fp(S[~R_mask])
+            Gamma[n:, :] = torch.tile(R, (m - n, 1)) * zeta[n:, :]
+
+        # Create matrices of repeated singular values for pairwise operations
+        S_i = torch.tile(S, (n, 1)).T
+        S_j = torch.tile(S, (n, 1))
+
+        def off_diags_zeta(S_i: torch.Tensor, S_j: torch.Tensor) -> torch.Tensor:
+            """Weight for off-diagonal elements when singular values differ."""
+            return (S_i * f(S_i) - S_j * f(S_j)) / (S_i**2 - S_j**2)
+
+        def off_diags_zetaT(S_i: torch.Tensor, S_j: torch.Tensor) -> torch.Tensor:
+            """Weight for transpose contribution when singular values differ."""
+            return (S_j * f(S_i) - S_i * f(S_j)) / (S_i**2 - S_j**2)
+
+        zeta_weights = torch.empty_like(zeta[:n, :])
+        zetaT_weights = torch.empty_like(zeta[:n, :])
+
+        # Mask for repeated/close singular values (numerical stability)
+        mask = torch.abs(S_i - S_j) <= epsilon
+
+        # Fill weights for distinct singular values
+        zeta_weights[~mask] = off_diags_zeta(S_i[~mask], S_j[~mask])
+        zetaT_weights[~mask] = off_diags_zetaT(S_i[~mask], S_j[~mask])
+
+        def off_diags_pos_repeated_zeta(S: torch.Tensor) -> torch.Tensor:
+            """Weight for repeated positive singular values."""
+            return 1 / 2 * fp(S) + 1 / 2 * f(S) / S
+
+        def off_diags_pos_repeated_zetaT(S: torch.Tensor) -> torch.Tensor:
+            """Transpose weight for repeated positive singular values."""
+            return 1 / 2 * fp(S) - 1 / 2 * f(S) / S
+
+        # Handle repeated singular values (above epsilon threshold)
+        pos_mask = mask & (S_i >= epsilon)
+        zeta_weights[pos_mask] = off_diags_pos_repeated_zeta(S_i[pos_mask])
+        zetaT_weights[pos_mask] = off_diags_pos_repeated_zetaT(S_i[pos_mask])
+
+        # Handle repeated near-zero singular values
+        zero_mask = mask & (S_i < epsilon)
+        zeta_weights[zero_mask] = fp(S_i[zero_mask])
+        zetaT_weights[zero_mask] = 0
+
+        # Set diagonal entries
+        torch.diagonal(zeta_weights)[:] = fp(S)
+        torch.diagonal(zetaT_weights)[:] = 0
+
+        # Compute the top-left block of Gamma
+        Gamma[:n, :] = zeta_weights * zeta[:n, :] + zetaT_weights * zeta[:n, :].T
+
+        # Final gradient: rotate back to original coordinate system
+        retval = U @ Gamma @ VT
+        return retval, None

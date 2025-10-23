@@ -22,10 +22,6 @@ class NonNegative(Box):
         >>> x = Variable((10,), name='x')
         >>> nonneg = NonNegative(x)
 
-        >>> # Use in optimization problems (e.g., with L1 regularization)
-        >>> from rlaopt.atoms import L1Norm
-        >>> objective = L1Norm(x) + nonneg
-
         >>> # Use proximal operator for projection
         >>> point_with_negatives = torch.randn(10)
         >>> projected = nonneg.prox(point_with_negatives, prox_scaling=1.0)

@@ -62,19 +62,21 @@ class Halfspace(Polyhedron):
 
         The proximal operator projects onto the halfspace by moving the point
         perpendicular to the boundary until it satisfies c^T x <= upper.
-        The prox_scaling parameter is unused because the projection is
-        independent of scaling.
 
         Args:
             location: Point at which to evaluate the proximal operator.
-            prox_scaling: Scaling factor (unused for halfspace constraints).
+            prox_scaling: Scaling factor.
 
         Returns:
             torch.Tensor: Projected point satisfying the halfspace constraint.
                 If the point already satisfies the constraint, it is returned
                 unchanged.
         """
-        c_norm = torch.linalg.norm(self.C, 2)
         r = torch.dot(self.C, location) - self.upper
-        zero = torch.tensor(0.0, device=r.device)
-        return location - torch.maximum(r, zero) * self.C / c_norm**2
+        # location is feasible
+        if r <= 0:
+            return location
+        # location is infeasible
+        else:
+            c_norm = torch.linalg.norm(self.C, 2)
+            return location - torch.nn.functional.relu(r) * self.C / c_norm**2
