@@ -6,6 +6,7 @@ import torch
 
 from rlaopt._typing import LinSysState, OptimState, TensorDict
 from rlaopt.expression.expression import Expression
+from rlaopt.linalg import LinSys
 from rlaopt.operator_split import OperatorSplit
 from rlaopt.solvers.configs_base import LinSysSolverConfig, SolverConfig
 
@@ -66,13 +67,15 @@ class LinSysSolver(ABC):
     that progressively refine a solution until convergence criteria are met.
     """
 
-    def __init__(self, config: LinSysSolverConfig):
-        """Initialize the solver with configuration.
+    @abstractmethod
+    def __init__(self, config: LinSysSolverConfig, lin_sys: LinSys):
+        """Initialize the solver.
 
         Args:
             config: Configuration object for the solver.
+            lin_sys: The linear system to solve.
         """
-        self.config = config
+        pass
 
     @abstractmethod
     def init_state(self, params: torch.Tensor) -> LinSysState:

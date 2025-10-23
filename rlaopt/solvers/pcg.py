@@ -65,13 +65,11 @@ class PCG(LinSysSolver):
         """Initialize the PCG solver.
 
         Args:
-            config (PCGConfig): Configuration for the solver including preconditioner.
+            config (PCGConfig): Configuration for the solver.
             lin_sys (LinSys): The linear system to solve.
         """
-        super().__init__(config)
-        P = get_preconditioner(
-            self.config.preconditioner_config, lin_sys.A, lin_sys.device
-        )
+        super().__init__(config, lin_sys)
+        P = get_preconditioner(config.preconditioner_config, lin_sys.A, lin_sys.device)
         self._init_state = _build_init_state(lin_sys, P, config.tol)
         self._step = _build_step(lin_sys, P, config.tol)
 
