@@ -5,7 +5,7 @@ import pytest
 import torch
 
 from rlaopt.atoms import Box, L1Norm, NonNegative, SumSquares
-from rlaopt.expression.expression import Variable
+from rlaopt.expression import Variable
 from rlaopt.solvers.configs import ProxGradConfig
 from rlaopt.solvers.proximal_gradient.prox_grad import ProximalGradient
 from rlaopt.utils import tensor_dict_ops as dict_ops
