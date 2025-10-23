@@ -1,5 +1,7 @@
 """LinSys module for positive-definite linear systems."""
 
+import warnings
+
 import torch
 
 
@@ -49,6 +51,11 @@ class LinSys(torch.nn.Module):
         Returns:
             torch.Tensor: Result of applying the linear operator to v.
         """
+        if v.ndim == 1:
+            warnings.warn(
+                "Input tensor v is 1D. The input tensor will be unsqueezed to 2D."
+            )
+            v = v.unsqueeze(-1)
         return self.A @ v + self.reg * v
 
     def compute_residual(self, v: torch.Tensor) -> torch.Tensor:

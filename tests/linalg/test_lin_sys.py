@@ -69,7 +69,7 @@ class TestLinSysInitialization:
         """Test initialization with 1D initial guess w."""
         lin_sys = LinSys(A=valid_A, B=valid_B_1d, w=valid_w_1d)
         assert lin_sys is not None
-        assert torch.equal(lin_sys.w, valid_w_1d)
+        assert torch.equal(lin_sys.w, valid_w_1d.unsqueeze(-1))
 
     def test_init_with_w_2d(self, valid_A, valid_B_2d, valid_w_2d):
         """Test initialization with 2D initial guess w."""
@@ -81,7 +81,7 @@ class TestLinSysInitialization:
         """Test that w defaults to zeros when not provided."""
         lin_sys = LinSys(A=valid_A, B=valid_B_1d)
         expected_w = torch.zeros_like(valid_B_1d)
-        assert torch.equal(lin_sys.w, expected_w)
+        assert torch.equal(lin_sys.w, expected_w.unsqueeze(-1))
 
     def test_init_without_w_2d_defaults_to_zeros(self, valid_A, valid_B_2d):
         """Test that w defaults to zeros for 2D B when not provided."""
@@ -99,7 +99,7 @@ class TestLinSysForward:
         v = torch.tensor([1.0, 1.0])
         result = lin_sys(v)
         expected = valid_A @ v
-        assert torch.allclose(result, expected)
+        assert torch.allclose(result, expected.unsqueeze(-1))
 
     def test_forward_with_regularization(self, valid_A, valid_B_1d):
         """Test calling LinSys with regularization."""
@@ -108,7 +108,7 @@ class TestLinSysForward:
         v = torch.tensor([1.0, 1.0])
         result = lin_sys(v)
         expected = valid_A @ v + reg * v
-        assert torch.allclose(result, expected)
+        assert torch.allclose(result, expected.unsqueeze(-1))
 
 
 class TestLinSysCheckInputsErrors:
