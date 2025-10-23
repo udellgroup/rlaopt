@@ -2,9 +2,10 @@
 
 from abc import ABC, abstractmethod
 
+import torch
+
 from rlaopt._typing import LinSysState, OptimState, TensorDict
 from rlaopt.expression.expression import Expression
-from rlaopt.linalg import LinSys
 from rlaopt.operator_split import OperatorSplit
 from rlaopt.solvers.configs_base import LinSysSolverConfig, SolverConfig
 
@@ -74,11 +75,11 @@ class LinSysSolver(ABC):
         self.config = config
 
     @abstractmethod
-    def init_state(self, lin_sys: LinSys) -> LinSysState:
+    def init_state(self, params: torch.Tensor | None = None) -> LinSysState:
         """Initialize the state of the solver.
 
         Args:
-            lin_sys (LinSys): The linear system to solve.
+            params: Initial parameters (solution estimate).
 
         Returns:
             Initial state for the solver containing iteration-specific variables.
@@ -86,11 +87,13 @@ class LinSysSolver(ABC):
         pass
 
     @abstractmethod
-    def step(self, lin_sys: LinSys, state: LinSysState) -> LinSysState:
+    def step(
+        self, params: torch.Tensor, state: LinSysState
+    ) -> tuple[torch.Tensor, LinSysState]:
         """Perform a single iteration step of the solver.
 
         Args:
-            lin_sys: The linear system to solve.
+            params: Current parameters (solution estimate).
             state: Current state of the solver.
 
         Returns:
