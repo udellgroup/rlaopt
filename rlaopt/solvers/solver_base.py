@@ -4,6 +4,7 @@ from abc import ABC, abstractmethod
 
 from rlaopt._typing import LinSysState, OptimState, TensorDict
 from rlaopt.expression.expression import Expression
+from rlaopt.linalg import LinSys
 from rlaopt.operator_split import OperatorSplit
 from rlaopt.solvers.configs_base import LinSysSolverConfig, SolverConfig
 
@@ -15,11 +16,13 @@ class OptimSolver(ABC):
     Each solver must implement the `solve` method to perform optimization.
     """
 
-    def __init__(self, config: SolverConfig):
+    def __init__(self, config: SolverConfig, obj: Expression | OperatorSplit):
         """Initialize the solver with an objective function.
 
         Args:
             config (SolverConfig): Configuration for the solver.
+            obj (Expression | AddExpression | OperatorSplit): The objective function
+                to optimize.
         """
         self.config = config
 
@@ -32,24 +35,6 @@ class OptimSolver(ABC):
 
         Returns:
             OptimState: Initial state of the optimizer.
-        """
-        pass
-
-    @abstractmethod
-    def solve(
-        self,
-        problem: Expression | OperatorSplit,
-        initial_params: TensorDict | None = None,
-    ) -> TensorDict:
-        """Solve the optimization problem defined by `problem`.
-
-        Args:
-            problem (OperatorSplit): The optimization problem to solve.
-            initial_params (TensorDict): Initial parameters for the optimization.
-            optim_state (OptimState): State of the optimizer.
-
-        Returns:
-            TensorDict: Optimized parameters after solving the problem.
         """
         pass
 
@@ -89,11 +74,11 @@ class LinSysSolver(ABC):
         self.config = config
 
     @abstractmethod
-    def init_state(self, lin_sys) -> LinSysState:
+    def init_state(self, lin_sys: LinSys) -> LinSysState:
         """Initialize the state of the solver.
 
         Args:
-            lin_sys: The linear system to solve.
+            lin_sys (LinSys): The linear system to solve.
 
         Returns:
             Initial state for the solver containing iteration-specific variables.
@@ -101,7 +86,7 @@ class LinSysSolver(ABC):
         pass
 
     @abstractmethod
-    def step(self, lin_sys, state: LinSysState) -> LinSysState:
+    def step(self, lin_sys: LinSys, state: LinSysState) -> LinSysState:
         """Perform a single iteration step of the solver.
 
         Args:

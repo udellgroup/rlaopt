@@ -1,7 +1,6 @@
 """Proximal gradient solver implementation."""
 
-from math import sqrt
-from typing import Callable, Dict, Tuple
+from typing import Callable
 
 import torch
 from pydantic import Field
@@ -91,7 +90,7 @@ class ProxGrad(OptimSolver):
 
     def step(
         self, params: TensorDict, state: ProxGradState
-    ) -> Tuple[TensorDict, ProxGradState]:
+    ) -> tuple[TensorDict, ProxGradState]:
         """Perform a single optimization step.
 
         Args:
@@ -102,90 +101,6 @@ class ProxGrad(OptimSolver):
             Tuple of updated parameters and state.
         """
         return self._step(params, state)
-
-    def solve(
-        self,
-        obj: Expression | AddExpression | OperatorSplit,
-        init_params: TensorDict = None,
-    ) -> Tuple[Dict[str, torch.Tensor], torch.Tensor]:
-        """Solve the optimization problem.
-
-        Args:
-            obj: The optimization objective.
-            init_params: Optional initial parameters.
-
-        Returns:
-            Tuple of optimized parameters and final error.
-        """
-        return _proximal_gradient(obj, self.config, init_params)
-
-
-def _proximal_gradient(
-    obj: Expression | OperatorSplit,
-    config: ProxGradConfig,
-    init_params: TensorDict | None = None,
-) -> tuple[TensorDict, torch.Tensor]:
-    """Solve an optimization problem using the proximal gradient method.
-
-    The proximal gradient method solves problems of the form:
-        minimize f(x) + g(x)
-    where f is smooth (differentiable) and g is proxable (has an efficient
-    proximal operator).
-
-    This implementation supports several variants:
-    - Basic proximal gradient (fixed step size)
-    - Accelerated proximal gradient (Nesterov momentum)
-    - Backtracking line search for adaptive step sizes
-    - Combinations of acceleration and line search
-
-    Args:
-        obj: The optimization objective. Can be either:
-            - An Expression that will be automatically split into smooth and
-              non-smooth parts
-            - An OperatorSplit with predefined f (smooth) and g (non-smooth) terms
-        config: Configuration parameters for the solver, including step size (eta),
-            maximum iterations, convergence tolerance, and flags for acceleration
-            and line search.
-        init_params: Optional initial parameters. If None, parameters are
-            initialized from the objective function.
-
-    Returns:
-        A tuple containing:
-        - params: The optimized parameters as a TensorDict
-        - err: Final error metric as a torch.Tensor. Lower values indicate
-          better convergence.
-    """
-    # Unpack config
-    eta, max_iters, tol, use_acceleration, use_linesearch = (
-        config.eta,
-        config.max_iters,
-        config.tol,
-        config.use_acceleration,
-        config.use_linesearch,
-    )
-
-    # Build step function and initialize optimizer params and state
-    step = _build_step(obj, use_acceleration, use_linesearch)
-
-    # Initialize params and optimizer state
-    if init_params:
-        params = init_params
-
-    elif isinstance(obj, OperatorSplit):
-        params = obj.f.params
-
-    else:
-        params = obj.params
-
-    state = _init_state(params, eta, use_acceleration)
-
-    # Get error tolerance
-    epsilon = tol * sqrt(dict_ops.dim(params))
-
-    # Solver loop
-    while state.err > epsilon and state.iter_ <= max_iters:
-        params, state = step(params, state)
-    return params, state.err
 
 
 def _init_state(
