@@ -205,6 +205,41 @@ class TestLinSysCheckInputsErrors:
             LinSys(A=valid_A, B=valid_B_1d, w=w_invalid)
 
 
+class TestLinSysComputeResidual:
+    """Test compute_residual method of LinSys."""
+
+    def test_compute_residual_with_zero_vector(self, valid_A, valid_B_1d):
+        """Test residual computation with zero vector."""
+        lin_sys = LinSys(A=valid_A, B=valid_B_1d, reg=0.0)
+        v = torch.tensor([0.0, 0.0])
+        residual = lin_sys.compute_residual(v)
+        assert torch.allclose(residual, valid_B_1d.unsqueeze(-1))
+
+    def test_compute_residual_with_exact_solution(self, valid_A, valid_B_1d):
+        """Test residual is zero for exact solution."""
+        lin_sys = LinSys(A=valid_A, B=valid_B_1d, reg=0.0)
+        v_exact = torch.linalg.solve(valid_A, valid_B_1d)
+        residual = lin_sys.compute_residual(v_exact)
+        assert torch.allclose(residual, torch.zeros_like(residual), atol=1e-6)
+
+    def test_compute_residual_with_regularization(self, valid_A, valid_B_1d):
+        """Test residual computation with regularization."""
+        reg = 0.5
+        lin_sys = LinSys(A=valid_A, B=valid_B_1d, reg=reg)
+        v = torch.tensor([1.0, 1.0])
+        residual = lin_sys.compute_residual(v)
+        expected = valid_B_1d.unsqueeze(-1) - (valid_A @ v + reg * v).unsqueeze(-1)
+        assert torch.allclose(residual, expected)
+
+    def test_compute_residual_2d_B(self, valid_A, valid_B_2d):
+        """Test residual computation with 2D B matrix."""
+        lin_sys = LinSys(A=valid_A, B=valid_B_2d, reg=0.0)
+        v = torch.ones_like(valid_B_2d)
+        residual = lin_sys.compute_residual(v)
+        expected = valid_B_2d - valid_A @ v
+        assert torch.allclose(residual, expected)
+
+
 class TestLinSysComputeResidualNorm:
     """Test compute_residual_norm method of LinSys."""
 
@@ -234,3 +269,41 @@ class TestLinSysComputeResidualNorm:
         # Should have one relative residual norm per column, all equal to 1.0
         assert rel_res_norm.shape == (valid_B_2d.shape[1],)
         assert torch.allclose(rel_res_norm, torch.ones(valid_B_2d.shape[1]))
+
+
+class TestLinSysDevice:
+    """Test device property of LinSys."""
+
+    def test_device_cpu(self, valid_A, valid_B_1d):
+        """Test device property returns CPU device."""
+        lin_sys = LinSys(A=valid_A, B=valid_B_1d)
+        assert lin_sys.device == torch.device("cpu")
+
+    @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA not available")
+    def test_device_cuda(self, valid_A, valid_B_1d):
+        """Test device property returns CUDA device when tensors are on GPU."""
+        lin_sys = LinSys(A=valid_A, B=valid_B_1d)
+        lin_sys = lin_sys.cuda()
+        assert lin_sys.device.type == torch.device("cuda").type
+
+
+class TestLinSysRhsNorm:
+    """Test rhs_norm property of LinSys."""
+
+    def test_rhs_norm_1d_B(self, valid_A, valid_B_1d):
+        """Test rhs_norm with 1D B vector."""
+        lin_sys = LinSys(A=valid_A, B=valid_B_1d)
+        expected_norm = torch.linalg.norm(valid_B_1d, ord=2)
+        assert torch.allclose(lin_sys.rhs_norm, expected_norm)
+
+    def test_rhs_norm_2d_B(self, valid_A, valid_B_2d):
+        """Test rhs_norm with 2D B matrix."""
+        lin_sys = LinSys(A=valid_A, B=valid_B_2d)
+        expected_norm = torch.linalg.norm(valid_B_2d, dim=0, ord=2)
+        assert torch.allclose(lin_sys.rhs_norm, expected_norm)
+
+    def test_rhs_norm_with_zero_B(self, valid_A):
+        """Test rhs_norm with zero B vector."""
+        B_zero = torch.zeros(2)
+        lin_sys = LinSys(A=valid_A, B=B_zero)
+        assert torch.allclose(lin_sys.rhs_norm, torch.tensor(0.0))
