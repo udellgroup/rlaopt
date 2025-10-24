@@ -9,6 +9,7 @@ from rlaopt.solvers.prox_grad import ProxGrad, ProxGradConfig, ProxGradStoppingC
 from rlaopt.utils import tensor_dict_ops as dict_ops
 
 TOLERANCES = {torch.float32: 1e-4, torch.float64: 1e-10}
+MAX_ITERS = 5000
 
 
 @pytest.fixture(params=[True, False], ids=["accel", "no_accel"])
@@ -78,11 +79,11 @@ def generate_matrix_sensing_data(n=64, p=16, precision=torch.float32, seed=0):
     """Generate random data for matrix sensing/completion problems."""
     torch.manual_seed(seed)
 
-    M_star = torch.randn(n, 8)
-    N_star = torch.randn(8, p)
+    M_star = torch.randn(n, 8, dtype=precision)
+    N_star = torch.randn(8, p, dtype=precision)
     X_Star = M_star @ N_star
-    A = torch.randn(2 * n, n)
-    B = A @ X_Star + 10**-4 * torch.randn((2 * n, p))
+    A = torch.randn(2 * n, n, dtype=precision)
+    B = A @ X_Star + 10**-4 * torch.randn((2 * n, p), dtype=precision)
     X = Variable(torch.zeros_like(X_Star))
     return A, B, X
 
@@ -170,7 +171,7 @@ def _test_optimization_problem(precision, tol, acceleration, ls, setup_fn):
 def _solve_and_verify(obj, eta, tol, use_acceleration, use_linesearch):
     """Test that optimization problem is solved correctly."""
     opt = _build_opt(obj, eta, use_acceleration, use_linesearch)
-    stopping_criteria = ProxGradStoppingCriteria(tol=tol, max_iters=5000)
+    stopping_criteria = ProxGradStoppingCriteria(tol=tol, max_iters=MAX_ITERS)
     params, state = _init_opt(obj, opt)
 
     # Test solving by step
