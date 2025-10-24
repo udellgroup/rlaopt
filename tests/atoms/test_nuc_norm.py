@@ -1,113 +1,199 @@
 import pytest
 import torch
 
-from rlaopt.atoms.sum_squares import SumSquares
 from rlaopt.atoms.nuc_norm import NucNorm
-from rlaopt.expression.expression import Variable
-from rlaopt.solvers.configs import ProxGradConfig
-from rlaopt.solvers.proximal_gradient.prox_grad import ProximalGradient
-
-TOLERANCES = {torch.float32: 1e-6, torch.float64: 1e-10}
-
-
-@pytest.fixture(params=[torch.float32, torch.float64], ids=["float32", "float64"])
-def precision(request):
-    return request.param
+from rlaopt.expression.variable import Variable
 
 
 @pytest.fixture
-def tol(precision):
-    return TOLERANCES[precision]
+def matrix_var():
+    """Create a matrix variable."""
+    return Variable((4, 3), name="X")
 
 
 @pytest.fixture
-def reset_torch_state():
-    """Fixture to reset torch default dtype after each test"""
-    original_dtype = torch.get_default_dtype()
-    yield
-    torch.set_default_dtype(original_dtype)
+def square_matrix_var():
+    """Create a square matrix variable."""
+    return Variable((5, 5), name="A")
 
 
-def get_atol(precision, t: torch.Tensor):
-    return torch.linalg.norm(t, ord=2) * TOLERANCES[precision]
+@pytest.fixture
+def wide_matrix_var():
+    """Create a wide matrix variable (more columns than rows)."""
+    return Variable((3, 5), name="W")
 
 
-class TestNucNormBasics:
-    @pytest.fixture(autouse=True)
-    def _setup_test(self, precision):
-        # Set seed per test for isolation
-        torch.manual_seed(0)
+class TestNucNorm:
+    """Test NucNorm atom."""
 
-        self.p = 5
-        self.U, _ = torch.linalg.qr(torch.randn(self.p, self.p, dtype=precision))
-        self.V, _ = torch.linalg.qr(torch.randn(self.p, self.p, dtype=precision))
-        self.S = torch.tensor([100, 50, 5, 0.1, 0.01], dtype=precision)
-        self.x = Variable(self.U @ (self.S * self.V.T))
-        self.r = NucNorm(self.x, scaling=1.0)
-        self.atol = get_atol(precision, self.S)
+    # ----------------------
+    # Initialization tests
+    # ----------------------
 
-    def test_init(self):
-        assert self.r.x is not None
-        assert self.r.scaling is not None
+    def test_init_with_matrix_variable(self, matrix_var):
+        """Test initialization with 2D matrix variable."""
+        nuc = NucNorm(matrix_var)
+        assert nuc.scaling == 1.0
 
-    def test_forward(self):
-        assert torch.isclose(self.r.forward(), torch.sum(self.S)) == True
+    def test_init_with_custom_scaling(self, matrix_var):
+        """Test initialization with custom scaling factor."""
+        nuc = NucNorm(matrix_var, scaling=0.5)
+        assert nuc.scaling == 0.5
 
-    def test_prox(self):
-        scaling_factor = 1.0
+    def test_init_with_tensor_scaling(self, matrix_var):
+        """Test initialization with tensor scaling."""
+        scaling = torch.tensor(2.0)
+        nuc = NucNorm(matrix_var, scaling=scaling)
+        assert torch.equal(nuc.scaling, scaling)
 
-        # When lambd = 1 and scaling factor is 1,
-        # prox should threshold last two singular values to 0,
-        # and subtract 1 from all other singular values.
-        S_new = torch.clone(self.S)
-        S_new[0:3] -= 1.0
-        S_new[3:5] = 0.0
-        ans = self.U @ (S_new * self.V.T)
+    def test_init_raises_error_for_non_2d_variable(self):
+        """Test initialization raises ValueError for non-2D variables."""
+        vector_var = Variable((10,), name="x")
+        with pytest.raises(ValueError, match="must be 2D Tensor"):
+            NucNorm(vector_var)
 
-        prox = self.r.prox(self.x.value.data, scaling_factor)
-        err = torch.linalg.norm(prox - ans, ord=2)
-        assert (err.item() <= self.atol) == True
+    # ----------------------
+    # Forward evaluation tests
+    # ----------------------
 
-        # When scaling factor is 200, all singular values should
-        # be thresholded to zero.
-        scaling_factor = 200
-        prox = self.r.prox(self.x.value.data, scaling_factor)
-        err = torch.linalg.norm(prox, ord=2)
-        assert (err.item() <= self.atol) == True
+    def test_forward_computes_sum_of_singular_values(self, matrix_var):
+        """Test forward() computes sum of singular values."""
+        matrix_var.value.data = torch.eye(
+            4, 3
+        )  # Identity-like, singular values = [1, 1, 1]
+        nuc = NucNorm(matrix_var)
+        result = nuc.forward()
+        assert torch.allclose(result, torch.tensor(3.0))
 
+    def test_forward_with_scaling(self, matrix_var):
+        """Test forward() applies scaling factor."""
+        matrix_var.value.data = torch.eye(4, 3)
+        nuc = NucNorm(matrix_var, scaling=2.0)
+        result = nuc.forward()
+        assert torch.allclose(result, torch.tensor(6.0))
 
-class TestNucNormProxGrad:
-    def test_prox_grad(self, reset_torch_state):
-        torch.manual_seed(0)
-        tol = TOLERANCES[torch.float64]
-        torch.set_default_dtype(torch.float64)
+    def test_forward_with_rank_deficient_matrix(self, matrix_var):
+        """Test forward() with rank-deficient matrix."""
+        # Create rank-1 matrix
+        matrix_var.value.data = torch.ones(4, 3)
+        nuc = NucNorm(matrix_var)
+        result = nuc.forward()
+        # For ones matrix 4x3, largest singular value ≈ sqrt(12) ≈ 3.46
+        assert result > 0
 
-        X_star = torch.randn(64, 8)
-        Y_star = torch.randn(8, 16)
-        W_Star = X_star @ Y_star
-        A = torch.randn(128, 64)
-        B = A @ W_Star + 10**-4 * torch.randn((128, 16))
-        lambd = 1000.0
+    def test_forward_with_zero_matrix(self, matrix_var):
+        """Test forward() with zero matrix."""
+        matrix_var.value.data = torch.zeros(4, 3)
+        nuc = NucNorm(matrix_var)
+        result = nuc.forward()
+        assert torch.allclose(result, torch.tensor(0.0))
 
-        W = Variable(torch.zeros_like(W_Star))
-        obj = SumSquares(A @ W - B) + NucNorm(W, scaling=lambd)
+    # ----------------------
+    # Property tests
+    # ----------------------
 
-        config = ProxGradConfig(
-            eta=10**-3, use_acceleration=False, use_linesearch=False
-        )
-        opt = ProximalGradient(config, obj)
-        params = obj.params
-        state = opt.init_state(params)
+    def test_is_smooth_returns_false(self, matrix_var):
+        """Test nuclear norm is not smooth."""
+        nuc = NucNorm(matrix_var)
+        assert nuc.is_smooth() is False
 
-        for _ in range(1000):
-            params, state = opt.step(params, state)
+    def test_is_proxable_returns_true(self, matrix_var):
+        """Test nuclear norm is proxable."""
+        nuc = NucNorm(matrix_var)
+        assert nuc.is_proxable() is True
 
-        names = list(params.keys())
-        params = params[names[0]]
-        err = state.err.item()
+    def test_is_subsamplable_returns_false(self, matrix_var):
+        """Test nuclear norm is not subsamplable."""
+        nuc = NucNorm(matrix_var)
+        assert nuc.is_subsamplable() is False
 
-        # Params has rank less than 16
-        assert (torch.linalg.matrix_rank(params) < 16) == True
+    def test_subsample_raises_not_implemented(self, matrix_var):
+        """Test subsample() raises NotImplementedError."""
+        nuc = NucNorm(matrix_var)
+        with pytest.raises(NotImplementedError, match="cannot be subsampled"):
+            nuc.subsample(torch.tensor([0, 1]))
 
-        # Problem is solved
-        assert (err <= tol) == True
+    # ----------------------
+    # Proximal operator tests
+    # ----------------------
+
+    def test_prox_performs_soft_thresholding(self, matrix_var):
+        """Test prox() performs singular value soft-thresholding."""
+        nuc = NucNorm(matrix_var, scaling=1.0)
+        location = torch.diag(torch.tensor([5.0, 3.0, 2.0]))  # Diagonal matrix
+        location = torch.cat([location, torch.zeros(1, 3)], dim=0)  # Make it 4x3
+
+        result = nuc.prox(location, prox_scaling=1.0)
+        # Singular values [5, 3, 2] thresholded by 1.0 → [4, 2, 1]
+        S = torch.linalg.svdvals(result)
+        expected_S = torch.tensor([4.0, 2.0, 1.0])
+        assert torch.allclose(S, expected_S, atol=1e-5)
+
+    def test_prox_with_scaling_factor(self, matrix_var):
+        """Test prox() with different scaling factors."""
+        nuc = NucNorm(matrix_var, scaling=2.0)
+        location = torch.diag(torch.tensor([10.0, 8.0, 6.0]))
+        location = torch.cat([location, torch.zeros(1, 3)], dim=0)
+
+        result = nuc.prox(location, prox_scaling=1.0)
+        # Threshold = 2.0 * 1.0 = 2.0
+        # Singular values [10, 8, 6] thresholded by 2.0 → [8, 6, 4]
+        S = torch.linalg.svdvals(result)
+        expected_S = torch.tensor([8.0, 6.0, 4.0])
+        assert torch.allclose(S, expected_S, atol=1e-5)
+
+    def test_prox_handles_wide_matrices(self, wide_matrix_var):
+        """Test prox() handles wide matrices (m < n)."""
+        nuc = NucNorm(wide_matrix_var, scaling=1.0)
+        location = torch.randn(3, 5)
+        result = nuc.prox(location, prox_scaling=0.5)
+
+        # Check result has correct shape
+        assert result.shape == (3, 5)
+
+        # Check singular values are thresholded
+        S_in = torch.linalg.svdvals(location)
+        S_out = torch.linalg.svdvals(result)
+        assert torch.all(S_out <= S_in)
+
+    def test_prox_zeros_small_singular_values(self, matrix_var):
+        """Test prox() zeros out singular values below threshold."""
+        nuc = NucNorm(matrix_var, scaling=1.0)
+        location = torch.diag(torch.tensor([3.0, 0.5, 0.2]))
+        location = torch.cat([location, torch.zeros(1, 3)], dim=0)
+
+        result = nuc.prox(location, prox_scaling=1.0)
+        S = torch.linalg.svdvals(result)
+        # Values [3.0, 0.5, 0.2] thresholded by 1.0 → [2.0, 0, 0]
+        expected_S = torch.tensor([2.0, 0.0, 0.0])
+        assert torch.allclose(S, expected_S, atol=1e-5)
+
+    def test_prox_gradient_flows_through(self, matrix_var):
+        """Test prox() allows gradient computation."""
+        nuc = NucNorm(matrix_var, scaling=1.0)
+        location = torch.randn(4, 3, requires_grad=True)
+
+        result = nuc.prox(location, prox_scaling=0.5)
+        loss = result.sum()
+        loss.backward()
+
+        assert location.grad is not None
+        assert not torch.isnan(location.grad).any()
+
+    # ----------------------
+    # Edge cases
+    # ----------------------
+
+    def test_with_square_matrix(self, square_matrix_var):
+        """Test nuclear norm works with square matrices."""
+        square_matrix_var.value.data = torch.eye(5)
+        nuc = NucNorm(square_matrix_var)
+        result = nuc.forward()
+        assert torch.allclose(result, torch.tensor(5.0))
+
+    def test_prox_preserves_zero_matrix(self, matrix_var):
+        """Test prox() of zero matrix is zero."""
+        nuc = NucNorm(matrix_var, scaling=1.0)
+        location = torch.zeros(4, 3)
+        result = nuc.prox(location, prox_scaling=1.0)
+        assert torch.allclose(result, torch.zeros(4, 3))

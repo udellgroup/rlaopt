@@ -5,10 +5,10 @@ from __future__ import annotations
 import cvxpy as cp
 import torch
 
-from rlaopt.atoms.atom_expression import AtomExpression
 from rlaopt.atoms.affine import Affine
-from rlaopt.expression.expression import Expression, Variable
-from rlaopt.atoms._utils import get_variable_value
+from rlaopt.atoms.atom_expression import AtomExpression
+from rlaopt.expression import Expression, Variable
+
 
 class SumSquares(AtomExpression):
     """Sum of squared elements atom."""
@@ -21,44 +21,36 @@ class SumSquares(AtomExpression):
         """
         super().__init__()
 
-        if not isinstance(x, (Variable, Expression)):
-            raise TypeError(f"Expected Variable or Expression, got {type(x)}")
-
-        # Register the variable as a parameter or module if it's an Expression
-        if isinstance(x, Variable):
-            self.register_parameter("x", x.value)
-        elif isinstance(x, Expression):
-            self.add_module("x", x)
+        # Register the input as a Parameter if its a Variable
+        # or Module if it's an Expression
+        self.register_input(x)
 
     def is_smooth(self) -> bool:
         """Returns True depending on the smoothness of the expression."""
-        if isinstance(self.x, Expression):
-            return self.x.is_smooth()
-        elif isinstance(self.x, torch.nn.Parameter):
+        input = self.get_input()
+        if isinstance(input, Expression):
+            return input.is_smooth()
+        else:
             return True
 
-    def evaluate_at(self, **variable_locations):
-        """Evaluate the sum of squares at specific locations.
-
-        Args:
-            **variable_locations: Mapping of variable names to locations
-
-        Returns:
-            Sum of squares
-        """
-        if isinstance(self.x, Expression):
-            value = self.x.evaluate_at(**variable_locations)
+    def forward(self) -> torch.Tensor:
+        """Forward pass to compute the sum of squares."""
+        input = self.get_input()
+        if isinstance(input, Expression):
+            value = input.forward()
         else:
-            value = get_variable_value(self.x, **variable_locations)
-
-        return torch.sum(value ** 2)
+            value = input
+        return torch.sum(value**2)
 
     def is_proxable(self) -> bool:
-        """Returns True if the input is a Variable or affine."""
-        if isinstance(self.x, torch.nn.Parameter) or isinstance(self.x, Affine):
+        """Returns True if the input is a Variable or Affine with Variable root."""
+        input = self.get_input()
+        if isinstance(input, torch.nn.Parameter):
             return True
-        else:
-            return False
+        elif isinstance(input, Affine):
+            if isinstance(input.get_input(), torch.nn.Parameter):
+                return True
+        return False
 
     def prox(self, location, prox_scaling) -> torch.Tensor:
         """Proximal operator for the sum of squares.
@@ -70,14 +62,29 @@ class SumSquares(AtomExpression):
         Returns:
             Result of the proximal operator
         """
-        if isinstance(self.x, torch.nn.Parameter):
-            return 1 / (1 + prox_scaling) * location
-        elif isinstance(self.x, Expression):
-            # For expressions, we need to handle the proximal operator differently
-            # This is a placeholder; actual implementation may vary
-            # based on the expression type
+        input = self.get_input()
+
+        if isinstance(input, torch.nn.Parameter):
+            return 1 / (1 + 2 * prox_scaling) * location
+
+        elif isinstance(input, Expression):
+            # For expressions, SumSquares is only proxable when
+            # input is Affine with a Parameter root.
+
+            if isinstance(input, Affine):
+                if isinstance(input.get_input(), torch.nn.Parameter):
+                    return _sum_squares_affine_prox(input, location, prox_scaling)
+
+                else:
+                    raise NotImplementedError(
+                        "Proximal operator for composition of SumSquares and Affine "
+                        "where Affine has non-Variable root is not supported."
+                    )
+
+            # SumSquares of general Expression is not proxable
             raise NotImplementedError(
-                "Proximal operator for Expression not implemented."
+                "Proximal operator for SumSquares and general Expression "
+                "is not supported."
             )
 
     def is_subsamplable(self) -> bool:
@@ -101,3 +108,28 @@ class SumSquares(AtomExpression):
     def to_cvxpy(self) -> cp.Expression:
         """Convert the sum of squares to a CVXPY expression."""
         return cp.sum_squares(self.x.to_cvxpy())
+
+
+def _sum_squares_affine_prox(
+    input: Affine, location: torch.Tensor, prox_scaling: float
+) -> torch.Tensor:
+    """Computes prox operator for ||A @ x + b||^2."""
+    # Get data for forming Abar
+    n = input.A.shape[1]
+    dtype = input.A.dtype
+    device = input.A.device
+
+    # Proximal operator is least-squares problem
+    # Form Abar = [A; 1/sqrt(2*prox_scaling)*I]
+    mu = 1 / (2 * prox_scaling) ** (0.5)
+    Abar = torch.cat((input.A, mu * torch.eye(n, dtype=dtype, device=device)), dim=0)
+
+    # Get QR factorization and setup right handside
+    _, R = torch.linalg.qr(Abar, mode="reduced")
+    rhs = 1 / (2 * prox_scaling) * location - input.A.T @ input.b
+
+    # Find solution via triangular solves
+    rhs = torch.linalg.solve_triangular(R.T, rhs.reshape(rhs.shape[0], 1), upper=False)
+    return torch.linalg.solve_triangular(R, rhs, upper=True).reshape(
+        rhs.shape[0],
+    )
