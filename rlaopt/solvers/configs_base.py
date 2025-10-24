@@ -19,5 +19,5 @@ class StoppingCriteria(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    max_iters: int = Field(default=100, gt=0)
+    max_iters: int = Field(default=1000, gt=0)
     tol: float = Field(default=1e-6, gt=0)

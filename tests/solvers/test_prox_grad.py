@@ -5,7 +5,7 @@ import torch
 
 from rlaopt.atoms import Box, L1Norm, NonNegative, SumSquares
 from rlaopt.expression.expression import Variable
-from rlaopt.solvers.prox_grad import ProxGrad, ProxGradConfig
+from rlaopt.solvers.prox_grad import ProxGrad, ProxGradConfig, ProxGradStoppingCriteria
 from rlaopt.utils import tensor_dict_ops as dict_ops
 
 ACCEL = {"accel": True, "no_accel": False}
@@ -47,7 +47,7 @@ def tol(precision):
 
 @pytest.fixture
 def reset_torch_state():
-    """Fixture to reset torch default dtype after each test"""
+    """Fixture to reset torch default dtype after each test."""
     original_dtype = torch.get_default_dtype()
     yield
     torch.set_default_dtype(original_dtype)
@@ -165,25 +165,26 @@ class TestProxGrad:
 
 def _solve_and_verify(obj, eta, tol, use_acceleration, use_linesearch):
     """Test that optimization problem is solved correctly."""
-    opt = _build_opt(obj, eta, tol, use_acceleration, use_linesearch)
+    opt = _build_opt(obj, eta, use_acceleration, use_linesearch)
+    stopping_criteria = ProxGradStoppingCriteria(tol=tol, max_iters=5000)
     params, state = _init_opt(obj, opt)
 
     # Test solving by step
-    params, err = _loop(params, state, opt)
+    params, err = _loop(params, state, opt, stopping_criteria)
     assert err <= tol, f"Step-by-step solving failed: error {err} > tolerance {tol}"
 
     # Test using solve method
-    params, err = opt.solve(obj)
+    params, err = opt.solve(stopping_criteria=stopping_criteria)
     assert err.item() <= tol * (dict_ops.dim(params) ** 0.5), (
         f"Solve method failed: error {err.item()} > tolerance {tol}"
     )
 
 
-def _loop(params, state, opt):
+def _loop(params, state, opt, stopping_criteria):
     """Run optimization loop until convergence or max iterations."""
-    for _ in range(opt.config.max_iters):
+    for _ in range(stopping_criteria.max_iters):
         params, state = opt.step(params, state)
-        if state.err.item() <= opt.config.tol:
+        if state.err.item() <= stopping_criteria.tol:
             break
     return params, state.err.item()
 
@@ -194,12 +195,11 @@ def _init_opt(obj, opt):
     return params, opt.init_state(params)
 
 
-def _build_opt(obj, eta, tol, use_acceleration, use_linesearch):
+def _build_opt(obj, eta, use_acceleration, use_linesearch):
     """Build proximal gradient optimizer with specified configuration."""
     config = ProxGradConfig(
         eta=eta,
-        tol=tol,
         use_acceleration=use_acceleration,
         use_linesearch=use_linesearch,
     )
-    return ProxGrad(config, obj)
+    return ProxGrad(obj, config)
