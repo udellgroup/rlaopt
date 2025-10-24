@@ -28,6 +28,17 @@ class ProxGradConfig(SolverConfig):
     use_linesearch: bool = True
 
 
+class ProxGradStoppingCriteria(StoppingCriteria):
+    """Stopping criteria specific to the Proximal Gradient solver.
+
+    Attributes:
+        max_iters: Maximum number of iterations.
+        tol: Tolerance for convergence based on the error metric.
+    """
+
+    tol: float = Field(default=1e-4, gt=0)
+
+
 class ProxGradState(OptimState):
     """State container for the proximal gradient solver.
 
@@ -46,17 +57,6 @@ class ProxGradState(OptimState):
     iter_: int = 0
 
 
-class ProxGradStoppingCriteria(StoppingCriteria):
-    """Stopping criteria specific to the Proximal Gradient solver.
-
-    Attributes:
-        max_iters: Maximum number of iterations.
-        tol: Tolerance for convergence based on the error metric.
-    """
-
-    tol: float = Field(default=1e-4, gt=0)
-
-
 class ProxGrad(OptimSolver):
     """Proximal gradient solver for optimization problems.
 
@@ -73,15 +73,15 @@ class ProxGrad(OptimSolver):
     """
 
     def __init__(
-        self, config: ProxGradConfig, obj: Expression | AddExpression | OperatorSplit
+        self, obj: Expression | AddExpression | OperatorSplit, config: ProxGradConfig
     ):
         """Initialize the proximal gradient solver.
 
         Args:
-            config: Configuration for the solver.
             obj: The optimization objective.
+            config: Configuration for the solver.
         """
-        super().__init__(config, obj)
+        super().__init__(obj, config)
         self._init_state = _build_init_state(config.eta, config.use_acceleration)
         self._step = _build_step(obj, config.use_acceleration, config.use_linesearch)
         self._solve = lambda tol, max_iters: _build_solve(
@@ -115,13 +115,14 @@ class ProxGrad(OptimSolver):
 
     def solve(
         self,
-        stopping_criteria: ProxGradStoppingCriteria,
         params: TensorDict | None = None,
+        stopping_criteria: ProxGradStoppingCriteria = ProxGradStoppingCriteria(),
     ) -> tuple[TensorDict, torch.Tensor]:
         """Solve the optimization problem using the proximal gradient method.
 
         Args:
             stopping_criteria: Criteria to determine when to stop the optimization.
+                Defaults to ProxGradStoppingCriteria().
             params: Initial parameters. If None, defaults to zeros.
 
         Returns:

@@ -12,11 +12,11 @@ from rlaopt.linalg import (
     PreconditionerConfig,
     get_preconditioner,
 )
-from rlaopt.solvers.configs_base import LinSysSolverConfig
+from rlaopt.solvers.configs_base import SolverConfig, StoppingCriteria
 from rlaopt.solvers.solver_base import LinSysSolver
 
 
-class PCGConfig(LinSysSolverConfig):
+class PCGConfig(SolverConfig):
     """Configuration for the Preconditioned Conjugate Gradient solver.
 
     Attributes:
@@ -24,6 +24,15 @@ class PCGConfig(LinSysSolverConfig):
     """
 
     preconditioner_config: PreconditionerConfig = IdentityConfig()
+
+
+class PCGStoppingCriteria(StoppingCriteria):
+    """Stopping criteria specific to the PCG solver.
+
+    Inherits from the base StoppingCriteria class.
+    """
+
+    pass
 
 
 class PCGState(LinSysState):
@@ -60,14 +69,14 @@ class PCG(LinSysSolver):
     that are scaled by the preconditioner.
     """
 
-    def __init__(self, config: PCGConfig, lin_sys: LinSys):
+    def __init__(self, lin_sys: LinSys, config: PCGConfig):
         """Initialize the PCG solver.
 
         Args:
-            config (PCGConfig): Configuration for the solver.
             lin_sys (LinSys): The linear system to solve.
+            config (PCGConfig): Configuration for the solver.
         """
-        super().__init__(config, lin_sys)
+        super().__init__(lin_sys, config)
         P = get_preconditioner(config.preconditioner_config, lin_sys.A, lin_sys.device)
         self._init_state = _build_init_state(lin_sys, P, config.tol)
         self._step = _build_step(lin_sys, P, config.tol)

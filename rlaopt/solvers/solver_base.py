@@ -20,14 +20,14 @@ class OptimSolver(ABC):
 
     @abstractmethod
     def __init__(
-        self, config: SolverConfig, obj: Expression | AddExpression | OperatorSplit
+        self, obj: Expression | AddExpression | OperatorSplit, config: SolverConfig
     ):
         """Initialize the solver with an objective function.
 
         Args:
-            config (SolverConfig): Configuration for the solver.
             obj (Expression | AddExpression | OperatorSplit): The objective function
                 to optimize.
+            config (SolverConfig): Configuration for the solver.
         """
         pass
 
@@ -87,12 +87,12 @@ class LinSysSolver(ABC):
     """
 
     @abstractmethod
-    def __init__(self, config: SolverConfig, lin_sys: LinSys):
+    def __init__(self, lin_sys: LinSys, config: SolverConfig):
         """Initialize the solver.
 
         Args:
-            config (SolverConfig): Configuration object for the solver.
             lin_sys (LinSys): The linear system to solve.
+            config (SolverConfig): Configuration object for the solver.
         """
         pass
 
