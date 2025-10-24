@@ -126,7 +126,7 @@ class ProxGrad(OptimSolver):
             params: Initial parameters. If None, defaults to zeros.
 
         Returns:
-            Tuple of optimized parameters and final solver state.
+            Tuple of optimized parameters and final solver error.
         """
         solve_fn = self._solve(
             tol=stopping_criteria.tol, max_iters=stopping_criteria.max_iters

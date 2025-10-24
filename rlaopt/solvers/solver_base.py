@@ -104,7 +104,8 @@ class LinSysSolver(ABC):
             params: Initial parameters (solution estimate).
 
         Returns:
-            Initial state for the solver containing iteration-specific variables.
+            LinSysState: Initial state for the solver containing
+                iteration-specific variables.
         """
         pass
 
@@ -119,6 +120,23 @@ class LinSysSolver(ABC):
             state: Current state of the solver.
 
         Returns:
-            Updated state after one iteration.
+            tuple[torch.Tensor, LinSysState]: Updated parameters and state
+                after one iteration.
+        """
+        pass
+
+    @abstractmethod
+    def solve(
+        self, params: torch.Tensor, stopping_criteria: StoppingCriteria
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        """Solve the linear system AW = B.
+
+        Args:
+            params: Initial parameters (solution estimate).
+            stopping_criteria (StoppingCriteria): Criteria to stop the solver.
+
+        Returns:
+            tuple[torch.Tensor, torch.Tensor]: Optimized parameters and
+                final residual norm.
         """
         pass
