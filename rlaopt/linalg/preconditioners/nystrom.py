@@ -3,7 +3,8 @@
 from typing import Literal
 
 import torch
-from pydantic import Field
+from pydantic import Field, model_validator
+from typing_extensions import Self
 
 from rlaopt.linalg.preconditioners.preconditioner import (
     Preconditioner,
@@ -15,14 +16,30 @@ class NystromConfig(PreconditionerConfig):
     """Configuration for the Nyström preconditioner.
 
     Attributes:
-        rank: Rank of the Nyström approximation.
+        rank_init: Initial rank of the Nyström approximation.
+        rank_max: Maximum allowable rank.
+        num_power_iters: Number of power iterations for error estimation
+            in rank adaptation.
+        error_tolerance: Error tolerance for rank adaptation.
         base_damping: Base damping parameter.
         damping_mode: Damping mode, either 'adaptive' or 'non_adaptive'.
     """
 
     # TODO(pratik): add option for sketching method
 
-    rank: int = Field(gt=0, description="Rank of the Nyström approximation.")
+    rank_init: int = Field(
+        gt=0, description="Initial rank of the Nyström approximation."
+    )
+    rank_max: int | None = Field(None, description="Maximum allowable rank.")
+    num_power_iters: int = Field(
+        default=10,
+        gt=0,
+        description="Number of power iterations for error estimation"
+        " in rank adaptation.",
+    )
+    error_tolerance: float = Field(
+        default=1e-2, gt=0.0, description="Error tolerance for rank adaptation."
+    )
     base_damping: float = Field(ge=0.0, description="Base damping parameter.")
     damping_mode: Literal["adaptive", "non_adaptive"] = Field(
         default="adaptive",
@@ -30,9 +47,24 @@ class NystromConfig(PreconditionerConfig):
         " 'non_adaptive' uses base_damping only.",
     )
 
+    @model_validator(mode="after")
+    def validate_rank_max(self) -> Self:
+        """Validate and set rank_max based on rank_init.
+
+        If rank_max is None, it is set to rank_init.
+        If rank_max is provided, it must be >= rank_init.
+        """
+        if self.rank_max is None:
+            self.rank_max = self.rank_init
+        elif self.rank_max < self.rank_init:
+            raise ValueError(
+                f"rank_max ({self.rank_max}) must be >= rank_init ({self.rank_init})"
+            )
+        return self
+
 
 class Nystrom(Preconditioner):
-    """Nyström preconditioner implementation."""
+    """Nyström preconditioner implementation with adaptive rank."""
 
     def __init__(self, config: NystromConfig):
         """Initialize the Nyström preconditioner with the given configuration.
@@ -55,7 +87,7 @@ class Nystrom(Preconditioner):
         # Sketching matrix
         Omega = _generate_ortho_embedding(
             dimension=A.shape[0],
-            sketch_size=self._config.rank,
+            sketch_size=self._config.rank_init,
             dtype=A.dtype,
             device=device,
         )
@@ -121,18 +153,7 @@ class Nystrom(Preconditioner):
 def _generate_ortho_embedding(
     dimension: int, sketch_size: int, dtype: torch.dtype, device: torch.device
 ) -> torch.Tensor:
-    """Generate an orthogonal random embedding matrix.
-
-    Args:
-        dimension (int): Dimension of the original space.
-        sketch_size (int): Size of the sketch (number of rows in the embedding).
-        dtype (torch.dtype): Data type of the embedding matrix.
-        device (torch.device): Device on which to create the embedding matrix.
-
-    Returns:
-        torch.Tensor: Orthogonal random embedding matrix of shape
-        (sketch_size, dimension).
-    """
+    """Generate an orthogonal random embedding matrix."""
     # Generate a random Gaussian matrix
     Omega = torch.linalg.qr(
         torch.randn(dimension, sketch_size, dtype=dtype, device=device),
@@ -140,3 +161,20 @@ def _generate_ortho_embedding(
     )[0]
 
     return Omega
+
+
+def _randomized_power_err_est(
+    A: torch.Tensor, U: torch.Tensor, S: torch.Tensor, num_iters: int
+) -> float:
+    """Estimate approximation error of the Nyström method."""
+    v_prev = torch.randn(A.shape[0], dtype=A.dtype, device=A.device)
+    v_prev /= torch.norm(v_prev)
+    err_est = torch.inf
+
+    for _ in range(num_iters):
+        v_next = A @ v_prev - U @ (S * (U.T @ v_prev))
+        err_est = torch.inner(v_prev, v_next).item()
+        v_next /= torch.norm(v_next)
+        v_prev = v_next
+
+    return err_est

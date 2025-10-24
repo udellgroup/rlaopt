@@ -91,7 +91,7 @@ class TestPCG:
             lin_sys = generate_positive_definite_system(
                 n=100, num_rhs=5, reg=reg, precision=precision
             )
-            preconditioner_config = NystromConfig(rank=20, base_damping=reg)
+            preconditioner_config = NystromConfig(rank_init=20, base_damping=reg)
             return lin_sys, preconditioner_config
 
         _test_pcg_solver(precision, tol, setup_problem)
@@ -115,7 +115,7 @@ class TestPCG:
             lin_sys = generate_positive_definite_system(
                 n=500, num_rhs=10, reg=reg, precision=precision
             )
-            preconditioner_config = NystromConfig(rank=50, base_damping=reg)
+            preconditioner_config = NystromConfig(rank_init=50, base_damping=reg)
             return lin_sys, preconditioner_config
 
         _test_pcg_solver(precision, tol, setup_problem)
@@ -237,7 +237,7 @@ def _test_gradient(wrt, precision):
     reg = torch.tensor(1e-3, dtype=precision)
 
     tol = TOLERANCES[precision]
-    preconditioner_config = NystromConfig(rank=50, base_damping=reg.item())
+    preconditioner_config = NystromConfig(rank_init=50, base_damping=reg.item())
 
     # Map parameter name to argnums for torch.func.grad
     argnums_map = {"B": 0, "reg": 1}
