@@ -65,6 +65,18 @@ class TestLinSysInitialization:
         lin_sys = LinSys(A=valid_A, B=valid_B_1d, reg=0.0)
         assert lin_sys is not None
 
+    def test_init_with_tensor_reg(self, valid_A, valid_B_1d):
+        """Test initialization with tensor regularization."""
+        reg_tensor = torch.tensor(0.5)
+        lin_sys = LinSys(A=valid_A, B=valid_B_1d, reg=reg_tensor)
+        assert lin_sys is not None
+
+    def test_init_with_zero_tensor_reg(self, valid_A, valid_B_1d):
+        """Test initialization with zero tensor regularization."""
+        reg_tensor = torch.tensor(0.0)
+        lin_sys = LinSys(A=valid_A, B=valid_B_1d, reg=reg_tensor)
+        assert lin_sys is not None
+
     def test_init_with_w_1d(self, valid_A, valid_B_1d, valid_w_1d):
         """Test initialization with 1D initial guess w."""
         lin_sys = LinSys(A=valid_A, B=valid_B_1d, w=valid_w_1d)
@@ -104,6 +116,15 @@ class TestLinSysForward:
     def test_forward_with_regularization(self, valid_A, valid_B_1d):
         """Test calling LinSys with regularization."""
         reg = 0.5
+        lin_sys = LinSys(A=valid_A, B=valid_B_1d, reg=reg)
+        v = torch.tensor([1.0, 1.0])
+        result = lin_sys(v)
+        expected = valid_A @ v + reg * v
+        assert torch.allclose(result, expected.unsqueeze(-1))
+
+    def test_forward_with_tensor_regularization(self, valid_A, valid_B_1d):
+        """Test calling LinSys with tensor regularization."""
+        reg = torch.tensor(0.5)
         lin_sys = LinSys(A=valid_A, B=valid_B_1d, reg=reg)
         v = torch.tensor([1.0, 1.0])
         result = lin_sys(v)
@@ -165,20 +186,27 @@ class TestLinSysCheckInputsErrors:
         ):
             LinSys(A=valid_A, B=B_invalid)
 
-    def test_reg_not_float(self, valid_A, valid_B_1d):
-        """Test error when reg is not a float."""
-        with pytest.raises(ValueError, match="reg must be a non-negative float"):
-            LinSys(A=valid_A, B=valid_B_1d, reg=1)  # int instead of float
+    def test_reg_not_float_or_tensor(self, valid_A, valid_B_1d):
+        """Test error when reg is not a float or tensor."""
+        with pytest.raises(TypeError, match="reg must be a float or torch.Tensor"):
+            LinSys(A=valid_A, B=valid_B_1d, reg="0.5")  # string instead of float/tensor
 
-    def test_reg_negative(self, valid_A, valid_B_1d):
-        """Test error when reg is negative."""
+    def test_reg_float_negative(self, valid_A, valid_B_1d):
+        """Test error when reg float is negative."""
         with pytest.raises(ValueError, match="reg must be a non-negative float"):
             LinSys(A=valid_A, B=valid_B_1d, reg=-0.5)
 
-    def test_reg_not_numeric(self, valid_A, valid_B_1d):
-        """Test error when reg is not numeric."""
-        with pytest.raises(ValueError, match="reg must be a non-negative float"):
-            LinSys(A=valid_A, B=valid_B_1d, reg="0.5")  # string instead of float
+    def test_reg_tensor_not_scalar(self, valid_A, valid_B_1d):
+        """Test error when reg tensor is not 0-dimensional."""
+        reg_invalid = torch.tensor([0.5, 1.0])  # 1D tensor instead of scalar
+        with pytest.raises(ValueError, match="reg tensor must be a scalar"):
+            LinSys(A=valid_A, B=valid_B_1d, reg=reg_invalid)
+
+    def test_reg_tensor_negative(self, valid_A, valid_B_1d):
+        """Test error when reg tensor is negative."""
+        reg_invalid = torch.tensor(-0.5)
+        with pytest.raises(ValueError, match="reg tensor must be non-negative"):
+            LinSys(A=valid_A, B=valid_B_1d, reg=reg_invalid)
 
     def test_w_not_tensor(self, valid_A, valid_B_1d):
         """Test error when w is not a torch.Tensor."""
@@ -231,6 +259,15 @@ class TestLinSysComputeResidual:
         expected = valid_B_1d.unsqueeze(-1) - (valid_A @ v + reg * v).unsqueeze(-1)
         assert torch.allclose(residual, expected)
 
+    def test_compute_residual_with_tensor_regularization(self, valid_A, valid_B_1d):
+        """Test residual computation with tensor regularization."""
+        reg = torch.tensor(0.5)
+        lin_sys = LinSys(A=valid_A, B=valid_B_1d, reg=reg)
+        v = torch.tensor([1.0, 1.0])
+        residual = lin_sys.compute_residual(v)
+        expected = valid_B_1d.unsqueeze(-1) - (valid_A @ v + reg * v).unsqueeze(-1)
+        assert torch.allclose(residual, expected)
+
     def test_compute_residual_2d_B(self, valid_A, valid_B_2d):
         """Test residual computation with 2D B matrix."""
         lin_sys = LinSys(A=valid_A, B=valid_B_2d, reg=0.0)
@@ -246,6 +283,16 @@ class TestLinSysComputeResidualNorm:
     def test_residual_norm_with_regularization(self, valid_A, valid_B_1d):
         """Test residual norm with regularization."""
         reg = 0.5
+        lin_sys = LinSys(A=valid_A, B=valid_B_1d, reg=reg)
+        # Solve (A + reg*I)v = B
+        A_reg = valid_A + reg * torch.eye(2)
+        v_exact = torch.linalg.solve(A_reg, valid_B_1d)
+        res_norm = lin_sys.compute_residual_norm(v_exact)
+        assert torch.allclose(res_norm, torch.tensor(0.0), atol=1e-6)
+
+    def test_residual_norm_with_tensor_regularization(self, valid_A, valid_B_1d):
+        """Test residual norm with tensor regularization."""
+        reg = torch.tensor(0.5)
         lin_sys = LinSys(A=valid_A, B=valid_B_1d, reg=reg)
         # Solve (A + reg*I)v = B
         A_reg = valid_A + reg * torch.eye(2)
