@@ -8,40 +8,30 @@ from rlaopt.expression.expression import Variable
 from rlaopt.solvers.prox_grad import ProxGrad, ProxGradConfig, ProxGradStoppingCriteria
 from rlaopt.utils import tensor_dict_ops as dict_ops
 
-ACCEL = {"accel": True, "no_accel": False}
-LINESEARCH = {"linesearch": True, "no_linesearch": False}
 TOLERANCES = {torch.float32: 1e-4, torch.float64: 1e-10}
 
 
-@pytest.fixture(params=["accel", "no_accel"], ids=["accel", "no_accel"])
-def accel(request):
+@pytest.fixture(params=[True, False], ids=["accel", "no_accel"])
+def acceleration(request):
+    """Whether to use acceleration."""
     return request.param
 
 
-@pytest.fixture(
-    params=["linesearch", "no_linesearch"], ids=["linesearch", "no_linesearch"]
-)
-def linesearch(request):
+@pytest.fixture(params=[True, False], ids=["linesearch", "no_linesearch"])
+def ls(request):
+    """Whether to use line search."""
     return request.param
 
 
 @pytest.fixture(params=[torch.float32, torch.float64], ids=["float32", "float64"])
 def precision(request):
+    """Torch dtype for the test."""
     return request.param
 
 
 @pytest.fixture
-def acceleration(accel):
-    return ACCEL[accel]
-
-
-@pytest.fixture
-def ls(linesearch):
-    return LINESEARCH[linesearch]
-
-
-@pytest.fixture
 def tol(precision):
+    """Convergence tolerance based on precision."""
     return TOLERANCES[precision]
 
 
@@ -108,6 +98,8 @@ def compute_lipschitz_stepsize(A, scaling=0.5):
 
 
 class TestProxGrad:
+    """Tests for the proximal gradient solver."""
+
     def test_least_squares(self, reset_torch_state, precision, tol, acceleration, ls):
         """Test proximal gradient on least squares problem."""
 
@@ -123,9 +115,9 @@ class TestProxGrad:
 
         def setup_problem():
             A, b, x = generate_least_squares_data(n=1024, p=256, precision=precision)
-            l = -torch.tensor(2.0)
-            u = torch.tensor(1.0)
-            obj = SumSquares(A @ x - b) + Box(x, l=l, u=u)
+            lower = -torch.tensor(2.0)
+            upper = torch.tensor(1.0)
+            obj = SumSquares(A @ x - b) + Box(x, l=lower, u=upper)
             return A, obj
 
         _test_optimization_problem(precision, tol, acceleration, ls, setup_problem)
