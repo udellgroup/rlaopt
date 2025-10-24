@@ -67,14 +67,6 @@ class _UnaryOpExpression(Expression):
         """
         return False
 
-    def to_cvxpy(self):
-        """CVXPY conversion not implemented for generic unary ops.
-
-        Raises:
-            NotImplementedError: Always.
-        """
-        raise NotImplementedError("to_cvxpy not implemented for UnaryOpExpression")
-
     def sum(self, dim=None):
         """Create a sum operation.
 

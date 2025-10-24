@@ -2,7 +2,6 @@
 
 from typing import Callable
 
-import cvxpy as cp
 import torch
 
 from rlaopt.expression import Expression
@@ -67,7 +66,3 @@ class BilevelExpression(Expression):
     def prox(self, location: torch.Tensor, prox_scaling: float) -> torch.Tensor:
         """Proximal operator not supported for bilevel expressions."""
         raise NotImplementedError("BilevelExpression is not proxable")
-
-    def to_cvxpy(self) -> cp.Expression:
-        """CVXPY conversion not supported for bilevel expressions."""
-        raise NotImplementedError("BilevelExpression cannot be converted to CVXPY")
