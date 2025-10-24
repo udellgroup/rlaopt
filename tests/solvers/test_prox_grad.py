@@ -109,58 +109,70 @@ def compute_lipschitz_stepsize(A, scaling=0.5):
 
 class TestProxGrad:
     def test_least_squares(self, reset_torch_state, precision, tol, acceleration, ls):
-        torch.set_default_dtype(precision)
+        """Test proximal gradient on least squares problem."""
 
-        A, b, x = generate_least_squares_data(n=1024, p=256, precision=precision)
-        obj = SumSquares(A @ x - b)
-        eta = compute_lipschitz_stepsize(A)
+        def setup_problem():
+            A, b, x = generate_least_squares_data(n=1024, p=256, precision=precision)
+            obj = SumSquares(A @ x - b)
+            return A, obj
 
-        _solve_and_verify(obj, eta, tol, acceleration, ls)
+        _test_optimization_problem(precision, tol, acceleration, ls, setup_problem)
 
     def test_box(self, reset_torch_state, precision, tol, acceleration, ls):
-        torch.set_default_dtype(precision)
+        """Test proximal gradient on box-constrained problem."""
 
-        A, b, x = generate_least_squares_data(n=1024, p=256, precision=precision)
-        l = -torch.tensor(2.0)
-        u = torch.tensor(1.0)
-        obj = SumSquares(A @ x - b) + Box(x, l=l, u=u)
-        eta = compute_lipschitz_stepsize(A)
+        def setup_problem():
+            A, b, x = generate_least_squares_data(n=1024, p=256, precision=precision)
+            l = -torch.tensor(2.0)
+            u = torch.tensor(1.0)
+            obj = SumSquares(A @ x - b) + Box(x, l=l, u=u)
+            return A, obj
 
-        _solve_and_verify(obj, eta, tol, acceleration, ls)
+        _test_optimization_problem(precision, tol, acceleration, ls, setup_problem)
 
     def test_nonnegative(self, reset_torch_state, precision, tol, acceleration, ls):
-        torch.set_default_dtype(precision)
+        """Test proximal gradient on nonnegative-constrained problem."""
 
-        A, b, x = generate_least_squares_data(n=1024, p=256, precision=precision)
-        obj = SumSquares(A @ x - b) + NonNegative(x)
-        eta = compute_lipschitz_stepsize(A)
+        def setup_problem():
+            A, b, x = generate_least_squares_data(n=1024, p=256, precision=precision)
+            obj = SumSquares(A @ x - b) + NonNegative(x)
+            return A, obj
 
-        _solve_and_verify(obj, eta, tol, acceleration, ls)
+        _test_optimization_problem(precision, tol, acceleration, ls, setup_problem)
 
     def test_lasso(self, reset_torch_state, precision, tol, acceleration, ls):
-        torch.set_default_dtype(precision)
+        """Test proximal gradient on LASSO problem."""
 
-        A, b, x, _ = generate_lasso_data(n=1024, p=128, s=32, precision=precision)
-        mu = 0.1 * torch.linalg.norm(A.T @ b, ord=torch.inf)
-        obj = SumSquares(A @ x - b) + L1Norm(x, scaling=mu)
-        eta = compute_lipschitz_stepsize(A)
+        def setup_problem():
+            A, b, x, _ = generate_lasso_data(n=1024, p=128, s=32, precision=precision)
+            mu = 0.1 * torch.linalg.norm(A.T @ b, ord=torch.inf)
+            obj = SumSquares(A @ x - b) + L1Norm(x, scaling=mu)
+            return A, obj
 
-        _solve_and_verify(obj, eta, tol, acceleration, ls)
+        _test_optimization_problem(precision, tol, acceleration, ls, setup_problem)
 
     # def test_nucnorm(self, reset_torch_state, precision, tol, acceleration, ls):
-    #     torch.set_default_dtype(precision)
+    #     """Test proximal gradient on nuclear norm regularized problem."""
+    #     def setup_problem():
+    #         A, B, X = generate_matrix_sensing_data(n=64, p=16, precision=precision)
+    #         lambd = 1000.0
+    #         obj = SumSquares(A @ X - B) + NucNorm(X, scaling=lambd)
+    #         return A, obj
 
-    #     A, B, X = generate_matrix_sensing_data(n=64, p=16, precision=precision)
-    #     lambd = 1000.0
-    #     obj = SumSquares(A @ X - B) + NucNorm(X, scaling=lambd)
-    #     # eta = compute_lipschitz_stepsize(A)
-
-    #     _solve_and_verify(obj, 1e-3, tol, acceleration, ls)
+    #     _test_optimization_problem(precision, tol, acceleration, ls, setup_problem)
 
 
 # ============================================================================
 # Helper Functions
 # ============================================================================
+
+
+def _test_optimization_problem(precision, tol, acceleration, ls, setup_fn):
+    """Common test structure for all optimization problems."""
+    torch.set_default_dtype(precision)
+    A, obj = setup_fn()
+    eta = compute_lipschitz_stepsize(A)
+    _solve_and_verify(obj, eta, tol, acceleration, ls)
 
 
 def _solve_and_verify(obj, eta, tol, use_acceleration, use_linesearch):
