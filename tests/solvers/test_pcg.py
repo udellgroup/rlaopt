@@ -23,6 +23,12 @@ def tol(precision):
 
 
 @pytest.fixture
+def reg():
+    """Regularization parameter for linear systems."""
+    return 1e-3
+
+
+@pytest.fixture
 def reset_torch_state():
     """Fixture to reset torch default dtype after each test."""
     original_dtype = torch.get_default_dtype()
@@ -38,21 +44,7 @@ def reset_torch_state():
 def generate_positive_definite_system(
     n=100, num_rhs=10, reg=1e-3, precision=torch.float32, seed=0
 ):
-    """Generate a positive-definite linear system.
-
-    Creates a system of the form (A + reg*I)W = B where A is symmetric
-    positive-definite.
-
-    Args:
-        n: Size of the matrix A (n x n)
-        num_rhs: Number of right-hand side vectors
-        reg: Regularization parameter
-        precision: Torch dtype for tensors
-        seed: Random seed for reproducibility
-
-    Returns:
-        LinSys object representing the linear system
-    """
+    """Generate a positive-definite linear system."""
     torch.manual_seed(seed)
 
     # Create eigenvalues that decay polynomially (ill-conditioned)
@@ -79,50 +71,50 @@ def generate_positive_definite_system(
 class TestPCG:
     """Tests for the PCG solver."""
 
-    def test_identity_preconditioner(self, reset_torch_state, precision, tol):
+    def test_identity_preconditioner(self, reset_torch_state, precision, tol, reg):
         """Test PCG with identity preconditioner."""
 
         def setup_problem():
             lin_sys = generate_positive_definite_system(
-                n=100, num_rhs=5, reg=1e-3, precision=precision
+                n=100, num_rhs=5, reg=reg, precision=precision
             )
             preconditioner_config = IdentityConfig()
             return lin_sys, preconditioner_config
 
         _test_pcg_solver(precision, tol, setup_problem)
 
-    def test_nystrom_preconditioner(self, reset_torch_state, precision, tol):
+    def test_nystrom_preconditioner(self, reset_torch_state, precision, tol, reg):
         """Test PCG with Nystrom preconditioner."""
 
         def setup_problem():
             lin_sys = generate_positive_definite_system(
-                n=100, num_rhs=5, reg=1e-3, precision=precision
+                n=100, num_rhs=5, reg=reg, precision=precision
             )
-            preconditioner_config = NystromConfig(rank=20, base_damping=1e-3)
+            preconditioner_config = NystromConfig(rank=20, base_damping=reg)
             return lin_sys, preconditioner_config
 
         _test_pcg_solver(precision, tol, setup_problem)
 
-    def test_single_rhs(self, reset_torch_state, precision, tol):
+    def test_single_rhs(self, reset_torch_state, precision, tol, reg):
         """Test PCG with a single right-hand side vector."""
 
         def setup_problem():
             lin_sys = generate_positive_definite_system(
-                n=50, num_rhs=1, reg=1e-3, precision=precision
+                n=50, num_rhs=1, reg=reg, precision=precision
             )
             preconditioner_config = IdentityConfig()
             return lin_sys, preconditioner_config
 
         _test_pcg_solver(precision, tol, setup_problem)
 
-    def test_large_system(self, reset_torch_state, precision, tol):
+    def test_large_system(self, reset_torch_state, precision, tol, reg):
         """Test PCG on a larger system with Nystrom preconditioner."""
 
         def setup_problem():
             lin_sys = generate_positive_definite_system(
-                n=500, num_rhs=10, reg=1e-3, precision=precision
+                n=500, num_rhs=10, reg=reg, precision=precision
             )
-            preconditioner_config = NystromConfig(rank=50, base_damping=1e-3)
+            preconditioner_config = NystromConfig(rank=50, base_damping=reg)
             return lin_sys, preconditioner_config
 
         _test_pcg_solver(precision, tol, setup_problem)
@@ -134,13 +126,7 @@ class TestPCG:
 
 
 def _test_pcg_solver(precision, tol, setup_fn):
-    """Common test structure for PCG solver.
-
-    Args:
-        precision: Torch dtype for the test
-        tol: Convergence tolerance
-        setup_fn: Function that returns (lin_sys, preconditioner_config)
-    """
+    """Common test structure for PCG solver."""
     torch.set_default_dtype(precision)
     lin_sys, preconditioner_config = setup_fn()
     _solve_and_verify(lin_sys, preconditioner_config, tol)
@@ -159,22 +145,18 @@ def _solve_and_verify(lin_sys, preconditioner_config, tol):
     params = lin_sys.w.clone()
     state = solver.init_state(params)
     params, _ = _loop(params, state, solver, stopping_criteria)
-
-    # Verify solution is actually correct
-    actual_rel_res_norm = lin_sys.compute_residual_norm(params, relative=True)
-    assert (actual_rel_res_norm <= tol).all(), (
-        f"Solution verification failed: "
-        f"max relative residual norm {actual_rel_res_norm.max().item()} > "
-        f"tolerance {tol}"
-    )
+    _verify_solution(lin_sys, params, tol, "Step-by-step solving")
 
     # Test solve method
     params, _ = solver.solve(stopping_criteria=stopping_criteria)
+    _verify_solution(lin_sys, params, tol, "Solve method")
 
-    # Verify solution is actually correct
+
+def _verify_solution(lin_sys, params, tol, method_name):
+    """Verify that the solution satisfies the tolerance."""
     actual_rel_res_norm = lin_sys.compute_residual_norm(params, relative=True)
     assert (actual_rel_res_norm <= tol).all(), (
-        f"Solution verification failed: "
+        f"{method_name} failed: "
         f"max relative residual norm {actual_rel_res_norm.max().item()} > "
         f"tolerance {tol}"
     )
