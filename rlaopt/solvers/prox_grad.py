@@ -43,18 +43,18 @@ class ProxGradState(OptimState):
     """State container for the proximal gradient solver.
 
     Attributes:
+        iter_: Current iteration count.
         eta: Step size (learning rate) for the gradient descent step.
         params_prev: Previous iteration's parameters, used for acceleration methods.
             None when acceleration is disabled.
         err: Current error metric, measuring convergence progress.
             Initialized to infinity.
-        iter_: Current iteration count, starting from 0.
     """
 
+    iter_: int
     eta: float
     params_prev: TensorDict | None = None
     err: torch.Tensor = torch.inf
-    iter_: int = 0
 
 
 class ProxGrad(OptimSolver):
@@ -123,7 +123,7 @@ class ProxGrad(OptimSolver):
         Args:
             stopping_criteria: Criteria to determine when to stop the optimization.
                 Defaults to ProxGradStoppingCriteria().
-            params: Initial parameters. If None, defaults to zeros.
+            params: Initial parameters. If None, defaults to parameters in objective.
 
         Returns:
             Tuple of optimized parameters and final solver error.
@@ -141,10 +141,12 @@ def _build_init_state(
 
     def init_state(params: TensorDict) -> ProxGradState:
         """Initialize the solver state."""
+        state_inputs = dict(iter_=0, eta=eta)
+
         if use_acceleration:
-            return ProxGradState(params_prev=params, eta=eta)
-        else:
-            return ProxGradState(eta=eta)
+            state_inputs["params_prev"] = params
+
+        return ProxGradState(**state_inputs)
 
     return init_state
 

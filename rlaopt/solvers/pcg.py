@@ -39,26 +39,30 @@ class PCGState(LinSysState):
     """State container for the PCG solver.
 
     Attributes:
+        iter_: Current iteration count.
         r: Residual vector (B - AW).
         z: Preconditioned residual (P_inv @ r).
         p: Search direction.
         rz: Inner product r^T @ z (for non-converged components).
         res_norm: Current residual norm per component.
         mask: Boolean mask indicating which components have not yet converged.
-        iter_: Current iteration count, starting from 0.
+            If there is no tolerance set, all components are considered active.
+        tol: Optional tolerance for convergence checking. When None, all components
+            are considered active (mask is not updated based on convergence).
     """
 
+    iter_: int
     r: torch.Tensor
     z: torch.Tensor
     p: torch.Tensor
     rz: torch.Tensor
     res_norm: torch.Tensor
     mask: torch.Tensor
-    iter_: int = 0
+    tol: float | None = None
 
 
 class PCG(LinSysSolver):
-    """Preconditioned Conjugate Gradient solver for linear systems.
+    """Block Preconditioned Conjugate Gradient solver for linear systems.
 
     Solves linear systems of the form:
         AW = B
@@ -78,8 +82,11 @@ class PCG(LinSysSolver):
         """
         super().__init__(lin_sys, config)
         P = get_preconditioner(config.preconditioner_config, lin_sys.A, lin_sys.device)
-        self._init_state = _build_init_state(lin_sys, P, config.tol)
-        self._step = _build_step(lin_sys, P, config.tol)
+        self._init_state = _build_init_state(lin_sys, P)
+        self._step = _build_step(lin_sys, P)
+        self._solve = lambda tol, max_iters: _build_solve(
+            lin_sys, self._init_state, self._step, tol, max_iters
+        )
 
     def init_state(self, params: torch.Tensor) -> PCGState:
         """Initialize the solver state.
@@ -106,6 +113,27 @@ class PCG(LinSysSolver):
         """
         return self._step(params, state)
 
+    def solve(
+        self,
+        params: torch.Tensor | None = None,
+        stopping_criteria: PCGStoppingCriteria = PCGStoppingCriteria(),
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        """Solve the linear system AW = B using PCG.
+
+        Args:
+            params: Initial parameters (solution estimate). If None, defaults to
+                parameters in linear system.
+            stopping_criteria: Criteria to determine when to stop the solver.
+                Defaults to PCGStoppingCriteria().
+
+        Returns:
+            Tuple of solution parameters and final residual norm.
+        """
+        solve_fn = self._solve(
+            tol=stopping_criteria.tol, max_iters=stopping_criteria.max_iters
+        )
+        return solve_fn(params)
+
 
 def _compute_convergence_mask(
     res_norm: torch.Tensor, lin_sys: LinSys, tol: float
@@ -116,7 +144,7 @@ def _compute_convergence_mask(
 
 
 def _build_init_state(
-    lin_sys: LinSys, P: Preconditioner, tol: float
+    lin_sys: LinSys, P: Preconditioner
 ) -> Callable[[torch.Tensor], PCGState]:
     def init_state(params: torch.Tensor) -> PCGState:
         """Initialize the PCG solver state.
@@ -125,7 +153,7 @@ def _build_init_state(
             params: Initial parameters (solution estimate).
 
         Returns:
-            Initial solver state.
+            Initial solver state with all components marked as active (mask=True).
         """
         # Compute initial residual: r = B - A @ params
         r = lin_sys.compute_residual(params)
@@ -139,13 +167,14 @@ def _build_init_state(
         # Compute initial residual norm per component
         res_norm = torch.linalg.norm(r, dim=0, ord=2)
 
-        # Initialize mask
-        mask = _compute_convergence_mask(res_norm, lin_sys, tol)
+        # Initialize mask to all True (all components are active)
+        # When tolerance is set via solve(), the mask will be updated in step()
+        mask = torch.ones(r.shape[1], dtype=torch.bool, device=r.device)
 
         # Compute r^T @ z as a matrix (rz[i,j] corresponds to components i and j)
         rz = r.T @ z
 
-        return PCGState(r=r, z=z, p=p, rz=rz, res_norm=res_norm, mask=mask, iter_=0)
+        return PCGState(iter_=0, r=r, z=z, p=p, rz=rz, res_norm=res_norm, mask=mask)
 
     return init_state
 
@@ -153,7 +182,6 @@ def _build_init_state(
 def _build_step(
     lin_sys: LinSys,
     P: Preconditioner,
-    tol: float,
 ) -> Callable[[torch.Tensor, PCGState], tuple[torch.Tensor, PCGState]]:
     def step(
         params: torch.Tensor,
@@ -216,19 +244,61 @@ def _build_step(
         # Compute new residual norm
         res_norm_new = torch.linalg.norm(r_new, dim=0, ord=2)
 
-        # Update mask based on convergence
-        mask_new = _compute_convergence_mask(res_norm_new, lin_sys, tol)
+        # Update mask based on convergence if tolerance is set
+        if state.tol is not None:
+            mask_new = _compute_convergence_mask(res_norm_new, lin_sys, state.tol)
+        else:
+            # If no tolerance is set, keep all components active
+            mask_new = mask
 
         new_state = PCGState(
+            iter_=state.iter_ + 1,
             r=r_new,
             z=z_new,
             p=p_new,
             rz=rz_new,
             res_norm=res_norm_new,
             mask=mask_new,
-            iter_=state.iter_ + 1,
+            tol=state.tol,
         )
 
         return params, new_state
 
     return step
+
+
+def _build_solve(
+    lin_sys: LinSys,
+    init_state_fn: Callable[[torch.Tensor], PCGState],
+    step_fn: Callable[[torch.Tensor, PCGState], tuple[torch.Tensor, PCGState]],
+    tol: float,
+    max_iters: int,
+) -> Callable[[torch.Tensor | None], tuple[torch.Tensor, torch.Tensor]]:
+    """Build the solve function with stopping criteria."""
+
+    def solve(params: torch.Tensor | None = None) -> tuple[torch.Tensor, torch.Tensor]:
+        """Solve the linear system AW = B.
+
+        Args:
+            params: Initial parameters. If None, defaults to zeros.
+
+        Returns:
+            Tuple of solution parameters and final residual norm.
+        """
+        if params is None:
+            params = lin_sys.w.clone()
+
+        # Initialize state without tolerance
+        state = init_state_fn(params)
+
+        # Set tolerance in state for convergence checking
+        state = state._replace(tol=tol)
+
+        # Iterate until convergence or max iterations
+        while state.mask.any() and state.iter_ < max_iters:
+            params, state = step_fn(params, state)
+
+        # Return final params and residual norm
+        return params, state.res_norm
+
+    return solve
