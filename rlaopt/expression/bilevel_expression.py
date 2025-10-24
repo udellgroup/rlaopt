@@ -4,7 +4,7 @@ import cvxpy as cp
 import torch
 
 from rlaopt.expression.expression import Expression
-from rlaopt.solvers import OptimSolver, SolverConfig
+from rlaopt.solvers import OptimSolver, SolverConfig, StoppingCriteria
 
 
 class BilevelExpression(Expression):
@@ -23,7 +23,7 @@ class BilevelExpression(Expression):
         F_in: Callable[[torch.Tensor], Expression],
         F_out: Expression,
         solver_config: SolverConfig,
-        solver_stopping_criteria: SolverConfig,
+        solver_stopping_criteria: StoppingCriteria,
         solver: OptimSolver,
     ):
         """Initializes the bilevel expression.
