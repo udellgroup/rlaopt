@@ -1,15 +1,16 @@
 """Proximal gradient solver implementation."""
 
+from dataclasses import dataclass, replace
 from typing import Callable
 
 import torch
 from pydantic import Field
 
-from rlaopt._typing import OptimState, TensorDict
+from rlaopt._typing import TensorDict
 from rlaopt.expression.expression import AddExpression, Expression
 from rlaopt.operator_split import OperatorSplit
 from rlaopt.solvers.configs_base import SolverConfig, StoppingCriteria
-from rlaopt.solvers.solver_base import OptimSolver
+from rlaopt.solvers.solver_base import OptimSolver, SolverState
 from rlaopt.solvers.utils import split_objective
 from rlaopt.utils import tensor_dict_ops as dict_ops
 
@@ -39,7 +40,8 @@ class ProxGradStoppingCriteria(StoppingCriteria):
     tol: float = Field(default=1e-4, gt=0)
 
 
-class ProxGradState(OptimState):
+@dataclass(frozen=True)
+class ProxGradState(SolverState):
     """State container for the proximal gradient solver.
 
     Attributes:
@@ -51,8 +53,7 @@ class ProxGradState(OptimState):
             Initialized to infinity.
     """
 
-    iter_: int
-    eta: float
+    eta: float = 1.0
     params_prev: TensorDict | None = None
     err: torch.Tensor = torch.inf
 
@@ -183,8 +184,8 @@ def _build_step(
         ) -> tuple[TensorDict, ProxGradState]:
             params_prev = params
             params, state = _accel_prox_grad_ls_step(params, state, f, grad_f, prox)
-            return params, state._replace(
-                iter_=state.iter_ + 1, params_prev=params_prev
+            return params, replace(
+                state, iter_=state.iter_ + 1, params_prev=params_prev
             )
 
     elif use_acceleration:
@@ -195,8 +196,8 @@ def _build_step(
             params_prev = params
             params = _accel_prox_grad_step(params, state, grad_f, prox)
             err = err_fn(params, state)
-            return params, state._replace(
-                iter_=state.iter_ + 1, err=err, params_prev=params_prev
+            return params, replace(
+                state, iter_=state.iter_ + 1, err=err, params_prev=params_prev
             )
 
     elif use_linesearch:
@@ -205,7 +206,7 @@ def _build_step(
             params: TensorDict, state: ProxGradState
         ) -> tuple[TensorDict, ProxGradState]:
             params, state = _linesearch(params, state, f, grad_f, prox)
-            return params, state._replace(iter_=state.iter_ + 1)
+            return params, replace(state, iter_=state.iter_ + 1)
 
     else:
 
@@ -214,7 +215,7 @@ def _build_step(
         ) -> tuple[TensorDict, ProxGradState]:
             params = _prox_grad_step(params, state, grad_f, prox)
             err = err_fn(params, state)
-            return params, state._replace(iter_=state.iter_ + 1, err=err)
+            return params, replace(state, iter_=state.iter_ + 1, err=err)
 
     return step
 
@@ -318,10 +319,10 @@ def _linesearch(
         )
         if f(z) <= u:
             err_new = dict_ops.elem_norm(d) / state.eta
-            return True, z, state._replace(err=err_new)
+            return True, z, replace(state, err=err_new)
         else:
             eta_new = beta * state.eta
-            return False, params, state._replace(eta=eta_new)
+            return False, params, replace(state, eta=eta_new)
 
     while not cond:
         cond, params, state = linesearch_step(params, state)

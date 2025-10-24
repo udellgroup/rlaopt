@@ -1,10 +1,10 @@
 """Preconditioned Conjugate Gradient solver implementation."""
 
+from dataclasses import dataclass, replace
 from typing import Callable
 
 import torch
 
-from rlaopt._typing import LinSysState
 from rlaopt.linalg import (
     IdentityConfig,
     LinSys,
@@ -13,7 +13,7 @@ from rlaopt.linalg import (
     get_preconditioner,
 )
 from rlaopt.solvers.configs_base import SolverConfig, StoppingCriteria
-from rlaopt.solvers.solver_base import LinSysSolver
+from rlaopt.solvers.solver_base import LinSysSolver, SolverState
 
 
 class PCGConfig(SolverConfig):
@@ -35,7 +35,8 @@ class PCGStoppingCriteria(StoppingCriteria):
     pass
 
 
-class PCGState(LinSysState):
+@dataclass(frozen=True)
+class PCGState(SolverState):
     """State container for the PCG solver.
 
     Attributes:
@@ -51,7 +52,6 @@ class PCGState(LinSysState):
             are considered active (mask is not updated based on convergence).
     """
 
-    iter_: int
     r: torch.Tensor
     z: torch.Tensor
     p: torch.Tensor
@@ -292,7 +292,7 @@ def _build_solve(
         state = init_state_fn(params)
 
         # Set tolerance in state for convergence checking
-        state = state._replace(tol=tol)
+        state = replace(state, tol=tol)
 
         # Iterate until convergence or max iterations
         while state.mask.any() and state.iter_ < max_iters:

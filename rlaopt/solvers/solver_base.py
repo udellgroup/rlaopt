@@ -1,14 +1,26 @@
 """Base classes for optimization and linear system solvers."""
 
 from abc import ABC, abstractmethod
+from dataclasses import dataclass
 
 import torch
 
-from rlaopt._typing import LinSysState, OptimState, TensorDict
+from rlaopt._typing import TensorDict
 from rlaopt.expression.expression import AddExpression, Expression
 from rlaopt.linalg import LinSys
 from rlaopt.operator_split import OperatorSplit
 from rlaopt.solvers.configs_base import SolverConfig, StoppingCriteria
+
+
+@dataclass(frozen=True)
+class SolverState:
+    """Base class for solver states.
+
+    This class can be extended to include specific state variables
+    required by different solvers.
+    """
+
+    iter_: int  # Current iteration count
 
 
 class OptimSolver(ABC):
@@ -32,29 +44,29 @@ class OptimSolver(ABC):
         pass
 
     @abstractmethod
-    def init_state(self, params: TensorDict) -> OptimState:
+    def init_state(self, params: TensorDict) -> SolverState:
         """Initialize the state of the optimizer.
 
         Args:
             params (TensorDict): Initial parameters for the optimization.
 
         Returns:
-            OptimState: Initial state of the optimizer.
+            SolverState: Initial state of the optimizer.
         """
         pass
 
     @abstractmethod
     def step(
-        self, params: TensorDict, optim_state: OptimState
-    ) -> tuple[TensorDict, OptimState]:
+        self, params: TensorDict, optim_state: SolverState
+    ) -> tuple[TensorDict, SolverState]:
         """Performs a single optimization step.
 
         Args:
             params (TensorDict): Current parameters.
-            optim_state (OptimState): Current state of the optimizer.
+            optim_state (SolverState): Current state of the optimizer.
 
         Returns:
-            tuple[TensorDict, OptimState]: Updated parameters and optimizer state.
+            tuple[TensorDict, SolverState]: Updated parameters and optimizer state.
         """
         pass
 
@@ -97,22 +109,22 @@ class LinSysSolver(ABC):
         pass
 
     @abstractmethod
-    def init_state(self, params: torch.Tensor) -> LinSysState:
+    def init_state(self, params: torch.Tensor) -> SolverState:
         """Initialize the state of the solver.
 
         Args:
             params: Initial parameters (solution estimate).
 
         Returns:
-            LinSysState: Initial state for the solver containing
+            SolverState: Initial state for the solver containing
                 iteration-specific variables.
         """
         pass
 
     @abstractmethod
     def step(
-        self, params: torch.Tensor, state: LinSysState
-    ) -> tuple[torch.Tensor, LinSysState]:
+        self, params: torch.Tensor, state: SolverState
+    ) -> tuple[torch.Tensor, SolverState]:
         """Perform a single iteration step of the solver.
 
         Args:
@@ -120,7 +132,7 @@ class LinSysSolver(ABC):
             state: Current state of the solver.
 
         Returns:
-            tuple[torch.Tensor, LinSysState]: Updated parameters and state
+            tuple[torch.Tensor, SolverState]: Updated parameters and state
                 after one iteration.
         """
         pass
