@@ -15,7 +15,8 @@ def _is_torch_tensor_1d_2d(tensor: torch.Tensor):
         tensor: Input tensor to check.
 
     Raises:
-        ValueError: If the input is not a torch tensor or not 1D/2D.
+        TypeError: If the input is not a torch tensor.
+        ValueError: If the tensor is not 1D or 2D.
     """
     if not isinstance(tensor, torch.Tensor):
         raise TypeError("Input must be a torch tensor.")
