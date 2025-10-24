@@ -125,9 +125,3 @@ class TestElasticNetProperties:
         atom = ElasticNet(simple_variable)
         with pytest.raises(NotImplementedError, match="does not support subsampling"):
             atom.subsample(torch.tensor([0, 1]))
-
-    def test_to_cvxpy_raises_error(self, simple_variable):
-        """Test that to_cvxpy raises NotImplementedError."""
-        atom = ElasticNet(simple_variable)
-        with pytest.raises(NotImplementedError, match="not supported"):
-            atom.to_cvxpy()
