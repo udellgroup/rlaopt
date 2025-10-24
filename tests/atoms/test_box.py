@@ -91,7 +91,7 @@ class TestBoxSolve:
         eta = 0.5 / torch.linalg.norm(A, ord=2) ** 2
 
         config = ProxGradConfig(eta=eta, use_acceleration=True, use_linesearch=False)
-        opt = ProxGrad(config, obj)
+        opt = ProxGrad(obj, config)
         params = obj.params
         state = opt.init_state(params)
 

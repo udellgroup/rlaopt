@@ -94,7 +94,7 @@ class TestNucNormProxGrad:
         config = ProxGradConfig(
             eta=10**-3, use_acceleration=False, use_linesearch=False
         )
-        opt = ProxGrad(config, obj)
+        opt = ProxGrad(obj, config)
         params = obj.params
         state = opt.init_state(params)
 
