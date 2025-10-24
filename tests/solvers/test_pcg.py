@@ -8,6 +8,7 @@ from rlaopt.solvers.pcg import PCG, PCGConfig, PCGStoppingCriteria
 
 TOLERANCES = {torch.float32: 1e-4, torch.float64: 1e-10}
 MAX_ITERS = 100
+GRAD_TEST_RTOL = {torch.float32: 1e-2, torch.float64: 1e-4}
 
 
 @pytest.fixture(params=[torch.float32, torch.float64], ids=["float32", "float64"])
@@ -169,3 +170,97 @@ def _loop(params, state, solver, stopping_criteria):
         if (state.res_norm <= stopping_criteria.tol).all():
             break
     return params, state.res_norm
+
+
+# ============================================================================
+# Differentiation Tests
+# ============================================================================
+
+
+class TestPCGDifferentiation:
+    """Tests for gradient computation through PCG solver."""
+
+    @pytest.mark.parametrize("wrt", ["B", "reg"])
+    def test_gradients(self, reset_torch_state, precision, wrt):
+        """Test gradient of solution norm squared w.r.t. B or reg."""
+        torch.set_default_dtype(precision)
+        _test_gradient(wrt, precision)
+
+
+# ============================================================================
+# Differentiation Helper Functions
+# ============================================================================
+
+
+def _solve_system(A, B, reg):
+    """Solve (A + reg*I)w = B."""
+    A_reg = A + reg * torch.eye(A.shape[0], dtype=A.dtype, device=A.device)
+    return torch.linalg.solve(A_reg, B)
+
+
+def _solved_params_sq_norm(A, B, reg, preconditioner_config, tol):
+    """Compute ||w||^2 where w solves (A + reg*I)w = B using PCG."""
+    lin_sys = LinSys(A, B, reg)
+    solver = PCG(lin_sys, PCGConfig(preconditioner_config=preconditioner_config))
+    params, _ = solver.solve(
+        stopping_criteria=PCGStoppingCriteria(max_iters=MAX_ITERS, tol=tol)
+    )
+    return torch.linalg.norm(params) ** 2
+
+
+def _analytical_gradient(A, B, reg, wrt):
+    """Compute analytical gradient of ||w||^2 w.r.t. specified parameter."""
+    w = _solve_system(A, B, reg)
+    inv_w = _solve_system(A, w, reg)  # (A + reg*I)^{-1} @ w
+
+    if wrt == "B":
+        # Gradient w.r.t. B: 2 * (A + reg*I)^{-1} @ w
+        return 2 * inv_w
+    elif wrt == "reg":
+        # Gradient w.r.t. reg: -2 * w^T @ (A + reg*I)^{-1} @ w
+        return -2 * torch.sum(w * inv_w)
+    else:
+        raise ValueError(f"Unknown parameter: {wrt}")
+
+
+def _test_gradient(wrt, precision):
+    """Test gradient computation w.r.t. specified parameter (B or reg)."""
+    n = 100
+    torch.manual_seed(42)
+
+    # Generate test problem
+    eigvals = torch.arange(1, n + 1, dtype=precision) ** -2.0
+    U = torch.randn(n, n, dtype=precision)
+    U = torch.linalg.qr(U).Q
+    A = U @ torch.diag(eigvals) @ U.T
+    B = torch.randn(n, dtype=precision) / (n**0.5)
+    reg = torch.tensor(1e-3, dtype=precision)
+
+    tol = TOLERANCES[precision]
+    preconditioner_config = NystromConfig(rank=50, base_damping=reg.item())
+
+    # Map parameter name to argnums for torch.func.grad
+    argnums_map = {"B": 0, "reg": 1}
+
+    # Compute gradient via autograd
+    grad_autograd = torch.func.grad(
+        lambda B_var, reg_var: _solved_params_sq_norm(
+            A, B_var, reg_var, preconditioner_config, tol
+        ),
+        argnums=argnums_map[wrt],
+    )(B, reg)
+
+    # Compute analytical gradient
+    grad_analytical = _analytical_gradient(A, B, reg, wrt)
+
+    # Compare
+    rtol = GRAD_TEST_RTOL[precision]
+
+    rel_error = torch.abs(
+        (grad_autograd - grad_analytical) / (torch.abs(grad_analytical) + 1e-8)
+    )
+    max_rel_error = torch.max(rel_error) if grad_analytical.ndim > 0 else rel_error
+
+    assert torch.allclose(grad_autograd, grad_analytical, rtol=rtol), (
+        f"Gradient w.r.t. {wrt} mismatch: max relative error = {max_rel_error}"
+    )

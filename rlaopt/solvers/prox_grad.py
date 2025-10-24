@@ -142,7 +142,7 @@ def _build_init_state(
 
     def init_state(params: TensorDict) -> ProxGradState:
         """Initialize the solver state."""
-        state_inputs = dict(iter_=0, eta=eta)
+        state_inputs = {"iter_": 0, "eta": eta}
 
         if use_acceleration:
             state_inputs["params_prev"] = params

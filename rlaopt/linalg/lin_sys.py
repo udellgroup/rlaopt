@@ -12,7 +12,7 @@ class LinSys(torch.nn.Module):
         self,
         A: torch.Tensor,
         B: torch.Tensor,
-        reg: float = 0.0,
+        reg: float | torch.Tensor = 0.0,
         w: torch.Tensor | None = None,
     ):
         """Initialize LinSys module.
@@ -22,7 +22,9 @@ class LinSys(torch.nn.Module):
             B (torch.Tensor): Right-hand side of the linear system. Must be 1D or 2D.
                 If 1D with shape (N,), it is automatically resized
                     to 2D with shape (N, 1).
-            reg (float): Regularization parameter. Defaults to 0.0.
+            reg (float | torch.Tensor): Non-negative regularization parameter.
+                Defaults to 0.0.
+                    Using a tensor allows for differentiation with respect to reg.
             w (torch.Tensor | None): Initial guess for the solution. Defaults to None.
         """
         super().__init__()
@@ -37,9 +39,13 @@ class LinSys(torch.nn.Module):
             B = B.unsqueeze(-1)
             w = w.unsqueeze(-1)
 
+        # Make reg a tensor if it is a float
+        if isinstance(reg, float):
+            reg = torch.tensor(reg, device=A.device, dtype=A.dtype)
+
         self.register_buffer("A", A)
         self.register_buffer("B", B)
-        self.register_buffer("reg", torch.tensor(reg))
+        self.register_buffer("reg", reg)
         self.w = torch.nn.Parameter(w)
 
     def forward(self, v: torch.Tensor) -> torch.Tensor:
@@ -123,8 +129,20 @@ class LinSys(torch.nn.Module):
                 "B must be a tensor whose first dimension matches A's size."
             )
 
-        if not isinstance(reg, float) or reg < 0:
+        if not isinstance(reg, (float, torch.Tensor)):
+            raise TypeError(
+                f"reg must be a float or torch.Tensor, "
+                f"but received {type(reg).__name__}."
+            )
+        if isinstance(reg, float) and reg < 0:
             raise ValueError(f"reg must be a non-negative float, but received {reg}.")
+        if isinstance(reg, torch.Tensor):
+            if reg.ndim != 0:
+                raise ValueError("reg tensor must be a scalar (0-dimensional).")
+            if (reg < 0).item():
+                raise ValueError(
+                    f"reg tensor must be non-negative, but received {reg.item()}."
+                )
 
         if w is not None:
             if not torch.is_tensor(w):

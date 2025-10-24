@@ -214,7 +214,8 @@ def _build_step(
         alpha_masked = torch.linalg.solve(p_masked.T @ Ap_masked, rz_masked)
 
         # Only update the active parts of the solution
-        params[:, mask] += p_masked @ alpha_masked
+        params_new = params.clone()
+        params_new[:, mask] += p_masked @ alpha_masked
 
         # Update residual for active components
         r_new = state.r.clone()
@@ -262,7 +263,7 @@ def _build_step(
             tol=state.tol,
         )
 
-        return params, new_state
+        return params_new, new_state
 
     return step
 
