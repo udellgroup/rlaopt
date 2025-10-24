@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import cvxpy as cp
 import torch
 
 from rlaopt.atoms.atom_expression import AtomExpression
@@ -71,14 +70,3 @@ class L1Norm(AtomExpression):
     def subsample(self, indices) -> L1Norm:
         """Raises NotImplementedError because L1-norm cannot be subsampled."""
         raise NotImplementedError("L1-norm cannot be subsampled.")
-
-    def to_cvxpy(self) -> cp.Expression:
-        """Converts the scaled L1-norm to a CVXPY expression.
-
-        This method implicitly assumes that `x` is a Variable.
-
-        Returns:
-            CVXPY expression for the scaled L1-norm
-        """
-        scaling_value = float(self.scaling.item())
-        return scaling_value * cp.norm(self.x.to_cvxpy(), 1)

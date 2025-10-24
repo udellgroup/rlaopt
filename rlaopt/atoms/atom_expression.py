@@ -27,7 +27,6 @@ class AtomExpression(Expression, ABC):
         - forward() - evaluation of the atom
         - is_subsamplable() - whether the atom supports data subsampling
         - subsample() - create a subsampled version of the atom
-        - to_cvxpy() - conversion to CVXPY representation
 
     Examples:
         >>> class L1Norm(AtomExpression):
