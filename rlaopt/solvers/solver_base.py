@@ -60,14 +60,14 @@ class OptimSolver(ABC):
 
     @abstractmethod
     def solve(
-        self, stopping_criteria: StoppingCriteria, params: TensorDict | None = None
+        self, params: TensorDict, stopping_criteria: StoppingCriteria
     ) -> tuple[TensorDict, torch.Tensor]:
         """Solve the optimization problem.
 
         Args:
-            stopping_criteria (StoppingCriteria): Criteria to stop the optimization.
             params (TensorDict | None): Initial parameters.
                 If None, the current parameters in the objective will be used.
+            stopping_criteria (StoppingCriteria): Criteria to stop the optimization.
 
         Returns:
             tuple[TensorDict, torch.Tensor]: Optimized parameters and final error.

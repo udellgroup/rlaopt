@@ -34,6 +34,7 @@ class BilevelExpression(Expression):
               for the inner problem.
             F_out: Expression representing the outer problem.
             solver_config: Configuration for the solver used to solve the inner problem.
+            solver_stopping_criteria: Stopping criteria for the inner problem solver.
             solver: Solver instance used to solve the inner problem.
         """
         super().__init__()
