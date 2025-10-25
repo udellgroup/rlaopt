@@ -216,13 +216,13 @@ def _randomized_power_err_est(
 ) -> float:
     """Estimate approximation error of the Nyström method."""
     v_prev = torch.randn(A.shape[0], dtype=A.dtype, device=A.device)
-    v_prev /= torch.norm(v_prev)
+    v_prev /= torch.linalg.norm(v_prev)
     err_est = torch.inf
 
     for _ in range(num_iters):
         v_next = A @ v_prev - U @ (S * (U.T @ v_prev))
         err_est = torch.inner(v_prev, v_next).item()
-        v_next /= torch.norm(v_next)
+        v_next /= torch.linalg.norm(v_next)
         v_prev = v_next
 
     return err_est
