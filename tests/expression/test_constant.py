@@ -1,7 +1,7 @@
 import pytest
 import torch
 
-from rlaopt.expression import ConstExpression
+from rlaopt.expression.constant import ConstExpression
 
 
 @pytest.fixture

@@ -1,10 +1,8 @@
 import pytest
 import torch
 
-from rlaopt.expression import AddExpression, ProductExpression
-from rlaopt.expression.constant import ConstExpression
-from rlaopt.expression.expression import Expression
-from rlaopt.expression.variable import Variable
+from rlaopt.expression import AddExpression, ConstExpression, Expression, Variable
+from rlaopt.expression.op_expressions import ProductExpression
 
 
 @pytest.fixture
