@@ -81,7 +81,7 @@ class PCG(LinSysSolver):
             config (PCGConfig): Configuration for the solver.
         """
         super().__init__(lin_sys, config)
-        P = get_preconditioner(config.preconditioner_config, lin_sys.A, lin_sys.device)
+        P = get_preconditioner(config.preconditioner_config, lin_sys.A)
         self._init_state = _build_init_state(lin_sys, P)
         self._step = _build_step(lin_sys, P)
         self._solve = lambda tol, max_iters: _build_solve(

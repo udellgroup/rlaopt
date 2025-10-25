@@ -1,6 +1,7 @@
 """Nyström preconditioner and configuration."""
 
 from typing import Literal
+from warnings import warn
 
 import torch
 from pydantic import Field, model_validator
@@ -79,41 +80,88 @@ class Nystrom(Preconditioner):
         self.current_damping = None
         self.using_low_precision = False
 
-    def _update(self, A: torch.Tensor, device: torch.device):
+    def _update(self, A: torch.Tensor):
         """Update the Nyström preconditioner based on the matrix A."""
-        if A.dtype != torch.float64:
+        dtype = A.dtype
+        device = A.device
+        n = A.shape[0]
+
+        if dtype != torch.float64:
             self.using_low_precision = True
 
-        # Sketching matrix
-        Omega = _generate_ortho_embedding(
-            dimension=A.shape[0],
-            sketch_size=self._config.rank_init,
-            dtype=A.dtype,
-            device=device,
-        )
+        # Initialize sketching matrix and sketch
+        Omega = torch.empty((n, 0), dtype=dtype, device=device)
+        Y = Omega.clone()
 
-        # Compute sketch
-        Y = A @ Omega
+        # Initialize empty tensors for estimated eigenvectors and eigenvalues
+        U = torch.Tensor([])
+        S = torch.Tensor([])
 
-        # Compute core
-        Core = Omega.T @ Y
+        # Unpack config
+        num_cols_to_add = self._config.rank_init
+        error_tolerance = self._config.error_tolerance
+        num_power_iters = self._config.num_power_iters
+        rank_max = self._config.rank_max
+        damping_mode = self._config.damping_mode
+        base_damping = self._config.base_damping
 
-        # Shift for stability
-        shift = torch.finfo(Y.dtype).eps * torch.trace(Core)
-        Core.diagonal().add_(shift)
+        # Start error at infinity to enter the loop
+        error = torch.inf
+        break_early = False
 
-        L = torch.linalg.cholesky(Core, upper=False)
+        # Compute Nyström approximation with adaptive rank
+        while error > error_tolerance:
+            # Update sketching matrix and sketch
+            Omega_new = _generate_ortho_embedding(
+                dimension=n,
+                sketch_size=num_cols_to_add,
+                dtype=dtype,
+                device=device,
+            )
+            Y_new = A @ Omega_new
+            Omega = torch.hstack([Omega, Omega_new])
+            Y = torch.hstack([Y, Y_new])
 
-        # Get eigendecomposition
-        B = torch.linalg.solve_triangular(L, Y.T, upper=False)
-        self.U, self.S, _ = torch.linalg.svd(B.T, full_matrices=False)
-        self.S = torch.nn.functional.relu(self.S**2 - shift)
+            # Compute core
+            Core = Omega.T @ Y
+
+            # Shift for stability
+            shift = torch.finfo(Y.dtype).eps * torch.trace(Core)
+            Core.diagonal().add_(shift)
+
+            L = torch.linalg.cholesky(Core, upper=False)
+
+            # Get eigendecomposition
+            B = torch.linalg.solve_triangular(L, Y.T, upper=False)
+            U, sigma, _ = torch.linalg.svd(B.T, full_matrices=False)
+            S = torch.nn.functional.relu(sigma**2 - shift)
+
+            # Make sure to estimate error before possibly breaking early
+            error = _randomized_power_err_est(A, U, S, num_power_iters)
+
+            if break_early:
+                break
+
+            # Increase sketch size for next iteration
+            num_cols_to_add = Omega.shape[1]
+            if 2 * num_cols_to_add > rank_max:
+                num_cols_to_add = rank_max - Omega.shape[1]
+                break_early = True
+
+        if error > error_tolerance:
+            warn(
+                f"Reached maximum rank {rank_max} before achieving "
+                f"desired error tolerance {error_tolerance}."
+            )
+
+        self.U = U
+        self.S = S
 
         # Recalculate damping
-        if self._config.damping_mode == "adaptive":
-            self.current_damping = self._config.base_damping + self.S[-1]
+        if damping_mode == "adaptive":
+            self.current_damping = base_damping + self.S[-1]
         else:
-            self.current_damping = self._config.base_damping
+            self.current_damping = base_damping
 
         # Reset L for inverse computations
         self.L = None

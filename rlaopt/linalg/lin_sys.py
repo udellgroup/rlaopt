@@ -1,6 +1,6 @@
 """LinSys module for positive-definite linear systems."""
 
-import warnings
+from warnings import warn
 
 import torch
 
@@ -58,9 +58,7 @@ class LinSys(torch.nn.Module):
             torch.Tensor: Result of applying the linear operator to v.
         """
         if v.ndim == 1:
-            warnings.warn(
-                "Input tensor v is 1D. The input tensor will be unsqueezed to 2D."
-            )
+            warn("Input tensor v is 1D. The input tensor will be unsqueezed to 2D.")
             v = v.unsqueeze(-1)
         return self.A @ v + self.reg * v
 

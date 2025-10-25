@@ -19,14 +19,13 @@ def _get_preconditioner_class(
 
 
 def get_preconditioner(
-    config: IdentityConfig | NystromConfig, A: torch.Tensor, device: torch.device
+    config: IdentityConfig | NystromConfig, A: torch.Tensor
 ) -> Preconditioner:
     """Factory function to create a preconditioner based on the given configuration.
 
     Args:
         config (IdentityConfig | NystromConfig): Configuration for the preconditioner.
         A (torch.Tensor): The matrix for which the preconditioner is to be created.
-        device (torch.device): The device on which computations will be performed.
 
     Returns:
         Preconditioner: An instance of the specified preconditioner.
@@ -37,5 +36,5 @@ def get_preconditioner(
     """
     preconditioner_class = _get_preconditioner_class(config)
     preconditioner = preconditioner_class(config)
-    preconditioner._update(A, device)
+    preconditioner._update(A)
     return preconditioner
