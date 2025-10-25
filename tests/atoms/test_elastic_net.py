@@ -3,7 +3,7 @@
 import pytest
 import torch
 
-from rlaopt.atoms import ElasticNet
+from rlaopt.atoms.elastic_net import ElasticNet
 from rlaopt.expression import Variable
 
 

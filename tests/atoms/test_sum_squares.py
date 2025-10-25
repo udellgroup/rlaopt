@@ -1,10 +1,11 @@
+"""Tests for SumSquares atom."""
+
 import pytest
 import torch
 
-from rlaopt.atoms.affine import Affine
+from rlaopt.atoms import Affine
 from rlaopt.atoms.sum_squares import SumSquares
-from rlaopt.expression.expression import Expression
-from rlaopt.expression.variable import Variable
+from rlaopt.expression import Expression, Variable
 
 
 @pytest.fixture

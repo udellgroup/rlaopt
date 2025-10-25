@@ -6,8 +6,7 @@ import cvxpy as cp
 import torch
 
 from rlaopt.expression import Expression
-from rlaopt.solvers.configs import SolverConfig
-from rlaopt.solvers.solver_base import OptimSolver
+from rlaopt.solvers import OptimSolver, SolverConfig, StoppingCriteria
 
 
 class BilevelExpression(Expression):
@@ -26,6 +25,7 @@ class BilevelExpression(Expression):
         F_in: Callable[[torch.Tensor], Expression],
         F_out: Expression,
         solver_config: SolverConfig,
+        solver_stopping_criteria: StoppingCriteria,
         solver: OptimSolver,
     ):
         """Initializes the bilevel expression.
@@ -36,6 +36,7 @@ class BilevelExpression(Expression):
               for the inner problem.
             F_out: Expression representing the outer problem.
             solver_config: Configuration for the solver used to solve the inner problem.
+            solver_stopping_criteria: Stopping criteria for the inner problem solver.
             solver: Solver instance used to solve the inner problem.
         """
         super().__init__()
@@ -46,13 +47,16 @@ class BilevelExpression(Expression):
         # between devices (e.g., CPU to GPU).
         object.__setattr__(self, "F_in", F_in)
         object.__setattr__(self, "F_out", F_out)
-        self.solver = lambda x: solver(solver_config, x)
+        self.solver = lambda x: solver(x, config=solver_config)
+        self.solver_stopping_criteria = solver_stopping_criteria
         self.w = torch.nn.Parameter(w0, requires_grad=True)
 
     def evaluate_at(self):
         """Evaluate outer objective by solving inner problem at current w."""
         obj_in = self.F_in(self.w)
-        params, _ = self.solver(obj_in).solve(obj_in)
+        params, _ = self.solver(obj_in).solve(
+            stopping_criteria=self.solver_stopping_criteria
+        )
         params = self.F_out.expr_convert_params(params)
         return self.F_out.evaluate(params)
 

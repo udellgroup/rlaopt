@@ -1,8 +1,10 @@
+"""Tests for Box atom."""
+
 import pytest
 import torch
 
 from rlaopt.atoms.box import Box
-from rlaopt.expression.variable import Variable
+from rlaopt.expression import Variable
 
 
 @pytest.fixture

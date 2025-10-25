@@ -3,8 +3,8 @@
 import pytest
 import torch
 
-from rlaopt.atoms import LinearEquality
-from rlaopt.expression.variable import Variable
+from rlaopt.atoms.linear_equality import LinearEquality
+from rlaopt.expression import Variable
 
 
 @pytest.fixture

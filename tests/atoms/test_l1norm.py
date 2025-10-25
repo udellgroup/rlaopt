@@ -3,7 +3,7 @@
 import pytest
 import torch
 
-from rlaopt.atoms import L1Norm
+from rlaopt.atoms.l1norm import L1Norm
 from rlaopt.expression import Variable
 
 

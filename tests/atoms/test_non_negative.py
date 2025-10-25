@@ -1,8 +1,10 @@
+"""Tests for NonNegative atom."""
+
 import pytest
 import torch
 
 from rlaopt.atoms.non_negative import NonNegative
-from rlaopt.expression.variable import Variable
+from rlaopt.expression import Variable
 
 
 @pytest.fixture
