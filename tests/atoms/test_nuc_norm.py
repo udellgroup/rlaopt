@@ -4,7 +4,7 @@ import pytest
 import torch
 
 from rlaopt.atoms.nuc_norm import NucNorm
-from rlaopt.expression.variable import Variable
+from rlaopt.expression import Variable
 
 
 @pytest.fixture

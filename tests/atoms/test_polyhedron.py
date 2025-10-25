@@ -4,7 +4,7 @@ import pytest
 import torch
 
 from rlaopt.atoms.polyhedron import Polyhedron
-from rlaopt.expression.variable import Variable
+from rlaopt.expression import Variable
 
 
 @pytest.fixture
