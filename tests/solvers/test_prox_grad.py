@@ -1,54 +1,44 @@
-from math import sqrt
+"""Tests for the proximal gradient solver."""
 
 import pytest
 import torch
 
 from rlaopt.atoms import Box, L1Norm, NonNegative, SumSquares
 from rlaopt.expression import Variable
-from rlaopt.solvers.configs import ProxGradConfig
-from rlaopt.solvers.proximal_gradient.prox_grad import ProximalGradient
+from rlaopt.solvers.prox_grad import ProxGrad, ProxGradConfig, ProxGradStoppingCriteria
 from rlaopt.utils import tensor_dict_ops as dict_ops
 
-ACCEL = {"accel": True, "no_accel": False}
-LINESEARCH = {"linesearch": True, "no_linesearch": False}
 TOLERANCES = {torch.float32: 1e-4, torch.float64: 1e-10}
+MAX_ITERS = 5000
 
 
-@pytest.fixture(params=["accel", "no_accel"], ids=["accel", "no_accel"])
-def accel(request):
+@pytest.fixture(params=[True, False], ids=["accel", "no_accel"])
+def acceleration(request):
+    """Whether to use acceleration."""
     return request.param
 
 
-@pytest.fixture(
-    params=["linesearch", "no_linesearch"], ids=["linesearch", "no_linesearch"]
-)
-def linesearch(request):
+@pytest.fixture(params=[True, False], ids=["linesearch", "no_linesearch"])
+def ls(request):
+    """Whether to use line search."""
     return request.param
 
 
 @pytest.fixture(params=[torch.float32, torch.float64], ids=["float32", "float64"])
 def precision(request):
+    """Torch dtype for the test."""
     return request.param
 
 
 @pytest.fixture
-def acceleration(accel):
-    return ACCEL[accel]
-
-
-@pytest.fixture
-def ls(linesearch):
-    return LINESEARCH[linesearch]
-
-
-@pytest.fixture
 def tol(precision):
+    """Convergence tolerance based on precision."""
     return TOLERANCES[precision]
 
 
 @pytest.fixture
 def reset_torch_state():
-    """Fixture to reset torch default dtype after each test"""
+    """Fixture to reset torch default dtype after each test."""
     original_dtype = torch.get_default_dtype()
     yield
     torch.set_default_dtype(original_dtype)
@@ -71,7 +61,7 @@ def generate_least_squares_data(n=1024, p=256, precision=torch.float32, seed=0):
 def generate_lasso_data(n=1024, p=128, s=32, precision=torch.float32, seed=0):
     """Generate random data for LASSO problems with sparse ground truth."""
     torch.manual_seed(seed)
-    
+
     # Generate sparse ground truth
     J = torch.randperm(p)[:s]
     x_star = torch.zeros(p, dtype=precision)
@@ -89,11 +79,11 @@ def generate_matrix_sensing_data(n=64, p=16, precision=torch.float32, seed=0):
     """Generate random data for matrix sensing/completion problems."""
     torch.manual_seed(seed)
 
-    M_star = torch.randn(n, 8)
-    N_star = torch.randn(8, p)
+    M_star = torch.randn(n, 8, dtype=precision)
+    N_star = torch.randn(8, p, dtype=precision)
     X_Star = M_star @ N_star
-    A = torch.randn(2 * n, n)
-    B = A @ X_Star + 10**-4 * torch.randn((2 * n, p))
+    A = torch.randn(2 * n, n, dtype=precision)
+    B = A @ X_Star + 10**-4 * torch.randn((2 * n, p), dtype=precision)
     X = Variable(torch.zeros_like(X_Star))
     return A, B, X
 
@@ -109,54 +99,60 @@ def compute_lipschitz_stepsize(A, scaling=0.5):
 
 
 class TestProxGrad:
+    """Tests for the proximal gradient solver."""
+
     def test_least_squares(self, reset_torch_state, precision, tol, acceleration, ls):
-        torch.set_default_dtype(precision)
+        """Test proximal gradient on least squares problem."""
 
-        A, b, x = generate_least_squares_data(n=1024, p=256, precision=precision)
-        obj = SumSquares(A @ x - b)
-        eta = compute_lipschitz_stepsize(A)
+        def setup_problem():
+            A, b, x = generate_least_squares_data(n=1024, p=256, precision=precision)
+            obj = SumSquares(A @ x - b)
+            return A, obj
 
-        _solve_and_verify(obj, eta, tol, acceleration, ls)
+        _test_optimization_problem(precision, tol, acceleration, ls, setup_problem)
 
     def test_box(self, reset_torch_state, precision, tol, acceleration, ls):
-        torch.set_default_dtype(precision)
+        """Test proximal gradient on box-constrained problem."""
 
-        A, b, x = generate_least_squares_data(n=1024, p=256, precision=precision)
-        l = -torch.tensor(2.0)
-        u = torch.tensor(1.0)
-        obj = SumSquares(A @ x - b) + Box(x, lower=l, upper=u)
-        eta = compute_lipschitz_stepsize(A)
+        def setup_problem():
+            A, b, x = generate_least_squares_data(n=1024, p=256, precision=precision)
+            lower = -torch.tensor(2.0)
+            upper = torch.tensor(1.0)
+            obj = SumSquares(A @ x - b) + Box(x, lower=lower, upper=upper)
+            return A, obj
 
-        _solve_and_verify(obj, eta, tol, acceleration, ls)
+        _test_optimization_problem(precision, tol, acceleration, ls, setup_problem)
 
     def test_nonnegative(self, reset_torch_state, precision, tol, acceleration, ls):
-        torch.set_default_dtype(precision)
+        """Test proximal gradient on nonnegative-constrained problem."""
 
-        A, b, x = generate_least_squares_data(n=1024, p=256, precision=precision)
-        obj = SumSquares(A @ x - b) + NonNegative(x)
-        eta = compute_lipschitz_stepsize(A)
+        def setup_problem():
+            A, b, x = generate_least_squares_data(n=1024, p=256, precision=precision)
+            obj = SumSquares(A @ x - b) + NonNegative(x)
+            return A, obj
 
-        _solve_and_verify(obj, eta, tol, acceleration, ls)
+        _test_optimization_problem(precision, tol, acceleration, ls, setup_problem)
 
     def test_lasso(self, reset_torch_state, precision, tol, acceleration, ls):
-        torch.set_default_dtype(precision)
+        """Test proximal gradient on LASSO problem."""
 
-        A, b, x, _ = generate_lasso_data(n=1024, p=128, s=32, precision=precision)
-        mu = 0.1 * torch.linalg.norm(A.T @ b, ord=torch.inf)
-        obj = SumSquares(A @ x - b) + L1Norm(x, scaling=mu)
-        eta = compute_lipschitz_stepsize(A)
+        def setup_problem():
+            A, b, x, _ = generate_lasso_data(n=1024, p=128, s=32, precision=precision)
+            mu = 0.1 * torch.linalg.norm(A.T @ b, ord=torch.inf)
+            obj = SumSquares(A @ x - b) + L1Norm(x, scaling=mu)
+            return A, obj
 
-        _solve_and_verify(obj, eta, tol, acceleration, ls)
+        _test_optimization_problem(precision, tol, acceleration, ls, setup_problem)
 
     # def test_nucnorm(self, reset_torch_state, precision, tol, acceleration, ls):
-    #     torch.set_default_dtype(precision)
+    #     """Test proximal gradient on nuclear norm regularized problem."""
+    #     def setup_problem():
+    #         A, B, X = generate_matrix_sensing_data(n=64, p=16, precision=precision)
+    #         lambd = 1000.0
+    #         obj = SumSquares(A @ X - B) + NucNorm(X, scaling=lambd)
+    #         return A, obj
 
-    #     A, B, X = generate_matrix_sensing_data(n=64, p=16, precision=precision)
-    #     lambd = 1000.0
-    #     obj = SumSquares(A @ X - B) + NucNorm(X, scaling=lambd)
-    #     # eta = compute_lipschitz_stepsize(A)
-
-    #     _solve_and_verify(obj, 1e-3, tol, acceleration, ls)
+    #     _test_optimization_problem(precision, tol, acceleration, ls, setup_problem)
 
 
 # ============================================================================
@@ -164,27 +160,36 @@ class TestProxGrad:
 # ============================================================================
 
 
+def _test_optimization_problem(precision, tol, acceleration, ls, setup_fn):
+    """Common test structure for all optimization problems."""
+    torch.set_default_dtype(precision)
+    A, obj = setup_fn()
+    eta = compute_lipschitz_stepsize(A)
+    _solve_and_verify(obj, eta, tol, acceleration, ls)
+
+
 def _solve_and_verify(obj, eta, tol, use_acceleration, use_linesearch):
     """Test that optimization problem is solved correctly."""
-    opt = _build_opt(obj, eta, tol, use_acceleration, use_linesearch)
+    opt = _build_opt(obj, eta, use_acceleration, use_linesearch)
+    stopping_criteria = ProxGradStoppingCriteria(tol=tol, max_iters=MAX_ITERS)
     params, state = _init_opt(obj, opt)
 
     # Test solving by step
-    params, err = _loop(params, state, opt)
+    params, err = _loop(params, state, opt, stopping_criteria)
     assert err <= tol, f"Step-by-step solving failed: error {err} > tolerance {tol}"
 
     # Test using solve method
-    params, err = opt.solve(obj)
-    assert err.item() <= tol * sqrt(dict_ops.dim(params)), (
+    params, err = opt.solve(stopping_criteria=stopping_criteria)
+    assert err.item() <= tol * (dict_ops.dim(params) ** 0.5), (
         f"Solve method failed: error {err.item()} > tolerance {tol}"
     )
 
 
-def _loop(params, state, opt):
+def _loop(params, state, opt, stopping_criteria):
     """Run optimization loop until convergence or max iterations."""
-    for _ in range(opt.config.max_iters):
+    for _ in range(stopping_criteria.max_iters):
         params, state = opt.step(params, state)
-        if state.err.item() <= opt.config.tol:
+        if state.err.item() <= stopping_criteria.tol:
             break
     return params, state.err.item()
 
@@ -195,12 +200,11 @@ def _init_opt(obj, opt):
     return params, opt.init_state(params)
 
 
-def _build_opt(obj, eta, tol, use_acceleration, use_linesearch):
+def _build_opt(obj, eta, use_acceleration, use_linesearch):
     """Build proximal gradient optimizer with specified configuration."""
     config = ProxGradConfig(
         eta=eta,
-        tol=tol,
         use_acceleration=use_acceleration,
         use_linesearch=use_linesearch,
     )
-    return ProximalGradient(config, obj)
+    return ProxGrad(obj, config)

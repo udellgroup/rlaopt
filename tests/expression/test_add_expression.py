@@ -1,9 +1,8 @@
 import pytest
 import torch
 
-from rlaopt.expression import AddExpression
-from rlaopt.expression.expression import Expression
-from rlaopt.expression.variable import Variable
+from rlaopt.expression import Expression, Variable
+from rlaopt.expression.op_expressions import AddExpression
 
 
 @pytest.fixture
