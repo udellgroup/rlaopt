@@ -1,6 +1,6 @@
 """Utility functions for solvers."""
 
-from rlaopt.expression.expression import AddExpression, Expression
+from rlaopt.expression import AddExpression, Expression
 from rlaopt.operator_split import OperatorSplit
 
 

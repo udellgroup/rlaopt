@@ -1,65 +1,106 @@
-"""Implementation of the elastic net atom."""
+"""Elastic net regularization atom."""
 
-import cvxpy as cp
+from __future__ import annotations
+
 import torch
 
 from rlaopt.atoms.atom_expression import AtomExpression
-from rlaopt.expression.expression import Variable
-from rlaopt.atoms._utils import get_variable_value
+from rlaopt.expression import Variable
 
 
 class ElasticNet(AtomExpression):
-    """Elastic net atom."""
+    """Elastic net regularization combining L1 and L2 penalties.
+
+    The elastic net penalty is defined as:
+        l1_scaling * ||x||₁ + (l2_scaling / 2) * ||x||₂²
+
+    Args:
+        x: Variable to apply the elastic net penalty to.
+        l1_scaling: Scaling factor for the L1-norm penalty. Defaults to 1.0.
+        l2_scaling: Scaling factor for the L2-norm penalty. Defaults to 1.0.
+
+    Raises:
+        TypeError: If x is not a Variable.
+
+    Examples:
+        >>> x = Variable((100,), name='weights')
+        >>> # Standard elastic net with equal L1 and L2 contribution
+        >>> elastic = ElasticNet(x, l1_scaling=0.5, l2_scaling=0.5)
+        >>> penalty = elastic.forward()
+
+        >>> # Lasso-like (emphasize sparsity)
+        >>> elastic_lasso = ElasticNet(x, l1_scaling=1.0, l2_scaling=0.1)
+
+        >>> # Ridge-like (emphasize smoothness)
+        >>> elastic_ridge = ElasticNet(x, l1_scaling=0.1, l2_scaling=1.0)
+    """
 
     def __init__(self, x: Variable, l1_scaling: float = 1.0, l2_scaling: float = 1.0):
-        """Initializes the elastic net atom with optional scaling.
+        """Initialize the elastic net atom.
 
         Args:
-            x: Variable to apply the elastic net to.
-               Must be an instance of Variable.
-            l1_scaling: Scaling factor for the L1-norm (default: 1.0).
-                        Can be a float or a torch.Tensor.
-            l2_scaling: Scaling factor for the L2-norm (default: 1.0).
-                        Can be a float or a torch.Tensor.
+            x: Variable to apply the elastic net penalty to.
+            l1_scaling: Scaling factor for the L1-norm penalty. Defaults to 1.0.
+            l2_scaling: Scaling factor for the L2-norm penalty. Defaults to 1.0.
+
+        Raises:
+            TypeError: If x is not a Variable.
         """
         super().__init__()
 
-        if not isinstance(x, Variable):
-            raise TypeError(f"Expected Variable, got {type(x)}")
+        # Register the input variable as a parameter
+        self.register_input(x)
 
-        # Register the variable as a parameter
-        self.register_parameter("x", x.value)
-
-        # Register the L1 scaling factor
-        if isinstance(l1_scaling, torch.Tensor):
-            self.register_buffer("l1_scaling", l1_scaling)
-        elif isinstance(l1_scaling, torch.nn.Parameter):
-            self.register_buffer("l1_scaling", l1_scaling.data)
-        else:
-            self.register_buffer("l1_scaling", torch.tensor(float(l1_scaling)))
-
-        # Register the L2 scaling factor
-        if isinstance(l2_scaling, torch.Tensor):
-            self.register_buffer("l2_scaling", l2_scaling)
-        elif isinstance(l2_scaling, torch.nn.Parameter):
-            self.register_buffer("l2_scaling", l2_scaling.data)
-        else:
-            self.register_buffer("l2_scaling", torch.tensor(float(l2_scaling)))
+        # Register the L1 and L2 scaling factors as buffers
+        self.register_atom_buffer("l1_scaling", l1_scaling)
+        self.register_atom_buffer("l2_scaling", l2_scaling)
 
     def is_smooth(self) -> bool:
-        """Returns False because elastic net is not smooth."""
-        return False
-
-    def evaluate_at(self, **variable_locations):
-        """Evaluate the elastic net at specific locations.
-
-        Args:
-            **variable_locations: Mapping of variable names to locations
+        """Check if the elastic net is smooth.
 
         Returns:
-            Elastic net value
+            bool: Always False, as the L1 component is non-smooth at zero.
         """
-        value = get_variable_value(self.x, **variable_locations)
+        return False
+
+    def is_subsamplable(self) -> bool:
+        """Check if the elastic net supports subsampling.
+
+        Returns:
+            bool: Always False, as regularization operates on all parameters.
+        """
+        return False
+
+    def subsample(self, indices: torch.Tensor) -> ElasticNet:
+        """Subsample the elastic net (not supported).
+
+        Args:
+            indices: Indices to subsample (unused).
+
+        Returns:
+            ElasticNet: Not applicable.
+
+        Raises:
+            NotImplementedError: Elastic net does not support subsampling.
+        """
+        raise NotImplementedError("Elastic net atom does not support subsampling")
+
+    def to_cvxpy(self):
+        """Convert to CVXPY expression (not supported).
+
+        Raises:
+            NotImplementedError: CVXPY conversion not implemented for elastic net.
+        """
+        raise NotImplementedError("Conversion to cvxpy is not supported.")
+
+    def forward(self) -> torch.Tensor:
+        """Evaluate the elastic net penalty at the current variable value.
+
+        Returns:
+            torch.Tensor: The elastic net penalty value:
+                l1_scaling * ||x||₁ + (l2_scaling / 2) * ||x||₂²
+        """
+        value = self.get_input()
 
         l1_norm = torch.sum(torch.abs(value))
         l2_norm = torch.sum(value**2)
@@ -67,17 +108,28 @@ class ElasticNet(AtomExpression):
         return self.l1_scaling * l1_norm + (self.l2_scaling / 2) * l2_norm
 
     def is_proxable(self) -> bool:
-        """Returns True because elastic net is proxable."""
+        """Check if the elastic net has a computable proximal operator.
+
+        Returns:
+            bool: Always True, as the elastic net proximal operator
+                has a closed-form solution (soft-thresholding with scaling).
+        """
         return True
 
-    def prox(self, location, prox_scaling) -> torch.Tensor:
-        """Proximal operator for the elastic net.
+    def prox(self, location: torch.Tensor, prox_scaling: float) -> torch.Tensor:
+        """Compute the proximal operator of the elastic net.
+
+        The proximal operator applies soft-thresholding followed by scaling
+        to account for the L2 regularization term.
 
         Args:
-            location: Point at which to evaluate the proximal operator
-            prox_scaling: Scaling factor for the proximal operator
+            location: Point at which to evaluate the proximal operator.
+            prox_scaling: Scaling factor for the proximal operator.
+
         Returns:
-            Result of the proximal operator
+            torch.Tensor: Result of the proximal operator.
+                Formula: soft_threshold(location, λ₁ * ρ) / (1 + ρ * λ₂)
+                where λ₁ = l1_scaling, λ₂ = l2_scaling, ρ = prox_scaling.
         """
         l2_term = 1 + prox_scaling * self.l2_scaling
         threshold = self.l1_scaling * prox_scaling

@@ -1,5 +1,4 @@
-"""
-This module defines the OperatorSplit class for representing composite objective
+"""This module defines the OperatorSplit class for representing composite objective
 functions in optimization problems that consist of a smooth term and a
 (non-smooth) proximal term.
 
@@ -21,13 +20,13 @@ from typing import Callable
 
 import torch
 
-from rlaopt.expression.expression import Expression, AddExpression
-from rlaopt.utils.tensor_dict_ops import dict_map, flatten
 from rlaopt._typing import TensorDict
+from rlaopt.expression import AddExpression, Expression
+from rlaopt.utils.tensor_dict_ops import dict_map, flatten
+
 
 class OperatorSplit:
-    """
-    Represents a composite objective function with a smooth and a proximal term.
+    """Represents a composite objective function with a smooth and a proximal term.
 
     This class is designed for use in operator splitting methods such as
     proximal gradient descent. It provides access to the smooth part (`f`),
@@ -59,14 +58,13 @@ class OperatorSplit:
     @property
     def f(self) -> Expression:
         return self._f
-    
+
     @property
     def r(self) -> Expression:
         return self._r
-    
+
     def evaluate(self, params: TensorDict) -> torch.Tensor:
-        """
-        Evaluate the full composite objective function `f + r` at the given parameters.
+        """Evaluate the full composite objective function `f + r` at the given parameters.
 
         Args:
             params (TensorDict): A dictionary of parameters compatible with f.
@@ -74,11 +72,12 @@ class OperatorSplit:
         Returns:
             torch.Tensor: The scalar value of the objective function at `params`.
         """
-        return self._f.evaluate(params) + self._r.evaluate(self._r.expr_convert_params(params))
-    
+        return self._f.evaluate(params) + self._r.evaluate(
+            self._r.expr_convert_params(params)
+        )
+
     def f_func(self, params: TensorDict) -> torch.Tensor:
-        """
-        Evaluate the smooth part of the objective function at the given parameters.
+        """Evaluate the smooth part of the objective function at the given parameters.
 
         Args:
             params (TensorDict): A dictionary of parameters.
@@ -87,10 +86,9 @@ class OperatorSplit:
             torch.Tensor: The scalar value of the smooth part at `params`.
         """
         return self._f.evaluate(params)
-    
+
     def grad_f(self, params: TensorDict) -> TensorDict:
-        """
-        Compute the gradient of the smooth part of the objective function.
+        """Compute the gradient of the smooth part of the objective function.
 
         Args:
             params (TensorDict): A dictionary of parameters.
@@ -99,10 +97,9 @@ class OperatorSplit:
             TensorDict: A dictionary of gradients with the same structure as `params`.
         """
         return torch.func.grad(self.f_func)(params)
-    
+
     def hvp_f(self, params: TensorDict, v: torch.Tensor) -> torch.Tensor:
-        """
-        Compute the Hessian-vector product of the smooth part of the objective function.
+        """Compute the Hessian-vector product of the smooth part of the objective function.
 
         Args:
             params (TensorDict): A dictionary of parameters.
@@ -111,14 +108,14 @@ class OperatorSplit:
         Returns:
             torch.Tensor: The Hessian-vector product of the Hessian at params and v.
         """
+
         def g_dot_v(params: TensorDict) -> torch.Tensor:
             return torch.dot(flatten(self.grad_f(params)), v)
-        
+
         return flatten(torch.func.grad(g_dot_v)(params))
-    
+
     def prox(self, params: TensorDict, eta: float) -> TensorDict:
-        """
-        Apply the proximal operator of `r` with step size `eta` to the parameters.
+        """Apply the proximal operator of `r` with step size `eta` to the parameters.
 
         Args:
             params (TensorDict): A dictionary of parameters.
@@ -128,32 +125,34 @@ class OperatorSplit:
             TensorDict: Updated parameters after applying the proximal operator.
         """
         return self._prox(params, eta)
-    
-def _validate_input(smooth_expr: Expression, prox_expr: Expression)-> None:
+
+
+def _validate_input(smooth_expr: Expression, prox_expr: Expression) -> None:
     if not smooth_expr.is_smooth():
-            raise ValueError("Smooth expression is not smooth.")
-        
+        raise ValueError("Smooth expression is not smooth.")
+
     if prox_expr and not prox_expr.is_proxable():
-            raise ValueError("Proximal expression is not proxable.")
+        raise ValueError("Proximal expression is not proxable.")
 
 
 def _build_prox(prox_expr: Expression) -> Callable[[TensorDict, float], TensorDict]:
-     if prox_expr:
-            if isinstance(prox_expr, AddExpression):
-                num_non_smooth_exprs = prox_expr._num_non_smooth_exprs
-            else:
-                num_non_smooth_exprs = 1
-            
-            if num_non_smooth_exprs > 1:
-               def prox(
-                    params: TensorDict, eta: float
-                ) -> TensorDict:
-                    return prox_expr.prox(params, eta)
-            else: 
-                 def prox(params: TensorDict, eta: float) -> TensorDict:
-                    return dict_map(params, lambda p: prox_expr.prox(p, eta))
-     else:
-                 def prox(params: TensorDict, eta: float) -> TensorDict:
-                    return params
-     return prox
-        
+    if prox_expr:
+        if isinstance(prox_expr, AddExpression):
+            num_non_smooth_exprs = prox_expr._num_non_smooth_exprs
+        else:
+            num_non_smooth_exprs = 1
+
+        if num_non_smooth_exprs > 1:
+
+            def prox(params: TensorDict, eta: float) -> TensorDict:
+                return prox_expr.prox(params, eta)
+        else:
+
+            def prox(params: TensorDict, eta: float) -> TensorDict:
+                return dict_map(params, lambda p: prox_expr.prox(p, eta))
+    else:
+
+        def prox(params: TensorDict, eta: float) -> TensorDict:
+            return params
+
+    return prox

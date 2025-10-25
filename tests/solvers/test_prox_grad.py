@@ -4,7 +4,7 @@ import pytest
 import torch
 
 from rlaopt.atoms import Box, L1Norm, NonNegative, SumSquares
-from rlaopt.expression.expression import Variable
+from rlaopt.expression import Variable
 from rlaopt.solvers.prox_grad import ProxGrad, ProxGradConfig, ProxGradStoppingCriteria
 from rlaopt.utils import tensor_dict_ops as dict_ops
 
@@ -118,7 +118,7 @@ class TestProxGrad:
             A, b, x = generate_least_squares_data(n=1024, p=256, precision=precision)
             lower = -torch.tensor(2.0)
             upper = torch.tensor(1.0)
-            obj = SumSquares(A @ x - b) + Box(x, l=lower, u=upper)
+            obj = SumSquares(A @ x - b) + Box(x, lower=lower, upper=upper)
             return A, obj
 
         _test_optimization_problem(precision, tol, acceleration, ls, setup_problem)

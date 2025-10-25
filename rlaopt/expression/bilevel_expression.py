@@ -1,9 +1,11 @@
+"""Expression module for defining a bilevel optimization problem."""
+
 from typing import Callable
 
 import cvxpy as cp
 import torch
 
-from rlaopt.expression.expression import Expression
+from rlaopt.expression import Expression
 from rlaopt.solvers import OptimSolver, SolverConfig, StoppingCriteria
 
 
@@ -50,6 +52,7 @@ class BilevelExpression(Expression):
         self.w = torch.nn.Parameter(w0, requires_grad=True)
 
     def evaluate_at(self):
+        """Evaluate outer objective by solving inner problem at current w."""
         obj_in = self.F_in(self.w)
         params, _ = self.solver(obj_in).solve(
             stopping_criteria=self.solver_stopping_criteria
@@ -58,13 +61,17 @@ class BilevelExpression(Expression):
         return self.F_out.evaluate(params)
 
     def is_smooth(self):
+        """Bilevel expressions are smooth."""
         return True
 
     def is_proxable(self):
-        raise NotImplementedError
+        """Bilevel expressions are not proxable."""
+        return False
 
     def prox(self, location: torch.Tensor, prox_scaling: float) -> torch.Tensor:
+        """Proximal operator not supported for bilevel expressions."""
         raise NotImplementedError("BilevelExpression is not proxable")
 
     def to_cvxpy(self) -> cp.Expression:
+        """CVXPY conversion not supported for bilevel expressions."""
         raise NotImplementedError("BilevelExpression cannot be converted to CVXPY")
