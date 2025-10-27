@@ -2,7 +2,6 @@
 
 from typing import Callable
 
-import cvxpy as cp
 import torch
 
 from rlaopt.expression import expr_types
@@ -202,14 +201,6 @@ class AddExpression(_NAryOperatorExpression):
                 proxes.append(expr.prox)
         return proxes
 
-    def to_cvxpy(self) -> cp.Expression:
-        """Convert to CVXPY expression.
-
-        Returns:
-            cp.Expression: CVXPY sum expression.
-        """
-        return NotImplementedError("AddExpressions do not support conversion to CVXPY.")
-
 
 class ProductExpression(_NAryOperatorExpression):
     """Product of multiple expressions.
@@ -329,16 +320,6 @@ class ProductExpression(_NAryOperatorExpression):
             NotImplementedError: Always.
         """
         raise NotImplementedError("ProductExpression is not proxable")
-
-    def to_cvxpy(self):
-        """Convert to CVXPY expression.
-
-        Returns:
-            cp.Expression: CVXPY product expression.
-        """
-        raise NotImplementedError(
-            "ProductExpressions do not support conversion to CVXPY."
-        )
 
     def _build_op(self) -> Callable[[list[torch.Tensor]], torch.Tensor]:
         if self.matmul:

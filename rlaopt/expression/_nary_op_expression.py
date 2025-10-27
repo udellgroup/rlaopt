@@ -1,6 +1,5 @@
 from abc import ABC, abstractmethod
 
-import cvxpy as cp
 import torch
 
 from rlaopt.expression.expression import Expression
@@ -74,14 +73,6 @@ class _NAryOperatorExpression(Expression, ABC):
         """
         vals = [expr.forward() for expr in self.exprs]
         return self.op(vals)
-
-    def to_cvxpy(self):
-        """Convert to CVXPY expression.
-
-        Returns:
-            cp.Expression: CVXPY representation of the operation.
-        """
-        return self.op([expr.to_cvxpy() for expr in self.exprs], cp)
 
     @property
     def n_exprs(self):

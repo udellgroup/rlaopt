@@ -127,14 +127,6 @@ class NucNorm(AtomExpression):
         """
         raise NotImplementedError("Nuclear norm cannot be subsampled")
 
-    def to_cvxpy(self):
-        """Convert to CVXPY expression (not supported).
-
-        Raises:
-            NotImplementedError: CVXPY conversion not implemented for nuclear norm.
-        """
-        raise NotImplementedError("NucNorm does not support conversion to cvxpy")
-
 
 class _prox_nuc_norm(torch.autograd.Function):
     """Proximal operator for the nuclear norm with custom backward pass.

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import cvxpy as cp
 import torch
 
 from rlaopt.atoms.affine import Affine
@@ -104,10 +103,6 @@ class SumSquares(AtomExpression):
             NotImplementedError: If the atom does not support subsampling.
         """
         raise NotImplementedError("Subsampling not implemented for SumSquares atom.")
-
-    def to_cvxpy(self) -> cp.Expression:
-        """Convert the sum of squares to a CVXPY expression."""
-        return cp.sum_squares(self.x.to_cvxpy())
 
 
 def _sum_squares_affine_prox(

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import cvxpy as cp
 import torch
 
 from rlaopt.atoms.atom_expression import AtomExpression
@@ -20,7 +19,7 @@ class Affine(AtomExpression):
         b: Bias/offset vector.
 
     Raises:
-        TypeError: If x is not a Variable.
+        TypeError: If x is not a Variable or Expression.
 
     Examples:
         >>> x = Variable((5,), name='x')
@@ -108,14 +107,3 @@ class Affine(AtomExpression):
             NotImplementedError: Affine transformations are not proxable.
         """
         raise NotImplementedError("Affine atom does not support subsampling")
-
-    def to_cvxpy(self) -> cp.Expression:
-        """Convert to CVXPY expression (not implemented).
-
-        Returns:
-            cp.Expression: Not applicable.
-
-        Raises:
-            NotImplementedError: CVXPY conversion not yet implemented for Affine.
-        """
-        raise NotImplementedError("Affine does not yet support CVXPY conversion.")

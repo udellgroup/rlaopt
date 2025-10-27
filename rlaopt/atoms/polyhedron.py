@@ -167,14 +167,6 @@ class Polyhedron(AtomExpression):
         """
         raise NotImplementedError("Polyhedron is not subsamplable")
 
-    def to_cvxpy(self):
-        """Convert to CVXPY expression.
-
-        Returns:
-            cp.Expression: CVXPY representation (delegates to parent class).
-        """
-        return super().to_cvxpy()
-
 
 def _validate(A, C, b, lower, upper):
     """Validate dimensional consistency of constraint matrices and vectors.

@@ -134,9 +134,6 @@ class TestSumSquares:
             def is_proxable(self):
                 return False
 
-            def to_cvxpy(self):
-                pass
-
             def forward(self):
                 return torch.ones(5)
 

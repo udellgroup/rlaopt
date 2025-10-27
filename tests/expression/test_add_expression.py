@@ -41,9 +41,6 @@ def non_smooth_expr():
         def prox(self, location, prox_scaling):
             return location * 0.5
 
-        def to_cvxpy(self):
-            pass
-
         def forward(self):
             return torch.ones(5) * 3
 
@@ -63,9 +60,6 @@ def non_proxable_expr():
 
         def is_proxable(self):
             return False
-
-        def to_cvxpy(self):
-            pass
 
         def forward(self):
             return torch.ones(5) * 4
@@ -147,9 +141,6 @@ class TestAddExpression:
             def is_proxable(self):
                 return True
 
-            def to_cvxpy(self):
-                pass
-
             def forward(self):
                 return self.var.forward()
 
@@ -187,9 +178,6 @@ class TestAddExpression:
             def prox(self, location, prox_scaling):  # <-- ADD THIS
                 return location * 0.5
 
-            def to_cvxpy(self):
-                pass
-
             def forward(self):
                 return torch.ones(5)
 
@@ -202,9 +190,6 @@ class TestAddExpression:
 
             def is_proxable(self):
                 return False
-
-            def to_cvxpy(self):
-                pass
 
             def forward(self):
                 return torch.ones(5)
@@ -261,9 +246,6 @@ class TestAddExpression:
 
             def prox(self, location, prox_scaling):
                 return location * 0.5
-
-            def to_cvxpy(self):
-                pass
 
             def forward(self):
                 return torch.ones(3)

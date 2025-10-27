@@ -1,6 +1,5 @@
 """Module for Variable class."""
 
-import cvxpy as cp
 import torch
 
 from rlaopt.expression._unary_op_expression import _UnaryOpExpression
@@ -164,14 +163,6 @@ class Variable(Expression):
             str: The variable's name.
         """
         return self._name
-
-    def to_cvxpy(self) -> cp.Variable:
-        """Convert to CVXPY variable.
-
-        Returns:
-            cp.Variable: CVXPY variable with same shape and name.
-        """
-        return cp.Variable(shape=self.value.shape, name=self.name, var_id=self.id)
 
     def __repr__(self):
         """Full representation of the Variable.
