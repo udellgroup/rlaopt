@@ -1,8 +1,11 @@
+"""Tests for Expression class."""
+
 import pytest
 import torch
 
 from rlaopt.expression import expr_types
 from rlaopt.expression.expression import Expression
+from rlaopt.ext_tensordict import TensorDict
 
 
 @pytest.fixture
@@ -40,7 +43,7 @@ class TestExpression:
         """Test evaluate() uses provided params without modifying stored ones."""
         original_value = concrete_expression.value.data.clone()
         param_name = list(concrete_expression.named_parameters())[0][0]
-        new_params = {param_name: torch.tensor([5.0, 6.0, 7.0])}
+        new_params = TensorDict({param_name: torch.tensor([5.0, 6.0, 7.0])})
 
         result = concrete_expression.evaluate(new_params)
 
@@ -55,13 +58,13 @@ class TestExpression:
         assert torch.equal(list(params.values())[0], torch.tensor([1.0, 2.0, 3.0]))
 
     def test_params_property_returns_params_dict(self, concrete_expression):
-        """Test params property is alias for params_dict()."""
-        assert concrete_expression.params == concrete_expression.params_dict()
+        """Test params property is alias for TensorDict(params_dict())."""
+        assert concrete_expression.params.to_dict() == concrete_expression.params_dict()
 
     def test_update_params_modifies_stored_values(self, concrete_expression):
         """Test update_params() changes stored parameter values."""
         param_name = list(concrete_expression.named_parameters())[0][0]
-        new_values = {param_name: torch.tensor([10.0, 11.0, 12.0])}
+        new_values = TensorDict({param_name: torch.tensor([10.0, 11.0, 12.0])})
 
         concrete_expression.update_params(new_values)
 
@@ -82,7 +85,7 @@ class TestExpression:
         assert isinstance(result, expr_types.add_expr())
 
     def test_sub_returns_add_expression(self, concrete_expression):
-        """Test __sub__ creates an AddExpression (subtraction is addition with negation)."""
+        """Test __sub__ creates an AddExpression (__sub__ is __add__ with negation)."""
         result = concrete_expression - 3
         assert isinstance(result, expr_types.add_expr())
 

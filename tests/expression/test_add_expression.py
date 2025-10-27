@@ -1,8 +1,11 @@
+"""Tests for AddExpression class."""
+
 import pytest
 import torch
 
 from rlaopt.expression import Expression, Variable
 from rlaopt.expression.op_expressions import AddExpression
+from rlaopt.ext_tensordict import TensorDict
 
 
 @pytest.fixture
@@ -269,9 +272,11 @@ class TestAddExpression:
         expr2 = MockNonSmoothSeparate("expr2")
         multi_non_smooth = AddExpression(expr1, expr2)
 
-        location_dict = {"param1": torch.ones(3) * 10, "param2": torch.ones(3) * 20}
+        location_dict = TensorDict(
+            {"param1": torch.ones(3) * 10, "param2": torch.ones(3) * 20}
+        )
         result = multi_non_smooth.prox(location_dict, 1.0)
 
-        assert isinstance(result, dict)
+        assert isinstance(result, TensorDict)
         assert torch.equal(result["param1"], torch.ones(3) * 5)
         assert torch.equal(result["param2"], torch.ones(3) * 10)
