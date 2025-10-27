@@ -51,7 +51,7 @@ class BilevelExpression(Expression):
         self.solver_stopping_criteria = solver_stopping_criteria
         self.w = torch.nn.Parameter(w0, requires_grad=True)
 
-    def evaluate_at(self):
+    def forward(self):
         """Evaluate outer objective by solving inner problem at current w."""
         obj_in = self.F_in(self.w)
         params, _ = self.solver(obj_in).solve(
