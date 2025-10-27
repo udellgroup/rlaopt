@@ -20,9 +20,6 @@ def concrete_expression():
         def is_proxable(self):
             return False
 
-        def to_cvxpy(self):
-            pass  # Not testing CVXPY integration
-
         def forward(self):
             return self.value
 

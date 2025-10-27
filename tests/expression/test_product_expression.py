@@ -126,9 +126,6 @@ class TestProductExpression:
             def is_proxable(self):
                 return False
 
-            def to_cvxpy(self):
-                pass
-
             def forward(self):
                 return self.var.forward() ** 2
 

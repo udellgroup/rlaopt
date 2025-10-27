@@ -1,6 +1,5 @@
 """Module for ConstExpression class."""
 
-import cvxpy as cp
 import torch
 
 from rlaopt.expression.expression import Expression
@@ -72,14 +71,6 @@ class ConstExpression(Expression):
             torch.Tensor: The constant value.
         """
         return self.value
-
-    def to_cvxpy(self) -> cp.Expression:
-        """Convert to CVXPY constant.
-
-        Returns:
-            cp.Constant: CVXPY constant expression.
-        """
-        return cp.Constant(self.value.detach().cpu().numpy())
 
     def __neg__(self):
         """Negate the constant (keeps it as a constant).

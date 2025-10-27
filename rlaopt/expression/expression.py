@@ -13,7 +13,6 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 
-import cvxpy as cp
 import torch
 
 from rlaopt._typing import TensorDict
@@ -80,22 +79,6 @@ class Expression(torch.nn.Module, ABC):
             >>> l1 = L1Norm(x)
             >>> l1.is_proxable()
             True
-        """
-        pass
-
-    @abstractmethod
-    def to_cvxpy(self) -> cp.Expression:
-        """Convert the expression to a CVXPY expression.
-
-        This allows verification of custom solvers against CVXPY's trusted
-        implementations and enables fallback to CVXPY for difficult problems.
-
-        Returns:
-            cp.Expression: A CVXPY expression representing this expression.
-
-        Note:
-            This method may be deprecated in future versions as the library
-            diverges from CVXPY's architecture.
         """
         pass
 

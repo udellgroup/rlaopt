@@ -85,14 +85,6 @@ class ElasticNet(AtomExpression):
         """
         raise NotImplementedError("Elastic net atom does not support subsampling")
 
-    def to_cvxpy(self):
-        """Convert to CVXPY expression (not supported).
-
-        Raises:
-            NotImplementedError: CVXPY conversion not implemented for elastic net.
-        """
-        raise NotImplementedError("Conversion to cvxpy is not supported.")
-
     def forward(self) -> torch.Tensor:
         """Evaluate the elastic net penalty at the current variable value.
 
