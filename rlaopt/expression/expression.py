@@ -16,9 +16,8 @@ from abc import ABC, abstractmethod
 import cvxpy as cp
 import torch
 
-from rlaopt._typing import TensorDict
 from rlaopt.expression import expr_types
-from rlaopt.utils import tensor_dict_ops as dict_ops
+from rlaopt.ext_tensordict import TensorDict
 
 
 class Expression(torch.nn.Module, ABC):
@@ -138,7 +137,9 @@ class Expression(torch.nn.Module, ABC):
             >>> torch.equal(result, torch.ones(5))
             True
         """
-        return torch.func.functional_call(self, params, args=None, kwargs=None)
+        return torch.func.functional_call(
+            self, params.to_dict(), args=None, kwargs=None
+        )
 
     def params_dict(self) -> TensorDict:
         """Get all parameters as a dictionary.
@@ -154,11 +155,85 @@ class Expression(torch.nn.Module, ABC):
         """
         return dict(self.named_parameters())
 
-    def update_params(self, params_dict: TensorDict):
-        """Update parameters from a dictionary.
+    def params_names(self) -> list[str]:
+        """Returns the list of parameter names in order."""
+        return list(self.params.keys())
+
+    def params_shapes(self) -> list[tuple[int]]:
+        """Returns a list of parameter shapes in order."""
+        return [param.shape for param in self.params.values()]
+
+    def params_from_tensors(
+        self, tensors: list[torch.Tensor] | tuple[torch.Tensor]
+    ) -> TensorDict:
+        """Creates a params TensorDict from a list/tuple of tensors.
+
+        Constructs a params TensorDict that match the expression's parameter structure.
+        The provided tensors are mapped to parameter
+        names in order. Shapes and devices are validated to see
+        that they match the expression's TensorDict, which
+        stores expression's parameter configuration.
 
         Args:
-            params_dict: Dictionary mapping parameter names to new values.
+            tensors: List or tuple of tensors to convert into a TensorDict.
+                    Must match the number, order, shapes, and device of
+                    the expression's parameters.
+
+        Returns:
+            TensorDict with tensors mapped to appropriate parameter names,
+            preserving the batch_size from self.params.
+
+        Raises:
+            ValueError: If the number of tensors doesn't match the number of parameters.
+            ValueError: If any tensor shape doesn't match the expected parameter shape.
+            ValueError: If tensor devices don't match the params TensorDict device.
+
+        Example:
+            >>> expr = SumSquares(Variable(shape=(3,)))
+            >>> tensors = [torch.tensor([1.0, 2.0, 3.0])]
+            >>> params = expr.params_from_tensors(tensors)
+        """
+        names = self.params_names()
+
+        # Validate number of tensors
+        if len(tensors) != len(names):
+            raise ValueError(
+                f"Input tensors do not define valid parameter configuration: "
+                f"number of tensors ({len(tensors)}) does not match number "
+                f"of parameters ({len(names)})"
+            )
+
+        dict_of_params = {}
+        has_device = self.params.device is not None
+
+        for idx, (tensor, name) in enumerate(zip(tensors, names)):
+            # Validate shape
+            if tensor.shape != self.params[name].shape:
+                raise ValueError(
+                    f"Input tensors do not define valid parameter configuration: "
+                    f"shape of tensor at position {idx} is {tensor.shape}, "
+                    f"expected {self.params[name].shape}. "
+                    f"Call params_shapes() to get the correct shapes "
+                    f"for all parameters."
+                )
+
+            # Validate device if applicable
+            if has_device and tensor.device != self.params.device:
+                raise ValueError(
+                    f"Input tensors do not define valid parameter configuration: "
+                    f"device of tensor at position {idx} is {tensor.device}, "
+                    f"expected {self.params.device}"
+                )
+
+            dict_of_params[name] = tensor
+
+        return TensorDict(dict_of_params, batch_size=self.params.batch_size)
+
+    def update_params(self, params_dict: TensorDict):
+        """Update parameters from a TensorDict.
+
+        Args:
+            params_dict (TensorDict): Dictionary mapping parameter names to new values.
 
         Examples:
             >>> x = Variable((5,), name='x')
@@ -166,11 +241,9 @@ class Expression(torch.nn.Module, ABC):
             >>> torch.equal(x.value, torch.ones(5))
             True
         """
-        self.load_state_dict(params_dict, strict=False)
+        self.load_state_dict(params_dict.to_dict(), strict=False)
 
-    def expr_convert_params(
-        self, params_dict: dict[str, torch.Tensor]
-    ) -> dict[str, torch.Tensor]:
+    def expr_convert_params(self, expr_params: TensorDict) -> TensorDict:
         """Convert parameter names from another expression to match this one.
 
         Given parameters from another Expression whose leaf tensor shapes match
@@ -179,12 +252,12 @@ class Expression(torch.nn.Module, ABC):
         similar expressions.
 
         Args:
-            params_dict: Parameters from another expression.
+            expr_params (TensorDict): Parameters from another expression.
 
         Returns:
-            dict[str, torch.Tensor]: Parameters with names matching this expression.
+            TensorDict: Parameters with names matching this expression.
         """
-        return dict_ops.relabel_from_template(params_dict, self.params)
+        return self.params.convert_target(expr_params)
 
     @property
     def params(self) -> TensorDict:
@@ -193,7 +266,7 @@ class Expression(torch.nn.Module, ABC):
         Returns:
             TensorDict: Dictionary of parameter names to parameter tensors.
         """
-        return self.params_dict()
+        return TensorDict(self.params_dict())
 
     # ----------------------
     # Centralized operator overloads

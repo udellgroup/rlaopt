@@ -8,6 +8,7 @@ import torch
 from rlaopt.expression import expr_types
 from rlaopt.expression._nary_op_expression import _NAryOperatorExpression
 from rlaopt.expression.constant import ConstExpression
+from rlaopt.ext_tensordict import TensorDict
 
 
 class AddExpression(_NAryOperatorExpression):
@@ -171,13 +172,13 @@ class AddExpression(_NAryOperatorExpression):
         else:
             proxes = self._get_proxes()
 
-            def prox(
-                location: dict[str, torch.Tensor], prox_scaling: float
-            ) -> dict[str, torch.Tensor]:
-                return {
-                    name: prox_fn(loc, prox_scaling)
-                    for (name, loc), prox_fn in zip(location.items(), proxes)
-                }
+            def prox(location: TensorDict, prox_scaling: float) -> TensorDict:
+                return TensorDict(
+                    {
+                        loc_name: prox_fn(loc, prox_scaling)
+                        for (loc_name, loc), prox_fn in zip(location.items(), proxes)
+                    }
+                )
 
             return prox
 
