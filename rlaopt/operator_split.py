@@ -20,10 +20,8 @@ from typing import Callable
 
 import torch
 
-from rlaopt._typing import TensorDict
 from rlaopt.expression import AddExpression, Expression
-from rlaopt.utils.tensor_dict_ops import dict_map, flatten
-
+from rlaopt.ext_tensordict import TensorDict
 
 class OperatorSplit:
     """Represents a composite objective function with a smooth and a proximal term.
@@ -110,9 +108,9 @@ class OperatorSplit:
         """
 
         def g_dot_v(params: TensorDict) -> torch.Tensor:
-            return torch.dot(flatten(self.grad_f(params)), v)
+            return torch.dot(self.grad_f(params).to_vector(), v)
 
-        return flatten(torch.func.grad(g_dot_v)(params))
+        return (torch.func.grad(g_dot_v)(params)).to_vector()
 
     def prox(self, params: TensorDict, eta: float) -> TensorDict:
         """Apply the proximal operator of `r` with step size `eta` to the parameters.
@@ -147,9 +145,8 @@ def _build_prox(prox_expr: Expression) -> Callable[[TensorDict, float], TensorDi
             def prox(params: TensorDict, eta: float) -> TensorDict:
                 return prox_expr.prox(params, eta)
         else:
-
             def prox(params: TensorDict, eta: float) -> TensorDict:
-                return dict_map(params, lambda p: prox_expr.prox(p, eta))
+                return params.apply(lambda p: prox_expr.prox(p, eta))
     else:
 
         def prox(params: TensorDict, eta: float) -> TensorDict:
