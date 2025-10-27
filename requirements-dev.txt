@@ -46,6 +46,7 @@ PyYAML==6.0.3
 scipy==1.15.3
 scs==3.2.8
 sympy==1.14.0
+tensordict==0.10.0
 tomli==2.2.1
 torch==2.8.0
 triton==3.4.0
