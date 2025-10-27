@@ -5,8 +5,8 @@ from dataclasses import dataclass
 
 import torch
 
-from rlaopt._typing import TensorDict
 from rlaopt.expression import AddExpression, Expression
+from rlaopt.ext_tensordict import TensorDict
 from rlaopt.linalg import LinSys
 from rlaopt.operator_split import OperatorSplit
 from rlaopt.solvers.configs_base import SolverConfig, StoppingCriteria
