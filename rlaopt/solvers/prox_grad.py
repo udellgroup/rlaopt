@@ -171,11 +171,8 @@ def _build_step(
     def err_fn(params: TensorDict, state: ProxGradState) -> torch.Tensor:
         grads = obj.grad_f(params)
         updated_params = params - state.eta * grads
-        # updated_params = dict_ops.sub(params, dict_ops.scal_mul(grads, state.eta))
         prox_params = obj.prox(updated_params, state.eta)
 
-        # delta_params = dict_ops.sub(params, prox_params)
-        # err = dict_ops.elem_norm(prox) / state.eta
         return (params - prox_params).norm_f() / state.eta
 
     if use_acceleration and use_linesearch:
