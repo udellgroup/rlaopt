@@ -36,6 +36,46 @@ class TestExpression:
     # Parameter management tests
     # ----------------------
 
+    def test_params_names(self, concrete_expression):
+        """Test params_names returns correct names."""
+        names = concrete_expression.params_names()
+
+        assert names[0] == "value"
+
+    def test_params_shapes(self, concrete_expression):
+        """Test params_shapes returns correct shapes."""
+        shapes = concrete_expression.params_shapes()
+
+        assert shapes[0] == (3,)
+
+    def test_params_from_tensors_with_correct_shapes(self, concrete_expression):
+        """Test params_from_tensors with correct shapes."""
+        new_params_tensor = torch.zeros(
+            3,
+        )
+        new_params = TensorDict({"value": new_params_tensor})
+
+        output_ = concrete_expression.params_from_tensors((new_params_tensor,))
+
+        assert torch.allclose(output_["value"], new_params["value"])
+
+    def test_params_from_tensors_with_wrong_shapes(self, concrete_expression):
+        """Test params_from_tensors with wrong shapes."""
+        new_params_tensor = torch.ones(20, 5)
+        with pytest.raises(ValueError):
+            concrete_expression.params_from_tensors(new_params_tensor)
+
+    def test_params_from_tensors_with_wrong_lens(self, concrete_expression):
+        """Test params_from_tensors with wrong lengths."""
+        new_params_tensors = (
+            torch.zeros(
+                3,
+            ),
+            torch.ones(20, 5),
+        )
+        with pytest.raises(ValueError):
+            concrete_expression.params_from_tensors(new_params_tensors)
+
     def test_evaluate_with_different_params(self, concrete_expression):
         """Test evaluate() uses provided params without modifying stored ones."""
         original_value = concrete_expression.value.data.clone()
