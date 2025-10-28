@@ -104,7 +104,7 @@ def _tensordict_unflatten(values, context):
         context: (keys, batch_size, device) tuple
     """
     keys, batch_size, device = context
-    td_dict = {key: value for key, value in zip(keys, values)}
+    td_dict = dict(zip(keys, values))
     return TensorDict(td_dict, batch_size=batch_size, device=device)
 
 
@@ -194,7 +194,7 @@ def relabel_from_template(td: TensorDict, template: TensorDict) -> TensorDict:
     """
     if has_compatible_ordered_shapes(template, td):
         return TensorDict(
-            {name: td_leaf for name, td_leaf in zip(template.keys(), td.values())},
+            dict(zip(template.keys(), td.values())),
             batch_size=template.batch_size,
         )
     else:
