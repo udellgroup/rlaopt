@@ -6,7 +6,6 @@ import torch
 from rlaopt.atoms import Box, L1Norm, NonNegative, SumSquares
 from rlaopt.expression import Variable
 from rlaopt.solvers.prox_grad import ProxGrad, ProxGradConfig, ProxGradStoppingCriteria
-from rlaopt.utils import tensor_dict_ops as dict_ops
 
 TOLERANCES = {torch.float32: 1e-4, torch.float64: 1e-10}
 MAX_ITERS = 5000
@@ -180,7 +179,7 @@ def _solve_and_verify(obj, eta, tol, use_acceleration, use_linesearch):
 
     # Test using solve method
     params, err = opt.solve(stopping_criteria=stopping_criteria)
-    assert err.item() <= tol * (dict_ops.dim(params) ** 0.5), (
+    assert err.item() <= tol * (params.dim_f() ** 0.5), (
         f"Solve method failed: error {err.item()} > tolerance {tol}"
     )
 

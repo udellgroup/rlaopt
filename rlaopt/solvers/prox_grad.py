@@ -6,13 +6,12 @@ from typing import Callable
 import torch
 from pydantic import Field
 
-from rlaopt._typing import TensorDict
 from rlaopt.expression import AddExpression, Expression
+from rlaopt.ext_tensordict import TensorDict
 from rlaopt.operator_split import OperatorSplit
 from rlaopt.solvers.configs_base import SolverConfig, StoppingCriteria
 from rlaopt.solvers.solver_base import OptimSolver, SolverState
 from rlaopt.solvers.utils import split_objective
-from rlaopt.utils import tensor_dict_ops as dict_ops
 
 
 class ProxGradConfig(SolverConfig):
@@ -171,11 +170,10 @@ def _build_step(
     # Setup function computing stopping criteria
     def err_fn(params: TensorDict, state: ProxGradState) -> torch.Tensor:
         grads = obj.grad_f(params)
-        updated_params = dict_ops.sub(params, dict_ops.scal_mul(grads, state.eta))
+        updated_params = params - state.eta * grads
         prox_params = obj.prox(updated_params, state.eta)
-        delta_params = dict_ops.sub(params, prox_params)
-        err = dict_ops.elem_norm(delta_params) / state.eta
-        return err
+
+        return (params - prox_params).norm_f() / state.eta
 
     if use_acceleration and use_linesearch:
 
@@ -240,7 +238,7 @@ def _build_solve(
         state = init_state_fn(params)
 
         # Get error tolerance
-        epsilon = tol * dict_ops.dim(params) ** 0.5
+        epsilon = tol * (params.dim_f()) ** 0.5
 
         while state.err > epsilon and state.iter_ < max_iters:
             params, state = step_fn(params, state)
@@ -290,10 +288,7 @@ def _accel_prox_grad_step(
 def _accel_step(params: TensorDict, state: ProxGradState) -> TensorDict:
     """Compute the accelerated (momentum) step."""
     momentum_scale = state.iter_ / (state.iter_ + 3)
-    momentum = dict_ops.scal_mul(
-        dict_ops.sub(params, state.params_prev), momentum_scale
-    )
-    return dict_ops.add(params, momentum)
+    return params + momentum_scale * (params - state.params_prev)
 
 
 def _linesearch(
@@ -311,14 +306,11 @@ def _linesearch(
 
     def linesearch_step(params: TensorDict, state: ProxGradState):
         z = _prox_update(params, grads, state, prox)
-        d = dict_ops.sub(z, params)
-        u = (
-            f0
-            + dict_ops.dot(grads, d)
-            + 1 / (2 * state.eta) * (dict_ops.elem_norm(d) ** 2)
-        )
+        d = z - params
+        u = f0 + grads.dot_f(d) + 1 / (2 * state.eta) * (d.norm_f() ** 2)
+
         if f(z) <= u:
-            err_new = dict_ops.elem_norm(d) / state.eta
+            err_new = d.norm_f() / state.eta
             return True, z, replace(state, err=err_new)
         else:
             eta_new = beta * state.eta
@@ -337,4 +329,4 @@ def _prox_update(
     prox: Callable[[TensorDict, float], TensorDict],
 ) -> TensorDict:
     """Apply the proximal update: prox(params - eta * grads, eta)."""
-    return prox(dict_ops.sub(params, dict_ops.scal_mul(grads, state.eta)), state.eta)
+    return prox(params - state.eta * grads, state.eta)

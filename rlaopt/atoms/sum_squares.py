@@ -26,28 +26,28 @@ class SumSquares(AtomExpression):
 
     def is_smooth(self) -> bool:
         """Returns True depending on the smoothness of the expression."""
-        input = self.get_input()
-        if isinstance(input, Expression):
-            return input.is_smooth()
+        input_ = self.get_input()
+        if isinstance(input_, Expression):
+            return input_.is_smooth()
         else:
             return True
 
     def forward(self) -> torch.Tensor:
         """Forward pass to compute the sum of squares."""
-        input = self.get_input()
-        if isinstance(input, Expression):
-            value = input.forward()
+        input_ = self.get_input()
+        if isinstance(input_, Expression):
+            value = input_.forward()
         else:
-            value = input
+            value = input_
         return torch.sum(value**2)
 
     def is_proxable(self) -> bool:
         """Returns True if the input is a Variable or Affine with Variable root."""
-        input = self.get_input()
-        if isinstance(input, torch.nn.Parameter):
+        input_ = self.get_input()
+        if isinstance(input_, torch.nn.Parameter):
             return True
-        elif isinstance(input, Affine):
-            if isinstance(input.get_input(), torch.nn.Parameter):
+        elif isinstance(input_, Affine):
+            if isinstance(input_.get_input(), torch.nn.Parameter):
                 return True
         return False
 
@@ -61,18 +61,18 @@ class SumSquares(AtomExpression):
         Returns:
             Result of the proximal operator
         """
-        input = self.get_input()
+        input_ = self.get_input()
 
-        if isinstance(input, torch.nn.Parameter):
+        if isinstance(input_, torch.nn.Parameter):
             return 1 / (1 + 2 * prox_scaling) * location
 
-        elif isinstance(input, Expression):
+        elif isinstance(input_, Expression):
             # For expressions, SumSquares is only proxable when
             # input is Affine with a Parameter root.
 
-            if isinstance(input, Affine):
-                if isinstance(input.get_input(), torch.nn.Parameter):
-                    return _sum_squares_affine_prox(input, location, prox_scaling)
+            if isinstance(input_, Affine):
+                if isinstance(input_.get_input(), torch.nn.Parameter):
+                    return _sum_squares_affine_prox(input_, location, prox_scaling)
 
                 else:
                     raise NotImplementedError(
@@ -106,22 +106,22 @@ class SumSquares(AtomExpression):
 
 
 def _sum_squares_affine_prox(
-    input: Affine, location: torch.Tensor, prox_scaling: float
+    input_: Affine, location: torch.Tensor, prox_scaling: float
 ) -> torch.Tensor:
     """Computes prox operator for ||A @ x + b||^2."""
     # Get data for forming Abar
-    n = input.A.shape[1]
-    dtype = input.A.dtype
-    device = input.A.device
+    n = input_.A.shape[1]
+    dtype = input_.A.dtype
+    device = input_.A.device
 
     # Proximal operator is least-squares problem
     # Form Abar = [A; 1/sqrt(2*prox_scaling)*I]
     mu = 1 / (2 * prox_scaling) ** (0.5)
-    Abar = torch.cat((input.A, mu * torch.eye(n, dtype=dtype, device=device)), dim=0)
+    Abar = torch.cat((input_.A, mu * torch.eye(n, dtype=dtype, device=device)), dim=0)
 
     # Get QR factorization and setup right handside
     _, R = torch.linalg.qr(Abar, mode="reduced")
-    rhs = 1 / (2 * prox_scaling) * location - input.A.T @ input.b
+    rhs = 1 / (2 * prox_scaling) * location - input_.A.T @ input_.b
 
     # Find solution via triangular solves
     rhs = torch.linalg.solve_triangular(R.T, rhs.reshape(rhs.shape[0], 1), upper=False)
