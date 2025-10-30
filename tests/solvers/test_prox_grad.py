@@ -179,7 +179,7 @@ def _solve_and_verify(obj, eta, tol, use_acceleration, use_linesearch):
 
     # Test using solve method
     params, err = opt.solve(stopping_criteria=stopping_criteria)
-    assert err.item() <= tol * (params.dim_f() ** 0.5), (
+    assert err.item() <= tol * (params.flat_dim() ** 0.5), (
         f"Solve method failed: error {err.item()} > tolerance {tol}"
     )
 

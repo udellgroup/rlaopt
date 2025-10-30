@@ -38,13 +38,13 @@ class TestExpression:
 
     def test_params_names(self, concrete_expression):
         """Test params_names returns correct names."""
-        names = concrete_expression.params_names()
+        names = concrete_expression.get_params_names()
 
         assert names[0] == "value"
 
     def test_params_shapes(self, concrete_expression):
         """Test params_shapes returns correct shapes."""
-        shapes = concrete_expression.params_shapes()
+        shapes = concrete_expression.get_params_shapes()
 
         assert shapes[0] == (3,)
 
@@ -87,16 +87,11 @@ class TestExpression:
         assert torch.equal(result, torch.tensor([5.0, 6.0, 7.0]))
         assert torch.equal(concrete_expression.value.data, original_value)
 
-    def test_params_dict_returns_parameters(self, concrete_expression):
-        """Test params_dict() returns all parameters."""
-        params = concrete_expression.params_dict()
-
-        assert len(params) == 1
-        assert torch.equal(list(params.values())[0], torch.tensor([1.0, 2.0, 3.0]))
-
     def test_params_property_returns_params_dict(self, concrete_expression):
         """Test params property is alias for TensorDict(params_dict())."""
-        assert concrete_expression.params.to_dict() == concrete_expression.params_dict()
+        assert concrete_expression.params.to_dict() == dict(
+            concrete_expression.named_parameters()
+        )
 
     def test_update_params_modifies_stored_values(self, concrete_expression):
         """Test update_params() changes stored parameter values."""
