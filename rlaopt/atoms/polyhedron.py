@@ -153,6 +153,10 @@ class Polyhedron(AtomExpression):
         """
         return False
 
+    def prox(self, location, prox_scaling):
+        """Prox operator for Polyhedron."""
+        return NotImplementedError("Polyhedron is not proxable")
+
     def subsample(self, indices: torch.Tensor) -> Polyhedron:
         """Subsample the polyhedral constraint (not supported).
 

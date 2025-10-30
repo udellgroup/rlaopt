@@ -25,6 +25,7 @@ class AtomExpression(Expression, ABC):
         - is_smooth() - whether the function is differentiable everywhere
         - is_proxable() - whether the proximal operator is computable
         - forward() - evaluation of the atom
+        - prox() - prox operator of the atom
         - is_subsamplable() - whether the atom supports data subsampling
         - subsample() - create a subsampled version of the atom
 
@@ -71,6 +72,11 @@ class AtomExpression(Expression, ABC):
             >>> reg.is_subsamplable()
             False
         """
+        pass
+
+    @abstractmethod
+    def prox(self, location: torch.Tensor, prox_scaling: float) -> torch.Tensor:
+        """Proximal operator corresponding to the atom."""
         pass
 
     @abstractmethod
@@ -156,8 +162,6 @@ class AtomExpression(Expression, ABC):
             >>> expr = x + y
             >>> atom.register_input(expr)  # Sets input_type to InputType.EXPRESSION
         """
-        # self._input_metadata = x
-
         if isinstance(x, Variable):
             self._var_name = x.name
             self.register_parameter(self._var_name, x.value)
@@ -178,8 +182,3 @@ class AtomExpression(Expression, ABC):
     def expr_name(self) -> Expression | None:
         """Get the expression registered with the atom."""
         return getattr(self, "_expr_name", None)
-
-    # @property
-    # def input_metadata(self) -> Variable | Expression | None:
-    #     """Get the original input Variable or Expression for reconstruction."""
-    #     return getattr(self, "_input_metadata", None)
