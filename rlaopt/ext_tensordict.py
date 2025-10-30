@@ -12,11 +12,11 @@ class TensorDict(td_lib.TensorDict):
 
     This class extends the PyTorch tensordict.TensorDict with utilities
     commonly needed in optimization contexts, including:
-    - Flat vector operations (dot products, norms)
-    - Conversions between TensorDict and flat vector representations
+    - Flat tensor operations (dot products, norms)
+    - Conversions between TensorDict and flat tensor representations
     - Key structure manipulation
 
-    All methods with '_f' suffix treat the TensorDict as a flat vector,
+    All methods with 'flat__' suffix treat the TensorDict as a big vector,
     operating on all elements as if concatenated into a single 1D tensor.
 
     Examples:
@@ -26,32 +26,38 @@ class TensorDict(td_lib.TensorDict):
         ... }, batch_size=[])
         >>>
         >>> # Flat operations
-        >>> td.dim_f()  # Total elements: 4
-        >>> td.norm_f()  # L2 norm: sqrt(1 + 4 + 9 + 16)
+        >>> td.flat_dim()  # Total elements: 4
+        >>> td.flat_norm()  # L2 norm: sqrt(1 + 4 + 9 + 16)
         >>>
         >>> # Vector conversion
-        >>> vec = td.to_vector()  # tensor([1., 2., 3., 4.])
-        >>> reconstructed = td.from_vector(vec)
+        >>> flat_tensor = td.to_flat_tensor()  # tensor([1., 2., 3., 4.])
+        >>> reconstructed = td.from_flat_tensor(flat_tensor)
     """
 
     def convert_target(self, target: TensorDict) -> TensorDict:
         """Relabel target to match this TensorDict's key structure."""
         return relabel_from_template(target, self)
 
-    def dim_f(self) -> int:
+    def flat_dim(self) -> int:
         """Get total number of elements across all tensors."""
         return sum(self[key].numel() for key in self.keys())
 
-    def dot_f(self, y: TensorDict) -> torch.Tensor:
+    def flat_dot(self, y: TensorDict) -> torch.Tensor:
         """Compute dot product treating both TensorDicts as flat vectors."""
+        if self.keys() != y.keys():
+            raise ValueError(
+                "Cannot compute dot product!Keys of y do not agree with TensorDict"
+            )
         return sum((self[key] * y[key]).sum() for key in self.keys())
 
-    def norm_f(self) -> torch.Tensor:
-        """Compute L2 norm treating TensorDict as a flat vector."""
-        return torch.sqrt(self.dot_f(self))
+    def flat_norm(self) -> torch.Tensor:
+        """Compute L2 norm treating TensorDict as a flat 1D tensor."""
+        # Get TensorDict of squared norms of each tensor.
+        sq_norms_dict = self.norm() ** 2
+        return torch.sqrt(sum(tensor_norm for tensor_norm in sq_norms_dict.values()))
 
-    def to_vector(self) -> torch.Tensor:
-        """Flatten all tensors into a single 1D vector.
+    def to_flat_tensor(self) -> torch.Tensor:
+        """Flatten all tensors into a single 1D tensor, that is a vector.
 
         Returns a 1D tensor containing all elements from all tensors
         in the TensorDict, concatenated in order.
@@ -61,14 +67,14 @@ class TensorDict(td_lib.TensorDict):
             return torch.tensor([], device=self.device)
         return torch.cat([p.view(-1) for p in values])
 
-    def from_vector(self, vec: torch.Tensor) -> TensorDict:
-        """Reconstruct TensorDict from a vector, that is a flat 1D tensor.
+    def from_flat_tensor(self, flat_tensor: torch.Tensor) -> TensorDict:
+        """Reconstruct TensorDict from a flat 1D tensor, that is a vector.
 
-        Unflattens the vector back into the original TensorDict structure,
+        Unflattens the 1D tensor back into the original TensorDict structure,
         preserving shapes, keys, batch_size, and device.
 
         Args:
-            vec: 1D tensor containing flattened values
+            flat_tensor: 1D tensor containing flattened values
 
         Returns:
             New TensorDict with the same structure as self
@@ -77,7 +83,7 @@ class TensorDict(td_lib.TensorDict):
         offset = 0
         for name, tensor in self.items():
             numel = tensor.numel()
-            params_out[name] = vec[offset : offset + numel].view_as(tensor)
+            params_out[name] = flat_tensor[offset : offset + numel].view_as(tensor)
             offset += numel
         return TensorDict(params_out, batch_size=self.batch_size, device=self.device)
 
