@@ -173,7 +173,7 @@ def _build_step(
         updated_params = params - state.eta * grads
         prox_params = obj.prox(updated_params, state.eta)
 
-        return (params - prox_params).norm_f() / state.eta
+        return (params - prox_params).flat_norm() / state.eta
 
     if use_acceleration and use_linesearch:
 
@@ -238,7 +238,7 @@ def _build_solve(
         state = init_state_fn(params)
 
         # Get error tolerance
-        epsilon = tol * (params.dim_f()) ** 0.5
+        epsilon = tol * (params.flat_dim()) ** 0.5
 
         while state.err > epsilon and state.iter_ < max_iters:
             params, state = step_fn(params, state)
@@ -307,10 +307,10 @@ def _linesearch(
     def linesearch_step(params: TensorDict, state: ProxGradState):
         z = _prox_update(params, grads, state, prox)
         d = z - params
-        u = f0 + grads.dot_f(d) + 1 / (2 * state.eta) * (d.norm_f() ** 2)
+        u = f0 + grads.flat_dot(d) + 1 / (2 * state.eta) * (d.flat_norm() ** 2)
 
         if f(z) <= u:
-            err_new = d.norm_f() / state.eta
+            err_new = d.flat_norm() / state.eta
             return True, z, replace(state, err=err_new)
         else:
             eta_new = beta * state.eta
