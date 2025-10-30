@@ -9,8 +9,6 @@ Classes:
     Expression: Abstract base class for all expressions.
 """
 
-from __future__ import annotations
-
 from abc import ABC, abstractmethod
 
 import torch
@@ -115,34 +113,20 @@ class Expression(torch.nn.Module, ABC):
 
         Examples:
             >>> x = Variable((5,), name='x')
-            >>> x.value.data = torch.zeros(5)
-            >>> result = x.evaluate({'exprs.0.x': torch.ones(5)})
-            >>> torch.equal(result, torch.ones(5))
+            >>> new_params = TensorDict({'x': torch.ones(5)})
+            >>> result = x.evaluate(new_params)
+            >>> torch.equal(result, new_params['x'])
             True
         """
         return torch.func.functional_call(
             self, params.to_dict(), args=None, kwargs=None
         )
 
-    def params_dict(self) -> TensorDict:
-        """Get all parameters as a dictionary.
-
-        Returns:
-            TensorDict: Dictionary of parameter names to parameter tensors.
-
-        Examples:
-            >>> x = Variable((5,), name='x')
-            >>> params = x.params_dict()
-            >>> 'x' in str(params.keys())
-            True
-        """
-        return dict(self.named_parameters())
-
-    def params_names(self) -> list[str]:
+    def get_params_names(self) -> list[str]:
         """Returns the list of parameter names in order."""
         return list(self.params.keys())
 
-    def params_shapes(self) -> list[tuple[int]]:
+    def get_params_shapes(self) -> list[tuple[int]]:
         """Returns a list of parameter shapes in order."""
         return [param.shape for param in self.params.values()]
 
@@ -176,14 +160,15 @@ class Expression(torch.nn.Module, ABC):
             >>> tensors = [torch.tensor([1.0, 2.0, 3.0])]
             >>> params = expr.params_from_tensors(tensors)
         """
-        names = self.params_names()
+        names = self.get_params_names()
 
         # Validate number of tensors
         if len(tensors) != len(names):
             raise ValueError(
                 f"Input tensors do not define valid parameter configuration: "
                 f"number of tensors ({len(tensors)}) does not match number "
-                f"of parameters ({len(names)})"
+                f"of parameters ({len(names)})."
+                f"Call get_params_shapes() to get the structure for tensors."
             )
 
         dict_of_params = {}
@@ -196,7 +181,7 @@ class Expression(torch.nn.Module, ABC):
                     f"Input tensors do not define valid parameter configuration: "
                     f"shape of tensor at position {idx} is {tensor.shape}, "
                     f"expected {self.params[name].shape}. "
-                    f"Call params_shapes() to get the correct shapes "
+                    f"Call get_params_shapes() to get the correct shapes "
                     f"for all parameters."
                 )
 
@@ -216,11 +201,11 @@ class Expression(torch.nn.Module, ABC):
         """Update parameters from a TensorDict.
 
         Args:
-            params_dict (TensorDict): Dictionary mapping parameter names to new values.
+            params_dict (TensorDict): TensorDict with new parameter new values.
 
         Examples:
             >>> x = Variable((5,), name='x')
-            >>> x.update_params({'x': torch.ones(5)})
+            >>> x.update_params(TensorDict({'x': torch.ones(5)}))
             >>> torch.equal(x.value, torch.ones(5))
             True
         """
@@ -249,7 +234,7 @@ class Expression(torch.nn.Module, ABC):
         Returns:
             TensorDict: Dictionary of parameter names to parameter tensors.
         """
-        return TensorDict(self.params_dict())
+        return TensorDict(dict(self.named_parameters()))
 
     # ----------------------
     # Centralized operator overloads
