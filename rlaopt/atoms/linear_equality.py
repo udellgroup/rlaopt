@@ -110,14 +110,9 @@ def _factor_and_check_feasibility(A: torch.Tensor) -> torch.Tensor | None:
     m, n = R.shape
 
     # Set relative tolerance based on dtype
-    if R.dtype == torch.bfloat16:
-        rtol = 7.8e-3
-    elif R.dtype == torch.float32:
-        rtol = 1.2e-7
-    elif R.dtype == torch.float64:
-        rtol = 2.2e-16
-    else:
+    if R.dtype not in (torch.bfloat16, torch.float32, torch.float64):
         raise ValueError(f"Unsupported dtype: {R.dtype}")
+    rtol = torch.finfo(R.dtype).eps
 
     # Scale by matrix size
     rtol = rtol * max(m, n)
