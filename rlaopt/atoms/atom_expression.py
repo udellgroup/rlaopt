@@ -102,14 +102,11 @@ class AtomExpression(Expression, ABC):
         """
         pass
 
-    def get_input(self) -> Expression | torch.nn.Parameter:
-        """Returns input variable or expression used to construct the Atom."""
-        if self.var_name:
-            return getattr(self, self.var_name)
-        else:
-            return getattr(self, self.expr_name)
+    def get_input(self) -> Expression:
+        """Returns input expression used to construct the Atom."""
+        return getattr(self, self.expr_name)
 
-    def register_atom_buffer(self, name: str, buffer) -> torch.nn.Buffer:
+    def register_atom_buffer(self, name: str, buffer):
         """Register a buffer (non-trainable constant) with the atom.
 
         Buffers store constants, hyperparameters, or fixed data that should be
@@ -141,33 +138,28 @@ class AtomExpression(Expression, ABC):
                 f"{type(buffer).__name__}"
             )
 
-    def register_input(self, x):
-        """Register an input (Variable or Expression) with the atom.
+    def register_input(self, x: Expression, variable_only: bool = False):
+        """Register an input (Expression) with the atom.
 
         This is a convenience method that automatically determines whether the
-        input is a Variable or Expression and registers then register appropriately.
+        input is a Expression and registers appropriately.
 
         Args:
-            x: Input to register (Variable or Expression).
+            x: Input to register (Expression).
+            variable_only: If True, only allow Variable inputs (default: False).
 
         Raises:
-            TypeError: If x is neither a Variable nor an Expression.
+            TypeError: If x is not a Variable when variable_only is True.
+            TypeError: If x is not an Expression.
         """
-        if isinstance(x, Variable):
-            self._var_name = x.name
-            self.register_parameter(self._var_name, x.value)
-        elif isinstance(x, Expression):
-            self._expr_name = x._get_name()
-            self.add_module(self._expr_name, x)
-        else:
-            raise TypeError(
-                f"Expected Expression or Variable, but got {type(x).__name__}"
-            )
+        if variable_only and not isinstance(x, Variable):
+            raise TypeError(f"Expected Variable, but got {type(x).__name__} instead.")
 
-    @property
-    def var_name(self) -> str | None:
-        """Get the registered variable's name."""
-        return getattr(self, "_var_name", None)
+        if not isinstance(x, Expression):
+            raise TypeError(f"Expected Expression, but got {type(x).__name__}")
+
+        self._expr_name = x._get_name()
+        self.add_module(self._expr_name, x)
 
     @property
     def expr_name(self) -> Expression | None:
