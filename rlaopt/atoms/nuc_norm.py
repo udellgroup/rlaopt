@@ -1,10 +1,9 @@
 """Nuclear norm atom for matrix regularization."""
 
-from __future__ import annotations
-
 from typing import Any
 
 import torch
+from typing_extensions import Self
 
 from rlaopt.atoms.atom_expression import AtomExpression
 from rlaopt.expression import Variable
@@ -49,8 +48,8 @@ class NucNorm(AtomExpression):
         """
         super().__init__()
 
-        # Register the Variable as a Parameter
-        self.register_input(x)
+        # Register the Variable
+        self.register_input(x, variable_only=True)
 
         if x.value.data.dim() != 2:
             raise ValueError(
@@ -75,7 +74,7 @@ class NucNorm(AtomExpression):
         Returns:
             torch.Tensor: The scaled sum of singular values.
         """
-        value = self.get_input()
+        value = self.get_input().forward()
         S = torch.linalg.svdvals(value)
         return self.scaling * torch.sum(S)
 
@@ -113,7 +112,7 @@ class NucNorm(AtomExpression):
         """
         return False
 
-    def subsample(self, indices: torch.Tensor) -> NucNorm:
+    def subsample(self, indices: torch.Tensor) -> Self:
         """Subsample the nuclear norm (not supported).
 
         Args:

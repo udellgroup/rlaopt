@@ -60,11 +60,8 @@ class Affine(AtomExpression):
         Returns:
             torch.Tensor: Result of A @ x + b.
         """
-        input_ = self.get_input()
-        if isinstance(input_, torch.nn.Parameter):
-            return self.A @ input_ + self.b
-        elif isinstance(input_, Expression):
-            return self.A @ input_.forward() + self.b
+        input_ = self.get_input().forward()
+        return self.A @ input_ + self.b
 
     def is_proxable(self) -> bool:
         """Check if the affine transformation has a computable proximal operator.

@@ -1,8 +1,7 @@
 """Implementation of the sum squared atom."""
 
-from __future__ import annotations
-
 import torch
+from typing_extensions import Self
 
 from rlaopt.atoms.affine import Affine
 from rlaopt.atoms.atom_expression import AtomExpression
@@ -86,7 +85,7 @@ class SumSquares(AtomExpression):
         """Returns True if the input is an affine expression."""
         raise NotImplementedError("Should eventually be True for certain cases.")
 
-    def subsample(self) -> SumSquares:
+    def subsample(self) -> Self:
         """Returns a subsampled version of the SumSquares atom.
 
         Args:

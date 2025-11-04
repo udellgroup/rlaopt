@@ -1,8 +1,7 @@
 """Elastic net regularization atom."""
 
-from __future__ import annotations
-
 import torch
+from typing_extensions import Self
 
 from rlaopt.atoms.atom_expression import AtomExpression
 from rlaopt.expression import Variable
@@ -49,7 +48,7 @@ class ElasticNet(AtomExpression):
         super().__init__()
 
         # Register the input variable as a parameter
-        self.register_input(x)
+        self.register_input(x, variable_only=True)
 
         # Register the L1 and L2 scaling factors as buffers
         self.register_atom_buffer("l1_scaling", l1_scaling)
@@ -71,7 +70,7 @@ class ElasticNet(AtomExpression):
         """
         return False
 
-    def subsample(self, indices: torch.Tensor) -> ElasticNet:
+    def subsample(self, indices: torch.Tensor) -> Self:
         """Subsample the elastic net (not supported).
 
         Args:
@@ -92,7 +91,7 @@ class ElasticNet(AtomExpression):
             torch.Tensor: The elastic net penalty value:
                 l1_scaling * ||x||₁ + (l2_scaling / 2) * ||x||₂²
         """
-        value = self.get_input()
+        value = self.get_input().forward()
 
         l1_norm = torch.sum(torch.abs(value))
         l2_norm = torch.sum(value**2)
