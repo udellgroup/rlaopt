@@ -152,15 +152,6 @@ class AtomExpression(Expression, ABC):
 
         Raises:
             TypeError: If x is neither a Variable nor an Expression.
-
-        Examples:
-            >>> # Registers a Variable
-            >>> x = Variable((5,), name='x')
-            >>> atom.register_input(x)  # Sets input_type to InputType.VARIABLE
-
-            >>> # Registers an Expression
-            >>> expr = x + y
-            >>> atom.register_input(expr)  # Sets input_type to InputType.EXPRESSION
         """
         if isinstance(x, Variable):
             self._var_name = x.name

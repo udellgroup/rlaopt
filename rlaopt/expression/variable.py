@@ -58,10 +58,10 @@ class Variable(Expression):
         requires_grad: bool = True,
         var_id: int | None = None,
         name: str | None = None,
-        dtype: torch.dtype = None,
-        device: torch.device = None,
+        dtype: torch.dtype | None = None,
+        device: torch.device | None = None,
     ):
-        """Constructor method fo Variable."""
+        """Constructor method for Variable."""
         super().__init__()
 
         if isinstance(size_or_tensor, torch.Tensor):
