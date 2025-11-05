@@ -146,9 +146,9 @@ class Expression(torch.nn.Module, ABC):
         """Returns the list of variable names in order."""
         return list(self.variables_dict.keys())
 
-    def get_variable_shapes(self) -> list[tuple[int]]:
-        """Returns a list of variable shapes in order."""
-        return [var.shape for var in self.variables_dict.values()]
+    def get_variable_shapes(self) -> dict[str, tuple[int, ...]]:
+        """Returns a dictionary mapping variable names to their shapes."""
+        return {var_name: var.shape for var_name, var in self.variables_dict.items()}
 
     def update_variables(self, variables_dict: TensorDict):
         """Update variables from a TensorDict.
