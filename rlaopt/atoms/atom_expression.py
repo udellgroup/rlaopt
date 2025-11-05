@@ -49,6 +49,7 @@ class AtomExpression(Expression, ABC):
         they use with the appropriate registration methods.
         """
         super().__init__()
+        self._expr_name = None
 
     @abstractmethod
     def is_subsamplable(self) -> bool:
@@ -104,7 +105,7 @@ class AtomExpression(Expression, ABC):
 
     def get_input(self) -> Expression:
         """Returns input expression used to construct the Atom."""
-        return getattr(self, self.expr_name)
+        return getattr(self, self._expr_name)
 
     def register_atom_buffer(self, name: str, buffer):
         """Register a buffer (non-trainable constant) with the atom.
@@ -160,8 +161,3 @@ class AtomExpression(Expression, ABC):
 
         self._expr_name = x._get_name()
         self.add_module(self._expr_name, x)
-
-    @property
-    def expr_name(self) -> Expression | None:
-        """Get the expression registered with the atom."""
-        return getattr(self, "_expr_name", None)
