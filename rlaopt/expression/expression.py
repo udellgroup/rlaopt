@@ -125,7 +125,22 @@ class Expression(torch.nn.Module, ABC):
         for var_name, tensor in variables_dict.items():
             for module_name in vars_to_param_names_map[var_name]:
                 params[module_name] = tensor
-        return torch.func.functional_call(self, params, args=None, kwargs=None)
+
+        # Save current state to restore after functional_call
+        # This is necessary because functional_call can mutate parameters
+        # when the same Variable module appears multiple times in the
+        # expression tree (tied weights)
+        saved_state = {k: v.clone() for k, v in self.state_dict().items()}
+
+        try:
+            result = torch.func.functional_call(
+                self, params, args=None, kwargs=None, tie_weights=False
+            )
+        finally:
+            # Always restore state, even if functional_call raises an exception
+            self.load_state_dict(saved_state)
+
+        return result
 
     def get_variable_names(self) -> list[str]:
         """Returns the list of variable names in order."""
