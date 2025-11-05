@@ -10,6 +10,7 @@ Classes:
 """
 
 from abc import ABC, abstractmethod
+from collections import defaultdict
 
 import torch
 
@@ -98,15 +99,15 @@ class Expression(torch.nn.Module, ABC):
         """
         pass
 
-    def evaluate(self, params: TensorDict) -> torch.Tensor:
-        """Evaluate the expression at specified parameter values.
+    def evaluate(self, variables_dict: TensorDict) -> torch.Tensor:
+        """Evaluate the expression at specified variable values.
 
-        Unlike forward(), this method evaluates the expression at parameter
-        values different from those currently stored, without modifying the
-        stored parameters. Useful for line searches, parameter exploration, etc.
+        Unlike forward(), this method evaluates the expression at variable
+        values different from those currently stored. Useful for line searches,
+        parameter exploration, etc.
 
         Args:
-            params: Dictionary mapping parameter names to their values.
+            variables_dict: Dictionary mapping variable names to their values.
 
         Returns:
             torch.Tensor: The evaluated result.
@@ -118,123 +119,71 @@ class Expression(torch.nn.Module, ABC):
             >>> torch.equal(result, new_params['x'])
             True
         """
-        return torch.func.functional_call(
-            self, params.to_dict(), args=None, kwargs=None
-        )
+        # Build a params dict by mapping variable names to module names
+        vars_to_param_names_map = self._get_variables_to_param_names_mapping()
+        params = {}
+        for var_name, tensor in variables_dict.items():
+            for module_name in vars_to_param_names_map[var_name]:
+                params[module_name] = tensor
+        return torch.func.functional_call(self, params, args=None, kwargs=None)
 
-    def get_params_names(self) -> list[str]:
-        """Returns the list of parameter names in order."""
-        return list(self.params.keys())
+    def get_variable_names(self) -> list[str]:
+        """Returns the list of variable names in order."""
+        return list(self.variables_dict.keys())
 
-    def get_params_shapes(self) -> list[tuple[int]]:
-        """Returns a list of parameter shapes in order."""
-        return [param.shape for param in self.params.values()]
+    def get_variable_shapes(self) -> list[tuple[int]]:
+        """Returns a list of variable shapes in order."""
+        return [var.shape for var in self.variables_dict.values()]
 
-    def params_from_tensors(
-        self, tensors: list[torch.Tensor] | tuple[torch.Tensor]
-    ) -> TensorDict:
-        """Creates a params TensorDict from a list/tuple of tensors.
-
-        Constructs a params TensorDict that match the expression's parameter structure.
-        The provided tensors are mapped to parameter
-        names in order. Shapes and devices are validated to see
-        that they match the expression's TensorDict, which
-        stores expression's parameter configuration.
+    def update_variables(self, variables_dict: TensorDict):
+        """Update variables from a TensorDict.
 
         Args:
-            tensors: List or tuple of tensors to convert into a TensorDict.
-                    Must match the number, order, shapes, and device of
-                    the expression's parameters.
-
-        Returns:
-            TensorDict with tensors mapped to appropriate parameter names,
-            preserving the batch_size from self.params.
-
-        Raises:
-            ValueError: If the number of tensors doesn't match the number of parameters.
-            ValueError: If any tensor shape doesn't match the expected parameter shape.
-            ValueError: If tensor devices don't match the params TensorDict device.
-
-        Example:
-            >>> expr = SumSquares(Variable(shape=(3,)))
-            >>> tensors = [torch.tensor([1.0, 2.0, 3.0])]
-            >>> params = expr.params_from_tensors(tensors)
-        """
-        names = self.get_params_names()
-
-        # Validate number of tensors
-        if len(tensors) != len(names):
-            raise ValueError(
-                f"Input tensors do not define valid parameter configuration: "
-                f"number of tensors ({len(tensors)}) does not match number "
-                f"of parameters ({len(names)})."
-                f"Call get_params_shapes() to get the structure for tensors."
-            )
-
-        dict_of_params = {}
-        has_device = self.params.device is not None
-
-        for idx, (tensor, name) in enumerate(zip(tensors, names)):
-            # Validate shape
-            if tensor.shape != self.params[name].shape:
-                raise ValueError(
-                    f"Input tensors do not define valid parameter configuration: "
-                    f"shape of tensor at position {idx} is {tensor.shape}, "
-                    f"expected {self.params[name].shape}. "
-                    f"Call get_params_shapes() to get the correct shapes "
-                    f"for all parameters."
-                )
-
-            # Validate device if applicable
-            if has_device and tensor.device != self.params.device:
-                raise ValueError(
-                    f"Input tensors do not define valid parameter configuration: "
-                    f"device of tensor at position {idx} is {tensor.device}, "
-                    f"expected {self.params.device}"
-                )
-
-            dict_of_params[name] = tensor
-
-        return TensorDict(dict_of_params, batch_size=self.params.batch_size)
-
-    def update_params(self, params_dict: TensorDict):
-        """Update parameters from a TensorDict.
-
-        Args:
-            params_dict (TensorDict): TensorDict with new parameter new values.
+            variables_dict (TensorDict): TensorDict with new variable values.
 
         Examples:
             >>> x = Variable((5,), name='x')
-            >>> x.update_params(TensorDict({'x': torch.ones(5)}))
+            >>> x.update_variables(TensorDict({'x': torch.ones(5)}))
             >>> torch.equal(x.value, torch.ones(5))
             True
         """
-        self.load_state_dict(params_dict.to_dict(), strict=False)
+        # Convert variable names to parameter names
+        vars_to_param_names_map = self._get_variables_to_param_names_mapping()
+        params_dict = {}
+        for var_name, tensor in variables_dict.items():
+            for param_name in vars_to_param_names_map[var_name]:
+                params_dict[param_name] = tensor
 
-    def expr_convert_params(self, expr_params: TensorDict) -> TensorDict:
-        """Convert parameter names from another expression to match this one.
+        # Use False in strict to allow partial updates
+        self.load_state_dict(params_dict, strict=False)
 
-        Given parameters from another Expression whose leaf tensor shapes match
-        but have different names, returns a dictionary with names consistent
-        with the current expression. Useful for transferring parameters between
-        similar expressions.
-
-        Args:
-            expr_params (TensorDict): Parameters from another expression.
-
-        Returns:
-            TensorDict: Parameters with names matching this expression.
-        """
-        return self.params.convert_target(expr_params)
+    def _get_variables_to_param_names_mapping(self) -> dict[str, list[str]]:
+        mapping = defaultdict(list)
+        for module_path, module in self.named_modules():
+            if isinstance(module, expr_types.variable()):
+                # We have to account for the full module path to get
+                # the correct parameter name
+                full_param_name = (
+                    f"{module_path}.{module._name}" if module_path else module._name
+                )
+                mapping[module.name].append(full_param_name)
+        return mapping
 
     @property
-    def params(self) -> TensorDict:
-        """Get parameters as a dictionary.
+    def variables_dict(self) -> TensorDict:
+        """Get variables as a dictionary.
 
         Returns:
-            TensorDict: Dictionary of parameter names to parameter tensors.
+            TensorDict: Dictionary of variable names to variable tensors.
         """
-        return TensorDict(dict(self.named_parameters()))
+        vars_dict = {}
+        for _, module in self.named_modules():
+            if (
+                isinstance(module, expr_types.variable())
+                and module.name not in vars_dict
+            ):
+                vars_dict[module.name] = module.value
+        return TensorDict(vars_dict)
 
     # ----------------------
     # Centralized operator overloads
