@@ -1,10 +1,9 @@
 """Base class for optimization atoms."""
 
-from __future__ import annotations
-
 from abc import ABC, abstractmethod
 
 import torch
+from typing_extensions import Self
 
 from rlaopt.expression import Expression, Variable
 
@@ -81,7 +80,7 @@ class AtomExpression(Expression, ABC):
         pass
 
     @abstractmethod
-    def subsample(self, indices: torch.Tensor) -> AtomExpression:
+    def subsample(self, indices: torch.Tensor) -> Self:
         """Create a subsampled version of the atom.
 
         This method should only be called if the atom is subsamplable.
@@ -91,7 +90,7 @@ class AtomExpression(Expression, ABC):
             indices: Indices of data points to include in the subsample.
 
         Returns:
-            AtomExpression: New atom representing the subsampled version.
+            Self: New atom representing the subsampled version.
 
         Raises:
             NotImplementedError: If the atom does not support subsampling.
