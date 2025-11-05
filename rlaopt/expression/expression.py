@@ -119,26 +119,26 @@ class Expression(torch.nn.Module, ABC):
             >>> torch.equal(result, new_params['x'])
             True
         """
-        # Build a params dict by mapping variable names to module names
-        vars_to_param_names_map = self._get_variables_to_param_names_mapping()
-        params = {}
-        for var_name, tensor in variables_dict.items():
-            for module_name in vars_to_param_names_map[var_name]:
-                params[module_name] = tensor
+        params = self._variables_dict_to_params_dict(variables_dict)
 
-        # Save current state to restore after functional_call
+        # Save current variable values to restore after functional_call
         # This is necessary because functional_call can mutate parameters
         # when the same Variable module appears multiple times in the
         # expression tree (tied weights)
-        saved_state = {k: v.clone() for k, v in self.state_dict().items()}
+        saved_variables = TensorDict(
+            {
+                var_name: tensor.clone()
+                for var_name, tensor in self.variables_dict.items()
+            }
+        )
 
         try:
             result = torch.func.functional_call(
                 self, params, args=None, kwargs=None, tie_weights=False
             )
         finally:
-            # Always restore state, even if functional_call raises an exception
-            self.load_state_dict(saved_state)
+            # Always restore variables, even if functional_call raises an exception
+            self.update_variables(saved_variables)
 
         return result
 
@@ -162,15 +162,22 @@ class Expression(torch.nn.Module, ABC):
             >>> torch.equal(x.value, torch.ones(5))
             True
         """
-        # Convert variable names to parameter names
+        params_dict = self._variables_dict_to_params_dict(variables_dict)
+        # Use strict=False to allow partial updates
+        self.load_state_dict(params_dict, strict=False)
+
+    def _variables_dict_to_params_dict(self, variables_dict: TensorDict) -> dict:
+        """Convert a variables dict to a parameters dict.
+
+        Maps variable names to their corresponding parameter names in the
+        module hierarchy.
+        """
         vars_to_param_names_map = self._get_variables_to_param_names_mapping()
         params_dict = {}
         for var_name, tensor in variables_dict.items():
             for param_name in vars_to_param_names_map[var_name]:
                 params_dict[param_name] = tensor
-
-        # Use False in strict to allow partial updates
-        self.load_state_dict(params_dict, strict=False)
+        return params_dict
 
     def _get_variables_to_param_names_mapping(self) -> dict[str, list[str]]:
         mapping = defaultdict(list)
