@@ -48,7 +48,7 @@ class TestSumSquares:
     def test_init_with_variable(self, vector_var):
         """Test initialization with Variable input."""
         ss = SumSquares(vector_var)
-        assert isinstance(ss.get_input(), torch.nn.Parameter)
+        assert isinstance(ss.get_input(), Variable)
 
     def test_init_with_expression(self, simple_affine):
         """Test initialization with Expression input."""
