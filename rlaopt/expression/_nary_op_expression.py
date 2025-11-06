@@ -6,7 +6,7 @@ from rlaopt.expression.expression import Expression
 from rlaopt.expression.utils import _to_expr
 
 
-class _NAryOperatorExpression(Expression, ABC):
+class _NAryOpExpression(Expression, ABC):
     """Private base class for n-ary operations (operations on multiple expressions).
 
     Provides infrastructure for expressions that operate on multiple sub-expressions,
