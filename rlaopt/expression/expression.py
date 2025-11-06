@@ -106,6 +106,9 @@ class Expression(torch.nn.Module, ABC):
         values different from those currently stored. Useful for line searches,
         parameter exploration, etc.
 
+        Note that the user can specify a partial set of variables; any variables
+        not included will be evaluated at their current stored values.
+
         Args:
             variables_dict: Dictionary mapping variable names to their values.
 
@@ -152,6 +155,10 @@ class Expression(torch.nn.Module, ABC):
 
     def update_variables(self, variables_dict: TensorDict):
         """Update variables from a TensorDict.
+
+        Note that this method allows partial updates; only the variables
+        specified in the input TensorDict will be updated, while others
+        will remain unchanged.
 
         Args:
             variables_dict (TensorDict): TensorDict with new variable values.
