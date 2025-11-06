@@ -5,12 +5,12 @@ from typing import Callable
 import torch
 
 from rlaopt.expression import expr_types
-from rlaopt.expression._nary_op_expression import _NAryOperatorExpression
+from rlaopt.expression._nary_op_expression import _NAryOpExpression
 from rlaopt.expression.constant import ConstExpression
 from rlaopt.ext_tensordict import TensorDict
 
 
-class AddExpression(_NAryOperatorExpression):
+class AddExpression(_NAryOpExpression):
     """Sum of multiple expressions.
 
     Represents the sum of two or more expressions.
@@ -202,7 +202,7 @@ class AddExpression(_NAryOperatorExpression):
         return proxes
 
 
-class ProductExpression(_NAryOperatorExpression):
+class ProductExpression(_NAryOpExpression):
     """Product of multiple expressions.
 
     Represents either elementwise multiplication (*) or matrix multiplication (@)
