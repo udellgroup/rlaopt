@@ -1,8 +1,7 @@
 """Implementation of the sum squared atom."""
 
-from __future__ import annotations
-
 import torch
+from typing_extensions import Self
 
 from rlaopt.atoms.affine import Affine
 from rlaopt.atoms.atom_expression import AtomExpression
@@ -34,20 +33,16 @@ class SumSquares(AtomExpression):
 
     def forward(self) -> torch.Tensor:
         """Forward pass to compute the sum of squares."""
-        input_ = self.get_input()
-        if isinstance(input_, Expression):
-            value = input_.forward()
-        else:
-            value = input_
+        value = self.get_input().forward()
         return torch.sum(value**2)
 
     def is_proxable(self) -> bool:
         """Returns True if the input is a Variable or Affine with Variable root."""
         input_ = self.get_input()
-        if isinstance(input_, torch.nn.Parameter):
+        if isinstance(input_, Variable):
             return True
         elif isinstance(input_, Affine):
-            if isinstance(input_.get_input(), torch.nn.Parameter):
+            if isinstance(input_.get_input(), Variable):
                 return True
         return False
 
@@ -63,15 +58,15 @@ class SumSquares(AtomExpression):
         """
         input_ = self.get_input()
 
-        if isinstance(input_, torch.nn.Parameter):
+        if isinstance(input_, Variable):
             return 1 / (1 + 2 * prox_scaling) * location
 
         elif isinstance(input_, Expression):
             # For expressions, SumSquares is only proxable when
-            # input is Affine with a Parameter root.
+            # input is Affine with a Variable root.
 
             if isinstance(input_, Affine):
-                if isinstance(input_.get_input(), torch.nn.Parameter):
+                if isinstance(input_.get_input(), Variable):
                     return _sum_squares_affine_prox(input_, location, prox_scaling)
 
                 else:
@@ -90,7 +85,7 @@ class SumSquares(AtomExpression):
         """Returns True if the input is an affine expression."""
         raise NotImplementedError("Should eventually be True for certain cases.")
 
-    def subsample(self) -> SumSquares:
+    def subsample(self) -> Self:
         """Returns a subsampled version of the SumSquares atom.
 
         Args:

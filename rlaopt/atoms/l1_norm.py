@@ -27,7 +27,7 @@ class L1Norm(AtomExpression):
         super().__init__()
 
         # Register the variable as a parameter
-        self.register_input(x)
+        self.register_input(x, variable_only=True)
 
         # Register the scaling factor as a buffer
         self.register_atom_buffer("scaling", scaling)
@@ -38,7 +38,7 @@ class L1Norm(AtomExpression):
 
     def forward(self) -> torch.Tensor:
         """Evaluates the scaled L1-norm."""
-        value = self.get_input()
+        value = self.get_input().forward()
         return self.scaling * torch.sum(torch.abs(value))
 
     def is_proxable(self) -> bool:

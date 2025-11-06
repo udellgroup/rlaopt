@@ -1,10 +1,9 @@
 """Extended TensorDict module."""
 
-from __future__ import annotations
-
 import tensordict as td_lib
 import torch
 from torch.utils._pytree import register_pytree_node
+from typing_extensions import Self
 
 
 class TensorDict(td_lib.TensorDict):
@@ -34,7 +33,7 @@ class TensorDict(td_lib.TensorDict):
         >>> reconstructed = td.from_flat_tensor(flat_tensor)
     """
 
-    def convert_target(self, target: TensorDict) -> TensorDict:
+    def convert_target(self, target: Self) -> Self:
         """Relabel target to match this TensorDict's key structure."""
         return relabel_from_template(target, self)
 
@@ -42,7 +41,7 @@ class TensorDict(td_lib.TensorDict):
         """Get total number of elements across all tensors."""
         return sum(self[key].numel() for key in self.keys())
 
-    def flat_dot(self, y: TensorDict) -> torch.Tensor:
+    def flat_dot(self, y: Self) -> torch.Tensor:
         """Compute dot product treating both TensorDicts as flat vectors."""
         if self.keys() != y.keys():
             raise ValueError(
@@ -67,7 +66,7 @@ class TensorDict(td_lib.TensorDict):
             return torch.tensor([], device=self.device)
         return torch.cat([p.view(-1) for p in values])
 
-    def from_flat_tensor(self, flat_tensor: torch.Tensor) -> TensorDict:
+    def from_flat_tensor(self, flat_tensor: torch.Tensor) -> Self:
         """Reconstruct TensorDict from a flat 1D tensor, that is a vector.
 
         Unflattens the 1D tensor back into the original TensorDict structure,

@@ -44,11 +44,11 @@ class OptimSolver(ABC):
         pass
 
     @abstractmethod
-    def init_state(self, params: TensorDict) -> SolverState:
+    def init_state(self, variable_values: TensorDict) -> SolverState:
         """Initialize the state of the optimizer.
 
         Args:
-            params (TensorDict): Initial parameters for the optimization.
+            variable_values (TensorDict): Initial variable values for the optimization.
 
         Returns:
             SolverState: Initial state of the optimizer.
@@ -57,32 +57,32 @@ class OptimSolver(ABC):
 
     @abstractmethod
     def step(
-        self, params: TensorDict, optim_state: SolverState
+        self, variable_values: TensorDict, optim_state: SolverState
     ) -> tuple[TensorDict, SolverState]:
         """Performs a single optimization step.
 
         Args:
-            params (TensorDict): Current parameters.
+            variable_values (TensorDict): Current variable values.
             optim_state (SolverState): Current state of the optimizer.
 
         Returns:
-            tuple[TensorDict, SolverState]: Updated parameters and optimizer state.
+            tuple[TensorDict, SolverState]: Updated variable values and optimizer state.
         """
         pass
 
     @abstractmethod
     def solve(
-        self, params: TensorDict, stopping_criteria: StoppingCriteria
+        self, variable_values: TensorDict, stopping_criteria: StoppingCriteria
     ) -> tuple[TensorDict, torch.Tensor]:
         """Solve the optimization problem.
 
         Args:
-            params (TensorDict | None): Initial parameters.
-                If None, the current parameters in the objective will be used.
+            variable_values (TensorDict | None): Initial variable values.
+                If None, the current variable values in the objective will be used.
             stopping_criteria (StoppingCriteria): Criteria to stop the optimization.
 
         Returns:
-            tuple[TensorDict, torch.Tensor]: Optimized parameters and final error.
+            tuple[TensorDict, torch.Tensor]: Optimized variable values and final error.
         """
         pass
 

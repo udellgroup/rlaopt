@@ -1,10 +1,9 @@
 """Base class for optimization atoms."""
 
-from __future__ import annotations
-
 from abc import ABC, abstractmethod
 
 import torch
+from typing_extensions import Self
 
 from rlaopt.expression import Expression, Variable
 
@@ -49,6 +48,7 @@ class AtomExpression(Expression, ABC):
         they use with the appropriate registration methods.
         """
         super().__init__()
+        self._expr_name = None
 
     @abstractmethod
     def is_subsamplable(self) -> bool:
@@ -80,7 +80,7 @@ class AtomExpression(Expression, ABC):
         pass
 
     @abstractmethod
-    def subsample(self, indices: torch.Tensor) -> AtomExpression:
+    def subsample(self, indices: torch.Tensor) -> Self:
         """Create a subsampled version of the atom.
 
         This method should only be called if the atom is subsamplable.
@@ -90,7 +90,7 @@ class AtomExpression(Expression, ABC):
             indices: Indices of data points to include in the subsample.
 
         Returns:
-            AtomExpression: New atom representing the subsampled version.
+            Self: New atom representing the subsampled version.
 
         Raises:
             NotImplementedError: If the atom does not support subsampling.
@@ -102,14 +102,11 @@ class AtomExpression(Expression, ABC):
         """
         pass
 
-    def get_input(self) -> Expression | torch.nn.Parameter:
-        """Returns input variable or expression used to construct the Atom."""
-        if self.var_name:
-            return getattr(self, self.var_name)
-        else:
-            return getattr(self, self.expr_name)
+    def get_input(self) -> Expression:
+        """Returns input expression used to construct the Atom."""
+        return getattr(self, self._expr_name)
 
-    def register_atom_buffer(self, name: str, buffer) -> torch.nn.Buffer:
+    def register_atom_buffer(self, name: str, buffer):
         """Register a buffer (non-trainable constant) with the atom.
 
         Buffers store constants, hyperparameters, or fixed data that should be
@@ -131,54 +128,32 @@ class AtomExpression(Expression, ABC):
             self.register_buffer(name, torch.tensor(float(buffer)))
         elif isinstance(buffer, torch.Tensor):
             self.register_buffer(name, buffer)
-        elif isinstance(buffer, torch.nn.Parameter):
-            self.register_buffer(name, buffer.data)
         elif buffer is None:
             self.register_buffer(name, None)
         else:
             raise TypeError(
-                "Expected float, Tensor, Parameter, or None, but got "
-                f"{type(buffer).__name__}"
+                f"Expected float, Tensor, or None, but got {type(buffer).__name__}"
             )
 
-    def register_input(self, x):
-        """Register an input (Variable or Expression) with the atom.
+    def register_input(self, x: Expression, variable_only: bool = False):
+        """Register an input (Expression) with the atom.
 
         This is a convenience method that automatically determines whether the
-        input is a Variable or Expression and registers then register appropriately.
+        input is a Expression and registers appropriately.
 
         Args:
-            x: Input to register (Variable or Expression).
+            x: Input to register (Expression).
+            variable_only: If True, only allow Variable inputs (default: False).
 
         Raises:
-            TypeError: If x is neither a Variable nor an Expression.
-
-        Examples:
-            >>> # Registers a Variable
-            >>> x = Variable((5,), name='x')
-            >>> atom.register_input(x)  # Sets input_type to InputType.VARIABLE
-
-            >>> # Registers an Expression
-            >>> expr = x + y
-            >>> atom.register_input(expr)  # Sets input_type to InputType.EXPRESSION
+            TypeError: If x is not a Variable when variable_only is True.
+            TypeError: If x is not an Expression.
         """
-        if isinstance(x, Variable):
-            self._var_name = x.name
-            self.register_parameter(self._var_name, x.value)
-        elif isinstance(x, Expression):
-            self._expr_name = x._get_name()
-            self.add_module(self._expr_name, x)
-        else:
-            raise TypeError(
-                f"Expected Expression or Variable, but got {type(x).__name__}"
-            )
+        if variable_only and not isinstance(x, Variable):
+            raise TypeError(f"Expected Variable, but got {type(x).__name__} instead.")
 
-    @property
-    def var_name(self) -> str | None:
-        """Get the registered variable's name."""
-        return getattr(self, "_var_name", None)
+        if not isinstance(x, Expression):
+            raise TypeError(f"Expected Expression, but got {type(x).__name__}")
 
-    @property
-    def expr_name(self) -> Expression | None:
-        """Get the expression registered with the atom."""
-        return getattr(self, "_expr_name", None)
+        self._expr_name = x._get_name()
+        self.add_module(self._expr_name, x)

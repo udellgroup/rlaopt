@@ -108,8 +108,8 @@ class Polyhedron(AtomExpression):
         elif (lower is not None) and (upper is None):
             upper = torch.tensor(torch.inf, device=lower.device, dtype=lower.dtype)
 
-        # Register the variable as a parameter
-        self.register_input(x)
+        # Register the variable
+        self.register_input(x, variable_only=True)
 
         # Register constraint data as buffers
         self.register_atom_buffer("A", A)
@@ -126,7 +126,7 @@ class Polyhedron(AtomExpression):
         Returns:
             torch.Tensor: 0.0 if constraints are satisfied, infinity otherwise.
         """
-        value = self.get_input()
+        value = self.get_input().forward()
         return self._eval(value)
 
     def is_smooth(self) -> bool:
