@@ -107,7 +107,8 @@ class Expression(torch.nn.Module, ABC):
         parameter exploration, etc.
 
         Note that the user can specify a partial set of variables; any variables
-        not included will be evaluated at their current stored values.
+        not included will be evaluated at their current stored values. Any variables in
+        the input that are not part of this expression will be ignored.
 
         Args:
             variables_dict: Dictionary mapping variable names to their values.
@@ -122,7 +123,8 @@ class Expression(torch.nn.Module, ABC):
             >>> torch.equal(result, new_params['x'])
             True
         """
-        params = self._variables_dict_to_params_dict(variables_dict)
+        variables_dict_selected = self.select_relevant_variables(variables_dict)
+        params = self._variables_dict_to_params_dict(variables_dict_selected)
         result = torch.func.functional_call(
             self, params, args=None, kwargs=None, tie_weights=False
         )
@@ -158,7 +160,8 @@ class Expression(torch.nn.Module, ABC):
 
         Note that this method allows partial updates; only the variables
         specified in the input TensorDict will be updated, while others
-        will remain unchanged.
+        will remain unchanged. Any variables in the input that are not
+        part of this expression will be ignored.
 
         Args:
             variables_dict (TensorDict): TensorDict with new variable values.
@@ -169,7 +172,8 @@ class Expression(torch.nn.Module, ABC):
             >>> torch.equal(x.value, torch.ones(5))
             True
         """
-        params_dict = self._variables_dict_to_params_dict(variables_dict)
+        variables_dict_selected = self.select_relevant_variables(variables_dict)
+        params_dict = self._variables_dict_to_params_dict(variables_dict_selected)
         # Use strict=False to allow partial updates
         self.load_state_dict(params_dict, strict=False)
 

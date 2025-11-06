@@ -50,8 +50,18 @@ class TestExpression:
                 ),
                 torch.tensor(145.0),
             ),
+            (
+                TensorDict(
+                    {
+                        "x": torch.tensor([2.0, 3.0, 4.0]),
+                        "y": torch.tensor([1.0, 1.0]),
+                        "z": torch.tensor([100.0, 200.0]),  # irrelevant variable
+                    }
+                ),
+                torch.tensor(31.0),
+            ),
         ],
-        ids=["partial_update", "full_update"],
+        ids=["partial_update", "full_update", "extra_variables"],
     )
     def test_evaluate_with_different_variables(
         self, concrete_expression, new_variables, expected_result
@@ -153,8 +163,19 @@ class TestExpression:
                 torch.tensor([10.0, 11.0, 12.0]),
                 torch.tensor([13.0, 14.0]),
             ),
+            (
+                TensorDict(
+                    {
+                        "x": torch.tensor([7.0, 8.0, 9.0]),
+                        "y": torch.tensor([2.0, 3.0]),
+                        "z": torch.tensor([999.0]),  # irrelevant variable
+                    }
+                ),
+                torch.tensor([7.0, 8.0, 9.0]),
+                torch.tensor([2.0, 3.0]),
+            ),
         ],
-        ids=["partial_update", "full_update"],
+        ids=["partial_update", "full_update", "extra_variables"],
     )
     def test_update_variables_modifies_stored_values(
         self, concrete_expression, new_values, expected_x, expected_y
