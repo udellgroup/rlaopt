@@ -105,15 +105,6 @@ class TestRegisterAtomBuffer:
         assert isinstance(atom.weights, torch.Tensor)
         assert torch.equal(atom.weights, buffer_tensor)
 
-    def test_register_buffer_with_parameter(self, simple_variable):
-        """Test register_atom_buffer extracts data from Parameter."""
-        param = torch.nn.Parameter(torch.tensor(3.14))
-        atom = MockAtom(simple_variable, buffer_name="pi", buffer_value=param)
-        # Should be a buffer (tensor), not a parameter
-        assert not isinstance(atom.pi, torch.nn.Parameter)
-        assert isinstance(atom.pi, torch.Tensor)
-        assert torch.isclose(atom.pi, torch.tensor(3.14))
-
     def test_register_buffer_with_none(self, simple_variable):
         """Test register_atom_buffer accepts None."""
         atom = MockAtom(simple_variable, buffer_name="optional", buffer_value=None)

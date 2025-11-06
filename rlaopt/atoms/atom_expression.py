@@ -126,12 +126,8 @@ class AtomExpression(Expression, ABC):
         """
         if isinstance(buffer, float):
             self.register_buffer(name, torch.tensor(float(buffer)))
-        elif isinstance(buffer, torch.Tensor) and not isinstance(
-            buffer, torch.nn.Parameter
-        ):
+        elif isinstance(buffer, torch.Tensor):
             self.register_buffer(name, buffer)
-        elif isinstance(buffer, torch.nn.Parameter):
-            self.register_buffer(name, buffer.data)
         elif buffer is None:
             self.register_buffer(name, None)
         else:
