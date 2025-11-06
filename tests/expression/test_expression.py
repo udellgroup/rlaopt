@@ -88,6 +88,54 @@ class TestExpression:
         assert shapes == {"x": torch.Size([3]), "y": torch.Size([2])}
 
     @pytest.mark.parametrize(
+        "input_dict,expected_keys",
+        [
+            (
+                TensorDict(
+                    {
+                        "x": torch.tensor([1.0, 2.0, 3.0]),
+                        "y": torch.tensor([4.0, 5.0]),
+                    }
+                ),
+                ["x", "y"],
+            ),
+            (
+                TensorDict(
+                    {
+                        "x": torch.tensor([1.0, 2.0, 3.0]),
+                        "y": torch.tensor([4.0, 5.0]),
+                        "z": torch.tensor([6.0, 7.0, 8.0]),
+                    }
+                ),
+                ["x", "y"],
+            ),
+            (
+                TensorDict({"x": torch.tensor([1.0, 2.0, 3.0])}),
+                ["x"],
+            ),
+            (
+                TensorDict({"z": torch.tensor([1.0, 2.0, 3.0])}),
+                [],
+            ),
+        ],
+        ids=[
+            "exact_match",
+            "extra_variables",
+            "partial_match",
+            "no_match",
+        ],
+    )
+    def test_select_relevant_variables(
+        self, concrete_expression, input_dict, expected_keys
+    ):
+        """Test select_relevant_variables filters to expression's variables."""
+        result = concrete_expression.select_relevant_variables(input_dict)
+
+        assert list(result.keys()) == expected_keys
+        for key in expected_keys:
+            assert torch.equal(result[key], input_dict[key])
+
+    @pytest.mark.parametrize(
         "new_values,expected_x,expected_y",
         [
             (

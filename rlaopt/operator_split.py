@@ -72,13 +72,11 @@ class OperatorSplit:
             torch.Tensor: The scalar value of the objective function
                 at `variables_dict`.
         """
-        f_var_names = self._f.get_variable_names()
-        f_vars = variables_dict.select(*f_var_names)
+        f_vars = self._f.select_relevant_variables(variables_dict)
         f_eval = self._f.evaluate(f_vars)
 
         if self._r:
-            r_var_names = self._r.get_variable_names()
-            r_vars = variables_dict.select(*r_var_names)
+            r_vars = self._r.select_relevant_variables(variables_dict)
             r_eval = self._r.evaluate(r_vars)
             return f_eval + r_eval
 
@@ -93,9 +91,8 @@ class OperatorSplit:
         Returns:
             torch.Tensor: The scalar value of the smooth part at `variables_dict`.
         """
-        f_var_names = self._f.get_variable_names()
-        params = variables_dict.select(*f_var_names)
-        return self._f.evaluate(params)
+        f_vars = self._f.select_relevant_variables(variables_dict)
+        return self._f.evaluate(f_vars)
 
     def grad_f(self, variables_dict: TensorDict) -> TensorDict:
         """Compute the gradient of the smooth part of the objective function.

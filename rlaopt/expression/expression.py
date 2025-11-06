@@ -173,6 +173,19 @@ class Expression(torch.nn.Module, ABC):
         # Use strict=False to allow partial updates
         self.load_state_dict(params_dict, strict=False)
 
+    def select_relevant_variables(self, variables_dict: TensorDict) -> TensorDict:
+        """Select variables relevant to this expression from a TensorDict.
+
+        Args:
+            variables_dict (TensorDict): TensorDict containing variable values.
+
+        Returns:
+            TensorDict: TensorDict with only variables relevant to this expression.
+        """
+        relevant_var_names = self.get_variable_names()
+        # Setting strict=False to avoid errors if some variables are missing
+        return variables_dict.select(*relevant_var_names, strict=False)
+
     def _variables_dict_to_params_dict(self, variables_dict: TensorDict) -> dict:
         """Convert a variables dict to a parameters dict.
 
