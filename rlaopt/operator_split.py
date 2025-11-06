@@ -7,10 +7,6 @@ The core functionality enables efficient splitting methods by providing access
 to the smooth component, its gradient, and the proximal operator for the
 non-smooth component. This is useful in first-order optimization algorithms such
 as proximal gradient descent and its variants.
-
-Functions:
-    _validate_input: Internal helper to validate the input expressions.
-    _build_prox: Internal helper to construct the correct proximal operator.
 """
 
 from typing import Callable
@@ -62,76 +58,76 @@ class OperatorSplit:
         """Returns the proximal component of the composite function."""
         return self._r
 
-    def evaluate(self, variables_dict: TensorDict) -> torch.Tensor:
+    def evaluate(self, variable_values: TensorDict) -> torch.Tensor:
         """Evaluate the composite objective function `f + r` at the given variables.
 
         Args:
-            variables_dict (TensorDict): A dictionary of variables.
+            variable_values (TensorDict): A dictionary of variables.
 
         Returns:
             torch.Tensor: The scalar value of the objective function
-                at `variables_dict`.
+                at `variable_values`.
         """
-        f_eval = self._f.evaluate(variables_dict)
+        f_eval = self._f.evaluate(variable_values)
 
         if self._r:
-            r_eval = self._r.evaluate(variables_dict)
+            r_eval = self._r.evaluate(variable_values)
             return f_eval + r_eval
 
         return f_eval
 
-    def f_func(self, variables_dict: TensorDict) -> torch.Tensor:
+    def f_func(self, variable_values: TensorDict) -> torch.Tensor:
         """Evaluate the smooth part of the objective function at the given variables.
 
         Args:
-            variables_dict (TensorDict): A dictionary of variables.
+            variable_values (TensorDict): A dictionary of variables.
 
         Returns:
-            torch.Tensor: The scalar value of the smooth part at `variables_dict`.
+            torch.Tensor: The scalar value of the smooth part at `variable_values`.
         """
-        return self._f.evaluate(variables_dict)
+        return self._f.evaluate(variable_values)
 
-    def grad_f(self, variables_dict: TensorDict) -> TensorDict:
+    def grad_f(self, variable_values: TensorDict) -> TensorDict:
         """Compute the gradient of the smooth part of the objective function.
 
         Args:
-            variables_dict (TensorDict): A dictionary of variables.
+            variable_values (TensorDict): A dictionary of variables.
 
         Returns:
             TensorDict: A dictionary of gradients with the same structure
-                as `variables_dict`.
+                as `variable_values`.
         """
-        return torch.func.grad(self.f_func)(variables_dict)
+        return torch.func.grad(self.f_func)(variable_values)
 
-    def hvp_f(self, variables_dict: TensorDict, v: torch.Tensor) -> torch.Tensor:
+    def hvp_f(self, variable_values: TensorDict, v: torch.Tensor) -> torch.Tensor:
         """Compute the Hessian-vector product of the smooth part of the objective.
 
         Args:
-            variables_dict (TensorDict): A dictionary of variables.
-            v (torch.Tensor): A torch tensor of shape (variables_dict.dim,) representing
-                the vector to multiply with the Hessian.
+            variable_values (TensorDict): A dictionary of variables.
+            v (torch.Tensor): A torch tensor of shape (variable_values.dim,)
+                representing the vector to multiply with the Hessian.
 
         Returns:
             torch.Tensor: The Hessian-vector product of the Hessian at
-                variables_dict and v.
+                variable_values and v.
         """
 
-        def g_dot_v(params: TensorDict) -> torch.Tensor:
-            return torch.dot(self.grad_f(params).to_flat_tensor(), v)
+        def g_dot_v(var_vals: TensorDict) -> torch.Tensor:
+            return torch.dot(self.grad_f(var_vals).to_flat_tensor(), v)
 
-        return (torch.func.grad(g_dot_v)(variables_dict)).to_flat_tensor()
+        return (torch.func.grad(g_dot_v)(variable_values)).to_flat_tensor()
 
-    def prox(self, variables_dict: TensorDict, eta: float) -> TensorDict:
+    def prox(self, variable_values: TensorDict, eta: float) -> TensorDict:
         """Apply the proximal operator of `r` with step size `eta` to the variables.
 
         Args:
-            variables_dict (TensorDict): A dictionary of variables.
+            variable_values (TensorDict): A dictionary of variables.
             eta (float): Step size or scaling factor for the proximal operator.
 
         Returns:
             TensorDict: Updated variables after applying the proximal operator.
         """
-        return self._prox(variables_dict, eta)
+        return self._prox(variable_values, eta)
 
 
 def _validate_input(smooth_expr: Expression, prox_expr: Expression | None):
@@ -153,15 +149,15 @@ def _build_prox(
 
         if num_non_smooth_exprs > 1:
 
-            def prox(params: TensorDict, eta: float) -> TensorDict:
-                return prox_expr.prox(params, eta)
+            def prox(var_vals: TensorDict, eta: float) -> TensorDict:
+                return prox_expr.prox(var_vals, eta)
         else:
 
-            def prox(params: TensorDict, eta: float) -> TensorDict:
-                return params.apply(lambda p: prox_expr.prox(p, eta))
+            def prox(var_vals: TensorDict, eta: float) -> TensorDict:
+                return var_vals.apply(lambda p: prox_expr.prox(p, eta))
     else:
 
-        def prox(params: TensorDict, eta: float) -> TensorDict:
-            return params
+        def prox(var_vals: TensorDict, eta: float) -> TensorDict:
+            return var_vals
 
     return prox

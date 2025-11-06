@@ -99,7 +99,7 @@ class Expression(torch.nn.Module, ABC):
         """
         pass
 
-    def evaluate(self, variables_dict: TensorDict) -> torch.Tensor:
+    def evaluate(self, variable_values: TensorDict) -> torch.Tensor:
         """Evaluate the expression at specified variable values.
 
         Unlike forward(), this method evaluates the expression at variable
@@ -111,7 +111,7 @@ class Expression(torch.nn.Module, ABC):
         the input that are not part of this expression will be ignored.
 
         Args:
-            variables_dict: Dictionary mapping variable names to their values.
+            variable_values: Dictionary mapping variable names to their values.
 
         Returns:
             torch.Tensor: The evaluated result.
@@ -123,8 +123,8 @@ class Expression(torch.nn.Module, ABC):
             >>> torch.equal(result, new_params['x'])
             True
         """
-        variables_dict_selected = self.select_relevant_variables(variables_dict)
-        params = self._variables_dict_to_params_dict(variables_dict_selected)
+        variable_values_selected = self.select_relevant_variables(variable_values)
+        params = self._variable_values_to_params_dict(variable_values_selected)
         result = torch.func.functional_call(
             self, params, args=None, kwargs=None, tie_weights=False
         )
@@ -132,7 +132,7 @@ class Expression(torch.nn.Module, ABC):
         return result
 
     @property
-    def variables_dict(self) -> TensorDict:
+    def variable_values(self) -> TensorDict:
         """Get variables as a dictionary.
 
         Returns:
@@ -149,13 +149,13 @@ class Expression(torch.nn.Module, ABC):
 
     def get_variable_names(self) -> list[str]:
         """Returns the list of variable names in order."""
-        return list(self.variables_dict.keys())
+        return list(self.variable_values.keys())
 
     def get_variable_shapes(self) -> dict[str, torch.Size]:
         """Returns a dictionary mapping variable names to their shapes."""
-        return {var_name: var.shape for var_name, var in self.variables_dict.items()}
+        return {var_name: var.shape for var_name, var in self.variable_values.items()}
 
-    def update_variables(self, variables_dict: TensorDict):
+    def update_variables(self, variable_values: TensorDict):
         """Update variables from a TensorDict.
 
         Note that this method allows partial updates; only the variables
@@ -164,7 +164,7 @@ class Expression(torch.nn.Module, ABC):
         part of this expression will be ignored.
 
         Args:
-            variables_dict (TensorDict): TensorDict with new variable values.
+            variable_values (TensorDict): TensorDict with new variable values.
 
         Examples:
             >>> x = Variable((5,), name='x')
@@ -172,25 +172,25 @@ class Expression(torch.nn.Module, ABC):
             >>> torch.equal(x.value, torch.ones(5))
             True
         """
-        variables_dict_selected = self.select_relevant_variables(variables_dict)
-        params_dict = self._variables_dict_to_params_dict(variables_dict_selected)
+        variable_values_selected = self.select_relevant_variables(variable_values)
+        params_dict = self._variable_values_to_params_dict(variable_values_selected)
         # Use strict=False to allow partial updates
         self.load_state_dict(params_dict, strict=False)
 
-    def select_relevant_variables(self, variables_dict: TensorDict) -> TensorDict:
+    def select_relevant_variables(self, variable_values: TensorDict) -> TensorDict:
         """Select variables relevant to this expression from a TensorDict.
 
         Args:
-            variables_dict (TensorDict): TensorDict containing variable values.
+            variable_values (TensorDict): TensorDict containing variable values.
 
         Returns:
             TensorDict: TensorDict with only variables relevant to this expression.
         """
         relevant_var_names = self.get_variable_names()
         # Setting strict=False to avoid errors if some variables are missing
-        return variables_dict.select(*relevant_var_names, strict=False)
+        return variable_values.select(*relevant_var_names, strict=False)
 
-    def _variables_dict_to_params_dict(self, variables_dict: TensorDict) -> dict:
+    def _variable_values_to_params_dict(self, variable_values: TensorDict) -> dict:
         """Convert a variables dict to a parameters dict.
 
         Maps variable names to their corresponding parameter names in the
@@ -198,7 +198,7 @@ class Expression(torch.nn.Module, ABC):
         """
         vars_to_param_names_map = self._get_variables_to_param_names_mapping()
         params_dict = {}
-        for var_name, tensor in variables_dict.items():
+        for var_name, tensor in variable_values.items():
             for param_name in vars_to_param_names_map[var_name]:
                 params_dict[param_name] = tensor
         return params_dict
