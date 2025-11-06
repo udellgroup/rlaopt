@@ -120,25 +120,9 @@ class Expression(torch.nn.Module, ABC):
             True
         """
         params = self._variables_dict_to_params_dict(variables_dict)
-
-        # Save current variable values to restore after functional_call
-        # This is necessary because functional_call can mutate parameters
-        # when the same Variable module appears multiple times in the
-        # expression tree (tied weights)
-        saved_variables = TensorDict(
-            {
-                var_name: tensor.clone()
-                for var_name, tensor in self.variables_dict.items()
-            }
+        result = torch.func.functional_call(
+            self, params, args=None, kwargs=None, tie_weights=False
         )
-
-        try:
-            result = torch.func.functional_call(
-                self, params, args=None, kwargs=None, tie_weights=False
-            )
-        finally:
-            # Always restore variables, even if functional_call raises an exception
-            self.update_variables(saved_variables)
 
         return result
 
