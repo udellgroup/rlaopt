@@ -88,6 +88,39 @@ class TestOperatorSplitInitialization:
 class TestOperatorSplitOracles:
     """Tests for OperatorSplit function and gradient oracles."""
 
+    def test_evaluate_smooth_only(self, smooth_only_problem):
+        """Test evaluate method with smooth-only problem."""
+        obj, A, b, _ = smooth_only_problem
+        p = A.shape[1]
+        new_params = TensorDict({"x": torch.zeros(p)})
+        expected = 0.5 * torch.linalg.norm(b) ** 2
+        assert torch.allclose(obj.evaluate(new_params), expected)
+
+    def test_evaluate_with_nonsmooth(self, lasso_problem):
+        """Test evaluate method with smooth + nonsmooth problem."""
+        obj, A, b, x, r = lasso_problem
+        p = A.shape[1]
+        test_values = torch.tensor([1.0, -2.0, 3.0] + [0.0] * (p - 3))
+        new_params = TensorDict({"x": test_values})
+
+        # Compute expected: f + r
+        f_val = 0.5 * torch.sum((A @ test_values - b) ** 2)
+        r_val = torch.sum(torch.abs(test_values))
+        expected = f_val + r_val
+
+        assert torch.allclose(obj.evaluate(new_params), expected)
+
+    def test_evaluate_multiple_params(self, mult_params_problem):
+        """Test evaluate with multiple parameters."""
+        obj, x, Y = mult_params_problem
+        p1 = x.value.shape[0]
+        p2, p3 = Y.value.shape
+        new_params = TensorDict({"x": -torch.ones(p1), "Y": torch.ones(p2, p3)})
+
+        # Expected: 0.5 * sum(x^2) + sum(Y^2) = 0.5 * p1 + p2 * p3
+        expected = torch.tensor(float(0.5 * p1 + p2 * p3))
+        assert torch.allclose(obj.evaluate(new_params), expected)
+
     def test_function_evaluation(self, smooth_only_problem):
         """Test function value computation."""
         obj, A, b, _ = smooth_only_problem

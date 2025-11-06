@@ -66,7 +66,7 @@ class OperatorSplit:
         """Evaluate the composite objective function `f + r` at the given variables.
 
         Args:
-            variables_dict (TensorDict): A dictionary of variables compatible with f.
+            variables_dict (TensorDict): A dictionary of variables.
 
         Returns:
             torch.Tensor: The scalar value of the objective function
