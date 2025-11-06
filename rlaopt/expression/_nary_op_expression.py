@@ -21,18 +21,6 @@ class _NAryOperatorExpression(Expression, ABC):
         _expr_signatures: Cached function signatures for kwargs filtering.
     """
 
-    @abstractmethod
-    def op(self, values: list[torch.Tensor]):
-        """Apply the operator to evaluated tensors.
-
-        Args:
-            values: List of evaluated tensor expressions.
-
-        Returns:
-            torch.Tensor: Result of the operation.
-        """
-        pass
-
     def __init__(self, *exprs):
         """Initialize with variable number of expressions.
 
@@ -44,16 +32,21 @@ class _NAryOperatorExpression(Expression, ABC):
         """
         super().__init__()
 
-        if len(exprs) == 0:
+        if not exprs:
             raise ValueError(f"{self.__class__.__name__} requires at least one operand")
-        else:
-            if exprs[-1] is not None:
-                self.exprs = torch.nn.ModuleList([_to_expr(e) for e in exprs])
-            else:
-                # If last expr is None, ignore it
-                # This is needed for operator_split in AddExpression
-                self.exprs = torch.nn.ModuleList([_to_expr(e) for e in exprs[:-1]])
-        self._n_exprs = len(self.exprs)
+        self.exprs = torch.nn.ModuleList(_to_expr(expr) for expr in exprs)
+
+    @abstractmethod
+    def op(self, values: list[torch.Tensor]):
+        """Apply the operator to evaluated tensors.
+
+        Args:
+            values: List of evaluated tensor expressions.
+
+        Returns:
+            torch.Tensor: Result of the operation.
+        """
+        pass
 
     def is_smooth(self) -> bool:
         """Check if all sub-expressions are smooth.
@@ -77,4 +70,4 @@ class _NAryOperatorExpression(Expression, ABC):
     @property
     def n_exprs(self):
         """The number of expressions being operated on."""
-        return self._n_exprs
+        return len(self.exprs)
