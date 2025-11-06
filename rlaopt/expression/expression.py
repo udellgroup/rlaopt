@@ -126,6 +126,22 @@ class Expression(torch.nn.Module, ABC):
 
         return result
 
+    @property
+    def variables_dict(self) -> TensorDict:
+        """Get variables as a dictionary.
+
+        Returns:
+            TensorDict: Dictionary of variable names to variable tensors.
+        """
+        vars_dict = {}
+        for _, module in self.named_modules():
+            if (
+                isinstance(module, expr_types.variable())
+                and module.name not in vars_dict
+            ):
+                vars_dict[module.name] = module.value
+        return TensorDict(vars_dict)
+
     def get_variable_names(self) -> list[str]:
         """Returns the list of variable names in order."""
         return list(self.variables_dict.keys())
@@ -174,22 +190,6 @@ class Expression(torch.nn.Module, ABC):
                 )
                 mapping[module.name].append(full_param_name)
         return mapping
-
-    @property
-    def variables_dict(self) -> TensorDict:
-        """Get variables as a dictionary.
-
-        Returns:
-            TensorDict: Dictionary of variable names to variable tensors.
-        """
-        vars_dict = {}
-        for _, module in self.named_modules():
-            if (
-                isinstance(module, expr_types.variable())
-                and module.name not in vars_dict
-            ):
-                vars_dict[module.name] = module.value
-        return TensorDict(vars_dict)
 
     # ----------------------
     # Centralized operator overloads

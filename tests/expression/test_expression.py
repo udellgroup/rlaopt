@@ -15,7 +15,7 @@ def concrete_expression():
     class ConcreteExpression(Expression):
         def __init__(self):
             super().__init__()
-            self.value = torch.nn.Parameter(torch.tensor([1.0, 2.0, 3.0]))
+            self.x = expr_types.variable()(torch.tensor([1.0, 2.0, 3.0]), name="x")
 
         def is_smooth(self):
             return True
@@ -24,7 +24,7 @@ def concrete_expression():
             return False
 
         def forward(self):
-            return self.value
+            return torch.sum(self.x.value**2)
 
     return ConcreteExpression()
 
@@ -33,74 +33,48 @@ class TestExpression:
     """Test concrete methods implemented in Expression ABC."""
 
     # ----------------------
-    # Parameter management tests
+    # Variable management tests
     # ----------------------
 
-    def test_params_names(self, concrete_expression):
-        """Test params_names returns correct names."""
-        names = concrete_expression.get_params_names()
+    def test_evaluate_with_different_variables(self, concrete_expression):
+        """Test evaluate() uses provided variables without modifying stored ones."""
+        original_value = concrete_expression.x.value.data.clone()
+        new_variables = TensorDict({"x": torch.tensor([5.0, 6.0, 7.0])})
 
-        assert names[0] == "value"
+        result = concrete_expression.evaluate(new_variables)
 
-    def test_params_shapes(self, concrete_expression):
-        """Test params_shapes returns correct shapes."""
-        shapes = concrete_expression.get_params_shapes()
+        # Sum of squares: 5^2 + 6^2 + 7^2 = 110
+        assert torch.equal(result, torch.tensor(110.0))
+        assert torch.equal(concrete_expression.x.value.data, original_value)
 
-        assert shapes[0] == (3,)
+    def test_variables_dict_property(self, concrete_expression):
+        """Test variables_dict property returns variable values."""
+        var_dict = concrete_expression.variables_dict
 
-    def test_params_from_tensors_with_correct_shapes(self, concrete_expression):
-        """Test params_from_tensors with correct shapes."""
-        new_params_tensor = torch.zeros(
-            3,
+        assert list(var_dict.keys()) == ["x"]
+        assert torch.equal(var_dict["x"], torch.tensor([1.0, 2.0, 3.0]))
+
+    def test_variable_names(self, concrete_expression):
+        """Test get_variable_names returns correct names."""
+        names = concrete_expression.get_variable_names()
+
+        assert names == ["x"]
+
+    def test_variable_shapes(self, concrete_expression):
+        """Test get_variable_shapes returns correct shapes."""
+        shapes = concrete_expression.get_variable_shapes()
+
+        assert shapes == {"x": torch.Size([3])}
+
+    def test_update_variables_modifies_stored_values(self, concrete_expression):
+        """Test update_variables() changes stored variable values."""
+        new_values = TensorDict({"x": torch.tensor([10.0, 11.0, 12.0])})
+
+        concrete_expression.update_variables(new_values)
+
+        assert torch.equal(
+            concrete_expression.x.value, torch.tensor([10.0, 11.0, 12.0])
         )
-        new_params = TensorDict({"value": new_params_tensor})
-
-        output_ = concrete_expression.params_from_tensors((new_params_tensor,))
-
-        assert torch.allclose(output_["value"], new_params["value"])
-
-    def test_params_from_tensors_with_wrong_shapes(self, concrete_expression):
-        """Test params_from_tensors with wrong shapes."""
-        new_params_tensor = torch.ones(20, 5)
-        with pytest.raises(ValueError):
-            concrete_expression.params_from_tensors(new_params_tensor)
-
-    def test_params_from_tensors_with_wrong_lens(self, concrete_expression):
-        """Test params_from_tensors with wrong lengths."""
-        new_params_tensors = (
-            torch.zeros(
-                3,
-            ),
-            torch.ones(20, 5),
-        )
-        with pytest.raises(ValueError):
-            concrete_expression.params_from_tensors(new_params_tensors)
-
-    def test_evaluate_with_different_params(self, concrete_expression):
-        """Test evaluate() uses provided params without modifying stored ones."""
-        original_value = concrete_expression.value.data.clone()
-        param_name = list(concrete_expression.named_parameters())[0][0]
-        new_params = TensorDict({param_name: torch.tensor([5.0, 6.0, 7.0])})
-
-        result = concrete_expression.evaluate(new_params)
-
-        assert torch.equal(result, torch.tensor([5.0, 6.0, 7.0]))
-        assert torch.equal(concrete_expression.value.data, original_value)
-
-    def test_params_property_returns_params_dict(self, concrete_expression):
-        """Test params property is alias for TensorDict(params_dict())."""
-        assert concrete_expression.params.to_dict() == dict(
-            concrete_expression.named_parameters()
-        )
-
-    def test_update_params_modifies_stored_values(self, concrete_expression):
-        """Test update_params() changes stored parameter values."""
-        param_name = list(concrete_expression.named_parameters())[0][0]
-        new_values = TensorDict({param_name: torch.tensor([10.0, 11.0, 12.0])})
-
-        concrete_expression.update_params(new_values)
-
-        assert torch.equal(concrete_expression.value, torch.tensor([10.0, 11.0, 12.0]))
 
     # ----------------------
     # Operator overload tests - verify correct types returned
