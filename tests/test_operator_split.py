@@ -5,6 +5,7 @@ import torch
 
 from rlaopt.atoms import Affine, L1Norm, NonNegative, SumSquares
 from rlaopt.expression import ProductExpression, Variable
+from rlaopt.ext_tensordict import TensorDict
 from rlaopt.operator_split import OperatorSplit
 
 
@@ -91,7 +92,7 @@ class TestOperatorSplitOracles:
         """Test function value computation."""
         obj, A, b, _ = smooth_only_problem
         p = A.shape[1]
-        new_params = obj.f.params_from_tensors((torch.zeros(p),))
+        new_params = TensorDict({"x": torch.zeros(p)})
         expected = 0.5 * torch.linalg.norm(b) ** 2
         assert torch.allclose(obj.f_func(new_params), expected)
 
@@ -99,16 +100,15 @@ class TestOperatorSplitOracles:
         """Test gradient computation."""
         obj, A, b, _ = smooth_only_problem
         p = A.shape[1]
-        new_params = obj.f.params_from_tensors((torch.zeros(p),))
-        name = obj.f.get_params_names()[0]
+        new_params = TensorDict({"x": torch.zeros(p)})
         grads = obj.grad_f(new_params)
-        assert torch.allclose(grads[name], -A.T @ b)
+        assert torch.allclose(grads["x"], -A.T @ b)
 
     def test_hvp_computation(self, smooth_only_problem):
         """Test Hessian-vector product computation."""
         obj, A, _, _ = smooth_only_problem
         p = A.shape[1]
-        new_params = obj.f.params_from_tensors((torch.zeros(p),))
+        new_params = TensorDict({"x": torch.zeros(p)})
         v = torch.ones(p)
         Hv = obj.hvp_f(new_params, v)
         assert torch.allclose(Hv, A.T @ (A @ v))
@@ -118,7 +118,7 @@ class TestOperatorSplitOracles:
         obj, x, Y = mult_params_problem
         p1 = x.value.shape[0]
         p2, p3 = Y.value.shape
-        new_params = obj.f.params_from_tensors((-torch.ones(p1), torch.ones(p2, p3)))
+        new_params = TensorDict({"x": -torch.ones(p1), "Y": torch.ones(p2, p3)})
         return obj, p1, p2, p3, new_params
 
     def test_function_evaluation_multiple_params(self, mult_params_problem):
@@ -137,11 +137,11 @@ class TestOperatorSplitOracles:
         grad_Y = 2 * torch.ones(p2, p3)
 
         # Should equal [grad_x, grad_Y]
-        grads = list(obj.grad_f(new_params).to_dict().values())
+        grads = obj.grad_f(new_params)
 
         # Test equality
-        assert torch.allclose(grad_x, grads[0])
-        assert torch.allclose(grad_Y, grads[1])
+        assert torch.allclose(grad_x, grads["x"])
+        assert torch.allclose(grad_Y, grads["Y"])
 
     def test_hvp_with_multiple_params(self, mult_params_problem):
         """Test hvp computation with multiple parameters."""
@@ -165,14 +165,14 @@ class TestOperatorSplitProx:
     def test_prox_smooth_only_unchanged(self, smooth_only_problem):
         """Test prox returns input unchanged for smooth-only problem."""
         obj, _, _, x = smooth_only_problem
-        name = obj.f.get_params_names()[0]
-        result = obj.prox(obj.f.params, 1.0)
+        name = obj.f.get_variable_names()[0]
+        result = obj.prox(obj.f.variables_dict, 1.0)
         assert torch.allclose(result[name], x.value)
 
     def test_prox_lasso_matches_l1norm(self, lasso_problem):
         """Test prox corresponds to L1Norm prox for Lasso problem."""
         obj, _, _, x, r = lasso_problem
-        obj_prox_result = obj.prox(obj.r.params, 1.0)["x"]
+        obj_prox_result = obj.prox(obj.r.variables_dict, 1.0)["x"]
         expected = r.prox(x.value, 1.0)
         assert torch.allclose(obj_prox_result, expected)
 
@@ -191,8 +191,8 @@ class TestOperatorSplitProx:
         prox_y = r_y.prox(y.value, 1.0)
 
         # Should equal [prox_x, prox_y]
-        prox = list(obj.prox(obj.f.params, 1.0).to_dict().values())
+        prox = obj.prox(obj.f.variables_dict, 1.0)
 
         # Test equality
-        assert torch.allclose(prox_x, prox[0])
-        assert torch.allclose(prox_y, prox[1])
+        assert torch.allclose(prox_x, prox["x"])
+        assert torch.allclose(prox_y, prox["y"])
