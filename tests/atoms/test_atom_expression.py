@@ -43,18 +43,20 @@ class MockAtom(AtomExpression):
         return torch.tensor(0.0)
 
 
+@pytest.fixture
+def simple_variable():
+    """Create a simple variable for testing."""
+    return Variable((3,), name="x")
+
+
+@pytest.fixture
+def add_expression(simple_variable):
+    """Create an Expression for testing."""
+    return simple_variable + 1.0
+
+
 class TestRegisterInputAndGetInput:
     """Tests for AtomExpression.register_input and get_input methods."""
-
-    @pytest.fixture
-    def simple_variable(self):
-        """Create a simple variable for testing."""
-        return Variable((3,), name="x")
-
-    @pytest.fixture
-    def add_expression(self, simple_variable):
-        """Create an Expressionfor testing."""
-        return simple_variable + 1.0
 
     def test_register_input_with_variable_allows_variable(self, simple_variable):
         """Test register_input accepts Variable when variable_only=False."""
@@ -84,11 +86,6 @@ class TestRegisterInputAndGetInput:
 
 class TestRegisterAtomBuffer:
     """Tests for AtomExpression.register_atom_buffer method."""
-
-    @pytest.fixture
-    def simple_variable(self):
-        """Create a simple variable for testing."""
-        return Variable((3,), name="x")
 
     def test_register_buffer_with_float(self, simple_variable):
         """Test register_atom_buffer converts float to tensor."""
@@ -124,9 +121,7 @@ class TestRegisterAtomBuffer:
         self, simple_variable, invalid_buffer
     ):
         """Test register_atom_buffer rejects invalid buffer types."""
-        with pytest.raises(
-            TypeError, match="Expected float, Tensor, Parameter, or None"
-        ):
+        with pytest.raises(TypeError, match="Expected float, Tensor, or None"):
             MockAtom(
                 simple_variable, buffer_name="invalid", buffer_value=invalid_buffer
             )

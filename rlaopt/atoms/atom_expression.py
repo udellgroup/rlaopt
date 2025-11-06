@@ -132,8 +132,7 @@ class AtomExpression(Expression, ABC):
             self.register_buffer(name, None)
         else:
             raise TypeError(
-                "Expected float, Tensor, Parameter, or None, but got "
-                f"{type(buffer).__name__}"
+                f"Expected float, Tensor, or None, but got {type(buffer).__name__}"
             )
 
     def register_input(self, x: Expression, variable_only: bool = False):
