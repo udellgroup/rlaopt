@@ -54,7 +54,7 @@ class ProxGradState(SolverState):
 
     eta: float = 1.0
     params_prev: TensorDict | None = None
-    err: torch.Tensor = torch.inf
+    err: torch.Tensor = torch.tensor(torch.inf)
 
 
 class ProxGrad(OptimSolver):
@@ -231,9 +231,9 @@ def _build_solve(
         """Solve the optimization problem."""
         if params is None:
             if isinstance(obj, OperatorSplit):
-                params = obj.f.params
+                params = obj.f.variables_dict
             else:
-                params = obj.params
+                params = obj.variables_dict
 
         state = init_state_fn(params)
 
