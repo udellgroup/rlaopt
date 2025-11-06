@@ -37,23 +37,33 @@ class TestExpression:
     # Variable management tests
     # ----------------------
 
-    def test_evaluate_with_different_variables(self, concrete_expression):
+    @pytest.mark.parametrize(
+        "new_variables,expected_result",
+        [
+            (
+                TensorDict({"x": torch.tensor([5.0, 6.0, 7.0])}),
+                torch.tensor(151.0),
+            ),
+            (
+                TensorDict(
+                    {"x": torch.tensor([0.0, 0.0, 0.0]), "y": torch.tensor([8.0, 9.0])}
+                ),
+                torch.tensor(145.0),
+            ),
+        ],
+        ids=["partial_update", "full_update"],
+    )
+    def test_evaluate_with_different_variables(
+        self, concrete_expression, new_variables, expected_result
+    ):
         """Test evaluate() uses provided variables without modifying stored ones."""
         original_values = {
             k: v.clone() for k, v in concrete_expression.variables_dict.items()
         }
-        new_variables = TensorDict({"x": torch.tensor([5.0, 6.0, 7.0])})
+
         result = concrete_expression.evaluate(new_variables)
 
-        assert torch.equal(result, torch.tensor(151.0))
-        assert torch.equal(concrete_expression.x.value.data, original_values["x"])
-        assert torch.equal(concrete_expression.y.value.data, original_values["y"])
-
-        new_variables = TensorDict(
-            {"x": torch.tensor([0.0, 0.0, 0.0]), "y": torch.tensor([8.0, 9.0])}
-        )
-        result = concrete_expression.evaluate(new_variables)
-        assert torch.equal(result, torch.tensor(145.0))
+        assert torch.equal(result, expected_result)
         assert torch.equal(concrete_expression.x.value.data, original_values["x"])
         assert torch.equal(concrete_expression.y.value.data, original_values["y"])
 
@@ -77,25 +87,35 @@ class TestExpression:
 
         assert shapes == {"x": torch.Size([3]), "y": torch.Size([2])}
 
-    def test_update_variables_modifies_stored_values(self, concrete_expression):
+    @pytest.mark.parametrize(
+        "new_values,expected_x,expected_y",
+        [
+            (
+                TensorDict({"x": torch.tensor([10.0, 11.0, 12.0])}),
+                torch.tensor([10.0, 11.0, 12.0]),
+                torch.tensor([4.0, 5.0]),  # y should remain unchanged
+            ),
+            (
+                TensorDict(
+                    {
+                        "x": torch.tensor([10.0, 11.0, 12.0]),
+                        "y": torch.tensor([13.0, 14.0]),
+                    }
+                ),
+                torch.tensor([10.0, 11.0, 12.0]),
+                torch.tensor([13.0, 14.0]),
+            ),
+        ],
+        ids=["partial_update", "full_update"],
+    )
+    def test_update_variables_modifies_stored_values(
+        self, concrete_expression, new_values, expected_x, expected_y
+    ):
         """Test update_variables() changes stored variable values."""
-        new_values = TensorDict({"x": torch.tensor([10.0, 11.0, 12.0])})
         concrete_expression.update_variables(new_values)
 
-        assert torch.equal(
-            concrete_expression.x.value, torch.tensor([10.0, 11.0, 12.0])
-        )
-        assert torch.equal(concrete_expression.y.value, torch.tensor([4.0, 5.0]))
-
-        new_values = TensorDict(
-            {"x": torch.tensor([10.0, 11.0, 12.0]), "y": torch.tensor([13.0, 14.0])}
-        )
-        concrete_expression.update_variables(new_values)
-
-        assert torch.equal(
-            concrete_expression.x.value, torch.tensor([10.0, 11.0, 12.0])
-        )
-        assert torch.equal(concrete_expression.y.value, torch.tensor([13.0, 14.0]))
+        assert torch.equal(concrete_expression.x.value, expected_x)
+        assert torch.equal(concrete_expression.y.value, expected_y)
 
     # ----------------------
     # Operator overload tests - verify correct types returned
