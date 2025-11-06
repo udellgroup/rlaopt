@@ -68,7 +68,7 @@ class TestExpression:
     ):
         """Test evaluate() uses provided variables without modifying stored ones."""
         original_values = {
-            k: v.clone() for k, v in concrete_expression.variables_dict.items()
+            k: v.clone() for k, v in concrete_expression.variable_values.items()
         }
 
         result = concrete_expression.evaluate(new_variables)
@@ -77,9 +77,9 @@ class TestExpression:
         assert torch.equal(concrete_expression.x.value.data, original_values["x"])
         assert torch.equal(concrete_expression.y.value.data, original_values["y"])
 
-    def test_variables_dict_property(self, concrete_expression):
-        """Test variables_dict property returns variable values."""
-        var_dict = concrete_expression.variables_dict
+    def test_variable_values_property(self, concrete_expression):
+        """Test variable_values property returns variable values."""
+        var_dict = concrete_expression.variable_values
 
         assert list(var_dict.keys()) == ["x", "y"]
         assert torch.equal(var_dict["x"], torch.tensor([1.0, 2.0, 3.0]))

@@ -199,13 +199,13 @@ class TestOperatorSplitProx:
         """Test prox returns input unchanged for smooth-only problem."""
         obj, _, _, x = smooth_only_problem
         name = obj.f.get_variable_names()[0]
-        result = obj.prox(obj.f.variables_dict, 1.0)
+        result = obj.prox(obj.f.variable_values, 1.0)
         assert torch.allclose(result[name], x.value)
 
     def test_prox_lasso_matches_l1norm(self, lasso_problem):
         """Test prox corresponds to L1Norm prox for Lasso problem."""
         obj, _, _, x, r = lasso_problem
-        obj_prox_result = obj.prox(obj.r.variables_dict, 1.0)["x"]
+        obj_prox_result = obj.prox(obj.r.variable_values, 1.0)["x"]
         expected = r.prox(x.value, 1.0)
         assert torch.allclose(obj_prox_result, expected)
 
@@ -224,7 +224,7 @@ class TestOperatorSplitProx:
         prox_y = r_y.prox(y.value, 1.0)
 
         # Should equal [prox_x, prox_y]
-        prox = obj.prox(obj.f.variables_dict, 1.0)
+        prox = obj.prox(obj.f.variable_values, 1.0)
 
         # Test equality
         assert torch.allclose(prox_x, prox["x"])

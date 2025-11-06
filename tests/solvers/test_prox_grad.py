@@ -195,7 +195,7 @@ def _loop(params, state, opt, stopping_criteria):
 
 def _init_opt(obj, opt):
     """Initialize optimizer state."""
-    params = obj.variables_dict
+    params = obj.variable_values
     return params, opt.init_state(params)
 
 

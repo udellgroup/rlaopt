@@ -184,7 +184,7 @@ def _build_step(
             var_vals_prev = var_vals
             var_vals, state = _accel_prox_grad_ls_step(var_vals, state, f, grad_f, prox)
             return var_vals, replace(
-                state, iter_=state.iter_ + 1, var_vals_prev=var_vals_prev
+                state, iter_=state.iter_ + 1, variable_values_prev=var_vals_prev
             )
 
     elif use_acceleration:
@@ -196,7 +196,10 @@ def _build_step(
             var_vals = _accel_prox_grad_step(var_vals, state, grad_f, prox)
             err = err_fn(var_vals, state)
             return var_vals, replace(
-                state, iter_=state.iter_ + 1, err=err, var_vals_prev=var_vals_prev
+                state,
+                iter_=state.iter_ + 1,
+                err=err,
+                variable_values_prev=var_vals_prev,
             )
 
     elif use_linesearch:
@@ -289,7 +292,7 @@ def _accel_prox_grad_step(
 def _accel_step(var_vals: TensorDict, state: ProxGradState) -> TensorDict:
     """Compute the accelerated (momentum) step."""
     momentum_scale = state.iter_ / (state.iter_ + 3)
-    return var_vals + momentum_scale * (var_vals - state.var_vals_prev)
+    return var_vals + momentum_scale * (var_vals - state.variable_values_prev)
 
 
 def _linesearch(
