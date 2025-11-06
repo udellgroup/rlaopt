@@ -1,4 +1,4 @@
-"""Module for mathematical operations on expressions."""
+"""Module for addition and product operations on expressions."""
 
 from typing import Callable
 
@@ -16,12 +16,7 @@ class AddExpression(_NAryOpExpression):
     Represents the sum of two or more expressions.
 
     Args:
-        left_or_exprs: First expression or list of expressions.
-        right: Second expression (optional, can be None).
-
-    Attributes:
-        _num_non_smooth_exprs: Count of non-smooth terms (for proxability).
-        _prox: Proximal operator function (if proxable).
+        *exprs: Expressions to sum together.
 
     Examples:
         >>> x = Variable((5,))
@@ -31,14 +26,30 @@ class AddExpression(_NAryOpExpression):
         True
     """
 
-    def __init__(self, left_or_exprs, right=None):
-        """Initialize sum expression.
+    def __init__(self, *exprs):
+        """Initialize sum expression with flattening.
+
+        Automatically flattens nested AddExpressions to prevent
+        deeply nested structures.
 
         Args:
-            left_or_exprs: First expression.
-            right: Second expression (can be None for operator splitting).
+            *exprs: Variable number of expressions to sum.
         """
-        super().__init__(left_or_exprs, right)
+        # Flatten nested AddExpressions before calling super().__init__
+        # This ensures that (a + b) + c becomes AddExpression(a, b, c)
+        # rather than AddExpression(AddExpression(a, b), c)
+        flattened_exprs = []
+
+        # Flatten any nested AddExpressions
+        for expr in exprs:
+            if isinstance(expr, AddExpression):
+                # Recursively flatten nested AddExpressions
+                flattened_exprs.extend(expr.exprs)
+            else:
+                flattened_exprs.append(expr)
+
+        # Call parent constructor with flattened expressions
+        super().__init__(*flattened_exprs)
         self._num_non_smooth_exprs = self._count_non_smooth_terms()
         self._prox = self._build_prox()
 
@@ -64,7 +75,7 @@ class AddExpression(_NAryOpExpression):
 
         A sum is proxable if:
         1. All non-smooth terms are proxable, AND
-        2. Non-smooth terms operate on disjoint parameter sets.
+        2. Non-smooth terms operate on disjoint sets of variables.
 
         Returns:
             bool: True if the sum is proxable.
@@ -75,13 +86,13 @@ class AddExpression(_NAryOpExpression):
         if any(not expr.is_proxable() for expr in non_smooth_exprs):
             return False
 
-        # Check for parameter overlap
-        seen_params = set()
+        # Check for variable overlap
+        seen_variables = set()
         for expr in non_smooth_exprs:
-            expr_params = set(expr.parameters())
-            if seen_params & expr_params:  # intersection
+            expr_var_names = expr.get_variable_names()
+            if seen_variables & expr_var_names:  # intersection
                 return False
-            seen_params.update(expr_params)
+            seen_variables.update(expr_var_names)
 
         return True
 
@@ -164,22 +175,18 @@ class AddExpression(_NAryOpExpression):
 
             return prox
 
-        elif self._num_non_smooth_exprs == 1:
-            proxes = self._get_proxes()
-            return proxes[0]
+        # Always return a function that handles TensorDict
+        proxes = self._get_proxes()
 
-        else:
-            proxes = self._get_proxes()
+        def prox(location: TensorDict, prox_scaling: float) -> TensorDict:
+            return TensorDict(
+                {
+                    loc_name: prox_fn(loc, prox_scaling)
+                    for (loc_name, loc), prox_fn in zip(location.items(), proxes)
+                }
+            )
 
-            def prox(location: TensorDict, prox_scaling: float) -> TensorDict:
-                return TensorDict(
-                    {
-                        loc_name: prox_fn(loc, prox_scaling)
-                        for (loc_name, loc), prox_fn in zip(location.items(), proxes)
-                    }
-                )
-
-            return prox
+        return prox
 
     def _count_non_smooth_terms(self):
         """Count non-smooth expressions in the sum.
@@ -241,7 +248,7 @@ class ProductExpression(_NAryOpExpression):
         # Valid input
         self._validate()
 
-        # Build propduct op
+        # Build product op
         self._op = self._build_op()
 
     def _validate(self):
@@ -253,10 +260,10 @@ class ProductExpression(_NAryOpExpression):
         Raises:
             TypeError: If validation fails.
         """
-        param_exprs = [e for e in self.exprs if list(e.parameters())]
+        var_exprs = [e for e in self.exprs if e.get_variable_names()]
 
-        if len(param_exprs) > 1:
-            if not all(self._is_var_or_const_tree(e) for e in param_exprs):
+        if len(var_exprs) > 1:
+            if not all(self._is_var_or_const_tree(e) for e in var_exprs):
                 raise TypeError(
                     "Cannot multiply two arbitrary parameterized Expressions. "
                     "Only Variables and Constants can be multiplied together."
@@ -292,14 +299,6 @@ class ProductExpression(_NAryOpExpression):
             ValueError: If expression list is empty.
         """
         return self._op(values)
-
-    def is_smooth(self):
-        """Products are always smooth.
-
-        Returns:
-            bool: Always True.
-        """
-        return True
 
     def is_proxable(self):
         """Products are not proxable.
