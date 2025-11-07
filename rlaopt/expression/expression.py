@@ -302,13 +302,18 @@ class Expression(torch.nn.Module, ABC):
             other: Float or int to divide by.
 
         Returns:
-            ProductExpression or AddExpression: Result of division.
+            Expression: Result of division (optimized).
                 If dividing a sum by a scalar, automatically distributes.
-            NotImplemented: If other is not a scalar.
+
+        Raises:
+            TypeError: If other is not a scalar (int or float).
         """
-        if isinstance(other, (int, float)):
-            return _create_product(self, 1.0 / other, matmul=False)
-        return NotImplemented
+        if not isinstance(other, (int, float)):
+            raise TypeError(
+                f"Division by {type(other).__name__} is not supported. "
+                "Only division by scalars (int, float) is allowed."
+            )
+        return _create_product(self, 1.0 / other, matmul=False)
 
     def __matmul__(self, other):
         """Matrix multiply this expression by another.
