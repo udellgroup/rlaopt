@@ -89,7 +89,7 @@ class AddExpression(_NAryOpExpression):
         # Check for variable overlap
         seen_variables = set()
         for expr in non_smooth_exprs:
-            expr_var_names = expr.get_variable_names()
+            expr_var_names = set(expr.get_variable_names())
             if seen_variables & expr_var_names:  # intersection
                 return False
             seen_variables.update(expr_var_names)
@@ -175,18 +175,22 @@ class AddExpression(_NAryOpExpression):
 
             return prox
 
-        # Always return a function that handles TensorDict
-        proxes = self._get_proxes()
+        elif self._num_non_smooth_exprs == 1:
+            proxes = self._get_proxes()
+            return proxes[0]
 
-        def prox(location: TensorDict, prox_scaling: float) -> TensorDict:
-            return TensorDict(
-                {
-                    loc_name: prox_fn(loc, prox_scaling)
-                    for (loc_name, loc), prox_fn in zip(location.items(), proxes)
-                }
-            )
+        else:
+            proxes = self._get_proxes()
 
-        return prox
+            def prox(location: TensorDict, prox_scaling: float) -> TensorDict:
+                return TensorDict(
+                    {
+                        loc_name: prox_fn(loc, prox_scaling)
+                        for (loc_name, loc), prox_fn in zip(location.items(), proxes)
+                    }
+                )
+
+            return prox
 
     def _count_non_smooth_terms(self):
         """Count non-smooth expressions in the sum.
