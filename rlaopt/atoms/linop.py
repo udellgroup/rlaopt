@@ -2,7 +2,7 @@
 
 import torch
 
-from typing_extension import Self
+from typing_extensions import Self
 
 from rlaopt.atoms.atom_expression import AtomExpression
 from rlaopt.expression import Expression, Variable
