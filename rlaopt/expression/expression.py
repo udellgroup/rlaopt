@@ -15,7 +15,7 @@ from collections import defaultdict
 import torch
 
 from rlaopt.expression import expr_types
-from rlaopt.expression.utils import _create_product
+from rlaopt.expression.utils import _create_add, _create_product
 from rlaopt.ext_tensordict import TensorDict
 
 
@@ -226,9 +226,9 @@ class Expression(torch.nn.Module, ABC):
             other: Expression, float, or int to add.
 
         Returns:
-            AddExpression: Sum of self and other.
+            Expression: Sum of self and other (optimized).
         """
-        return expr_types.add_expr()(self, other)
+        return _create_add(self, other)
 
     def __radd__(self, other):
         """Add a scalar and an expression (reverse operation).
@@ -237,9 +237,9 @@ class Expression(torch.nn.Module, ABC):
             other: Float or int to add.
 
         Returns:
-            AddExpression: Sum of other and self.
+            Expression: Sum of other and self (optimized).
         """
-        return expr_types.add_expr()(other, self)
+        return _create_add(other, self)
 
     def __sub__(self, other):
         """Subtract an expression or scalar from this expression.
@@ -248,9 +248,9 @@ class Expression(torch.nn.Module, ABC):
             other: Expression, float, or int to subtract.
 
         Returns:
-            AddExpression: Difference of self and other.
+            Expression: Difference of self and other (optimized).
         """
-        return expr_types.add_expr()(self, -other)
+        return _create_add(self, -other)
 
     def __rsub__(self, other):
         """Subtract this expression from a scalar (reverse operation).
@@ -259,9 +259,9 @@ class Expression(torch.nn.Module, ABC):
             other: Float or int to subtract from.
 
         Returns:
-            AddExpression: Difference of other and self.
+            Expression: Difference of other and self (optimized).
         """
-        return expr_types.add_expr()(other, -self)
+        return _create_add(other, -self)
 
     def __neg__(self):
         """Negate this expression.
@@ -269,7 +269,7 @@ class Expression(torch.nn.Module, ABC):
         Returns:
             ProductExpression: Negation of self.
         """
-        return expr_types.prod_expr()(expr_types.constant()(-1.0), self)
+        return _create_product(-1.0, self, matmul=False)
 
     def __mul__(self, other):
         """Multiply this expression by another (elementwise).
@@ -307,9 +307,7 @@ class Expression(torch.nn.Module, ABC):
             NotImplemented: If other is not a scalar.
         """
         if isinstance(other, (int, float)):
-            return _create_product(
-                self, expr_types.constant()(1.0 / other), matmul=False
-            )
+            return _create_product(self, 1.0 / other, matmul=False)
         return NotImplemented
 
     def __matmul__(self, other):

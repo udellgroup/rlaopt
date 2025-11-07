@@ -28,29 +28,15 @@ class AddExpression(_NAryOpExpression):
     """
 
     def __init__(self, *exprs):
-        """Initialize sum expression with flattening.
+        """Initialize sum expression.
 
-        Automatically flattens nested AddExpressions to prevent
-        deeply nested structures.
+        Note: Flattening and optimization are handled by _create_add in utils.py.
+        This constructor assumes it receives already-optimized expressions.
 
         Args:
             *exprs: Variable number of expressions to sum.
         """
-        # Flatten nested AddExpressions before calling super().__init__
-        # This ensures that (a + b) + c becomes AddExpression(a, b, c)
-        # rather than AddExpression(AddExpression(a, b), c)
-        flattened_exprs = []
-
-        # Flatten any nested AddExpressions
-        for expr in exprs:
-            if isinstance(expr, AddExpression):
-                # Recursively flatten nested AddExpressions
-                flattened_exprs.extend(expr.exprs)
-            else:
-                flattened_exprs.append(expr)
-
-        # Call parent constructor with flattened expressions
-        super().__init__(*flattened_exprs)
+        super().__init__(*exprs)
         self._prox = self._build_prox()
 
         # Build op method for adding expressions

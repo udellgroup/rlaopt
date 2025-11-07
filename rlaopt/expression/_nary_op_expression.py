@@ -3,7 +3,6 @@ from abc import ABC, abstractmethod
 import torch
 
 from rlaopt.expression.expression import Expression
-from rlaopt.expression.utils import _to_expr
 
 
 class _NAryOpExpression(Expression, ABC):
@@ -34,7 +33,7 @@ class _NAryOpExpression(Expression, ABC):
 
         if not exprs:
             raise ValueError(f"{self.__class__.__name__} requires at least one operand")
-        self.exprs = torch.nn.ModuleList(_to_expr(expr) for expr in exprs)
+        self.exprs = torch.nn.ModuleList(expr for expr in exprs)
 
     @abstractmethod
     def op(self, values: list[torch.Tensor]):

@@ -5,6 +5,61 @@ import torch
 from rlaopt.expression import expr_types
 
 
+def _create_add(left, right):
+    """Create an addition expression with automatic optimizations.
+
+    Optimizations:
+    - Flattens nested AddExpressions: (a + b) + c -> AddExpression(a, b, c)
+    - Folds constants: const1 + const2 -> single const
+    - Filters zeros: expr + 0 -> expr, 0 + expr -> expr
+
+    Args:
+        left: Left operand (Expression, float, int, or torch.Tensor).
+        right: Right operand (Expression, float, int, or torch.Tensor).
+
+    Returns:
+        Expression: Optimized sum (AddExpression, ConstExpression, or single expr).
+    """
+    # Convert inputs to expressions if needed
+    left = _to_expr(left)
+    right = _to_expr(right)
+
+    # Collect all terms by flattening nested AddExpressions
+    terms = []
+    for expr in [left, right]:
+        if isinstance(expr, expr_types.add_expr()):
+            terms.extend(expr.exprs)
+        else:
+            terms.append(expr)
+
+    # Separate constants from non-constants
+    constants = []
+    non_constants = []
+    for term in terms:
+        if isinstance(term, expr_types.constant()):
+            constants.append(term)
+        else:
+            non_constants.append(term)
+
+    # Fold all constants into one
+    if constants:
+        total = sum((c.value for c in constants[1:]), constants[0].value)
+        # Only add back if non-zero (or if it's the only term)
+        if (
+            not torch.allclose(total, torch.zeros_like(total))
+            or len(non_constants) == 0
+        ):
+            non_constants.append(expr_types.constant()(total))
+
+    # Return based on what's left
+    if len(non_constants) == 0:
+        return expr_types.constant()(0.0)
+    elif len(non_constants) == 1:
+        return non_constants[0]
+    else:
+        return expr_types.add_expr()(*non_constants)
+
+
 def _create_product(left, right, matmul: bool):
     """Create a product expression with automatic distribution.
 
