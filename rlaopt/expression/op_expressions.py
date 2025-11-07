@@ -18,13 +18,6 @@ class AddExpression(_NAryOpExpression):
 
     Args:
         *exprs: Expressions to sum together.
-
-    Examples:
-        >>> x = Variable((5,))
-        >>> y = Variable((5,))
-        >>> z = x + y + 10
-        >>> isinstance(z, AddExpression)
-        True
     """
 
     def __init__(self, *exprs):
@@ -207,14 +200,6 @@ class ProductExpression(_NAryOpExpression):
 
     Attributes:
         matmul: Whether to use matrix multiplication.
-
-    Examples:
-        >>> x = Variable((5,))
-        >>> y = Variable((5,))
-        >>> z = x * y  # Elementwise
-        >>> A = Variable((3, 4))
-        >>> b = Variable((4,))
-        >>> c = A @ b  # Matrix multiplication
     """
 
     def __init__(self, *exprs, matmul: bool = False):

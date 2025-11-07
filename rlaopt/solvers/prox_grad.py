@@ -22,7 +22,7 @@ class ProxGradConfig(SolverConfig):
         use_linesearch: Whether to use line search for step size selection.
     """
 
-    eta: float = Field(default=1.0, gt=0)
+    eta: float = Field(default=1.0, gt=0.0)
     use_acceleration: bool = False
     use_linesearch: bool = True
 
@@ -35,7 +35,7 @@ class ProxGradStoppingCriteria(StoppingCriteria):
         tol: Tolerance for convergence based on the error metric.
     """
 
-    tol: float = Field(default=1e-4, gt=0)
+    tol: float = Field(default=1e-4, gt=0.0)
 
 
 @dataclass(frozen=True)
@@ -241,7 +241,7 @@ def _build_solve(
     def solve(var_vals: TensorDict | None = None) -> tuple[TensorDict, torch.Tensor]:
         """Solve the optimization problem."""
         if var_vals is None:
-            var_vals = op_split.f.variable_values
+            var_vals = op_split.variable_values
 
         state = init_state_fn(var_vals)
 

@@ -12,6 +12,7 @@ as proximal gradient descent and its variants.
 from typing import Callable
 
 import torch
+from tensordict import merge_tensordicts
 from typing_extensions import Self
 
 from rlaopt.expression import AddExpression, Expression
@@ -58,6 +59,18 @@ class OperatorSplit:
     def r(self) -> Expression | None:
         """Returns the proximal component of the composite function."""
         return self._r
+
+    @property
+    def variable_values(self) -> TensorDict:
+        """Returns the variable values associated with the composite function."""
+        if self._r:
+            # Return variable values from f and r, avoiding duplication
+            r_var_vals = self._r.variable_values
+            _, r_var_vals_excluding_f = r_var_vals.split_keys(
+                self._f.get_variable_names()
+            )
+            return merge_tensordicts(self._f.variable_values, r_var_vals_excluding_f)
+        return self._f.variable_values
 
     def evaluate(self, variable_values: TensorDict) -> torch.Tensor:
         """Evaluate the composite objective function `f + r` at the given variables.
