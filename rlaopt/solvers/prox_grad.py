@@ -6,12 +6,11 @@ from typing import Callable
 import torch
 from pydantic import Field
 
-from rlaopt.expression import AddExpression, Expression
+from rlaopt.expression import Expression
 from rlaopt.ext_tensordict import TensorDict
 from rlaopt.operator_split import OperatorSplit
 from rlaopt.solvers.configs_base import SolverConfig, StoppingCriteria
 from rlaopt.solvers.solver_base import OptimSolver, SolverState
-from rlaopt.solvers.utils import split_objective
 
 
 class ProxGradConfig(SolverConfig):
@@ -72,20 +71,32 @@ class ProxGrad(OptimSolver):
     - Combinations of acceleration and line search
     """
 
-    def __init__(
-        self, obj: Expression | AddExpression | OperatorSplit, config: ProxGradConfig
-    ):
+    def __init__(self, obj: Expression | OperatorSplit, config: ProxGradConfig):
         """Initialize the proximal gradient solver.
 
         Args:
-            obj: The optimization objective.
+            obj: The optimization objective (Expression or OperatorSplit).
+                If an Expression, it will be automatically converted to OperatorSplit.
             config: Configuration for the solver.
         """
         super().__init__(obj, config)
+
+        # Convert to OperatorSplit if needed
+        if isinstance(obj, Expression):
+            op_split = OperatorSplit.from_expression(obj)
+        elif isinstance(obj, OperatorSplit):
+            op_split = obj
+        else:
+            raise TypeError(
+                f"obj must be an Expression or OperatorSplit, got {type(obj).__name__}"
+            )
+
         self._init_state = _build_init_state(config.eta, config.use_acceleration)
-        self._step = _build_step(obj, config.use_acceleration, config.use_linesearch)
+        self._step = _build_step(
+            op_split, config.use_acceleration, config.use_linesearch
+        )
         self._solve = lambda tol, max_iters: _build_solve(
-            obj, self._init_state, self._step, tol, max_iters
+            op_split, self._init_state, self._step, tol, max_iters
         )
 
     def init_state(self, variable_values: TensorDict) -> ProxGradState:
@@ -153,7 +164,7 @@ def _build_init_state(
 
 
 def _build_step(
-    obj: Expression | AddExpression | OperatorSplit,
+    op_split: OperatorSplit,
     use_acceleration: bool,
     use_linesearch: bool,
 ) -> Callable[
@@ -161,18 +172,14 @@ def _build_step(
     tuple[TensorDict, ProxGradState],
 ]:
     """Build the step function based on configuration."""
-    # If the objective is not already an OperatorSplit, split it
-    if isinstance(obj, Expression):
-        obj = split_objective(obj)
-
     # Extract the function, gradient, and prox operator
-    f, grad_f, prox = obj.f_func, obj.grad_f, obj.prox
+    f, grad_f, prox = op_split.f_func, op_split.grad_f, op_split.prox
 
     # Setup function computing stopping criteria
     def err_fn(var_vals: TensorDict, state: ProxGradState) -> torch.Tensor:
-        grads = obj.grad_f(var_vals)
+        grads = op_split.grad_f(var_vals)
         updated_var_vals = var_vals - state.eta * grads
-        prox_var_vals = obj.prox(updated_var_vals, state.eta)
+        prox_var_vals = op_split.prox(updated_var_vals, state.eta)
 
         return (var_vals - prox_var_vals).flat_norm() / state.eta
 
@@ -223,7 +230,7 @@ def _build_step(
 
 
 def _build_solve(
-    obj: Expression | AddExpression | OperatorSplit,
+    op_split: OperatorSplit,
     init_state_fn: Callable,
     step_fn: Callable,
     tol: float,
@@ -234,10 +241,7 @@ def _build_solve(
     def solve(var_vals: TensorDict | None = None) -> tuple[TensorDict, torch.Tensor]:
         """Solve the optimization problem."""
         if var_vals is None:
-            if isinstance(obj, OperatorSplit):
-                var_vals = obj.f.variable_values
-            else:
-                var_vals = obj.variable_values
+            var_vals = op_split.f.variable_values
 
         state = init_state_fn(var_vals)
 
