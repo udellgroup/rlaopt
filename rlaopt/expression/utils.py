@@ -61,18 +61,13 @@ def _create_add(left, right):
 
 
 def _create_product(left, right, matmul: bool):
-    """Create a product expression with automatic distribution.
+    """Create a product expression with automatic optimizations.
 
-    Distributes constants over sums to enable better splitting:
-    - const * (a + b + c) -> const*a + const*b + const*c
-    - (a + b + c) * const -> a*const + b*const + c*const
-
-    Condenses products of constants:
-    - const1 * const2 -> single const with combined value
-
-    Handles atom scaling:
-    - const * atom -> atom._scale(const.value) if atom supports it
-    - atom * const -> atom._scale(const.value) if atom supports it
+    Optimizations:
+    - Flattens nested ProductExpressions: (a * b) * c -> ProductExpression(a, b, c)
+    - Folds scalar constants: 2 * (3 * x) -> 6 * x
+    - Distributes constants over sums: const * (a + b) -> const*a + const*b
+    - Handles atom scaling: const * atom -> atom._scale(const) if supported
 
     Does NOT distribute expression * expression products to avoid
     duplicating computation and increasing expression tree size.
@@ -80,11 +75,11 @@ def _create_product(left, right, matmul: bool):
     Args:
         left: Left operand (Expression, float, int, or torch.Tensor).
         right: Right operand (Expression, float, int, or torch.Tensor).
-        matmul: If True, use matrix multiplication (no distribution).
+        matmul: If True, use matrix multiplication (no optimizations).
 
     Returns:
         ProductExpression, AddExpression (if distributed), ConstExpression
-        (if both constants), or AtomExpression (if scaled atom).
+        (if all constants fold), or AtomExpression (if scaled atom).
     """
     # Convert inputs to expressions if needed
     left = _to_expr(left)
@@ -92,52 +87,69 @@ def _create_product(left, right, matmul: bool):
 
     # Only optimize for elementwise multiplication
     if not matmul:
-        # Check if we have constants
-        left_is_const = isinstance(left, expr_types.constant())
-        right_is_const = isinstance(right, expr_types.constant())
+        # Step 1: Flatten nested ProductExpressions (only elementwise products)
+        factors = []
+        for expr in [left, right]:
+            if isinstance(expr, expr_types.prod_expr()) and not expr.matmul:
+                factors.extend(expr.exprs)
+            else:
+                factors.append(expr)
 
-        # Condense: const * const -> single const
-        if left_is_const and right_is_const:
-            combined_value = left.value * right.value
-            return expr_types.constant()(combined_value)
+        # Step 2: Separate scalar constants from other factors
+        scalar_constants = []
+        other_factors = []
+        for factor in factors:
+            if isinstance(factor, expr_types.constant()) and factor.value.numel() == 1:
+                scalar_constants.append(factor)
+            else:
+                other_factors.append(factor)
 
-        # Handle atom scaling: const * atom or atom * const
-        # Import here to avoid circular imports
-        from rlaopt.atoms.atom_expression import AtomExpression
+        # Step 3: Fold all scalar constants into one
+        folded_const = None
+        if scalar_constants:
+            product = scalar_constants[0].value.item()
+            for const in scalar_constants[1:]:
+                product *= const.value.item()
+            folded_const = expr_types.constant()(product)
 
-        # const * atom
-        if left_is_const and isinstance(right, AtomExpression):
-            if left.value.numel() == 1:
-                scalar = left.value.item()
-                try:
-                    return right._scale(scalar)
-                except NotImplementedError:
-                    pass
+        # Step 4: Apply optimizations with the folded constant
+        if folded_const is not None:
+            # If only constant(s), return the folded constant
+            if len(other_factors) == 0:
+                return folded_const
 
-        # atom * const
-        if right_is_const and isinstance(left, AtomExpression):
-            if right.value.numel() == 1:
-                scalar = right.value.item()
-                try:
-                    return left._scale(scalar)
-                except NotImplementedError:
-                    pass
+            # If we have exactly one other factor, try special optimizations
+            if len(other_factors) == 1:
+                other = other_factors[0]
 
-        # Distribute: const * (a + b) -> const*a + const*b
-        if left_is_const and isinstance(right, expr_types.add_expr()):
-            distributed_terms = [
-                _create_product(left, term, matmul=False) for term in right.exprs
-            ]
-            return expr_types.add_expr()(*distributed_terms)
+                # Handle atom scaling: const * atom
+                from rlaopt.atoms.atom_expression import AtomExpression
 
-        # Distribute: (a + b) * const -> a*const + b*const
-        if right_is_const and isinstance(left, expr_types.add_expr()):
-            distributed_terms = [
-                _create_product(term, right, matmul=False) for term in left.exprs
-            ]
-            return expr_types.add_expr()(*distributed_terms)
+                if isinstance(other, AtomExpression):
+                    scalar = folded_const.value.item()
+                    try:
+                        return other._scale(scalar)
+                    except NotImplementedError:
+                        pass
 
-    # No distribution needed
+                # Distribute: const * (a + b) -> const*a + const*b
+                if isinstance(other, expr_types.add_expr()):
+                    distributed_terms = [
+                        _create_product(folded_const, term, matmul=False)
+                        for term in other.exprs
+                    ]
+                    return expr_types.add_expr()(*distributed_terms)
+
+            # General case: rebuild product with folded constant and other factors
+            all_factors = [folded_const] + other_factors
+            return expr_types.prod_expr()(*all_factors, matmul=False)
+
+        # No scalar constants to fold
+        if len(other_factors) == 1:
+            return other_factors[0]
+        return expr_types.prod_expr()(*other_factors, matmul=False)
+
+    # No optimization for matmul
     return expr_types.prod_expr()(left, right, matmul=matmul)
 
 
