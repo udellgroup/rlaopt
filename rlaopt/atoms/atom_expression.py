@@ -159,6 +159,16 @@ class AtomExpression(Expression, ABC):
         self.add_module(self._expr_name, x)
 
     def _scale(self, scaling: float) -> Self:
-        raise NotImplementedError(
-            f"{self.__class__.__name__} does not support scalar multiplication."
-        )
+        """Scale the atom by a scalar constant.
+
+        This method should be overridden by subclasses that support scalar
+        multiplication. The default implementation returns NotImplemented.
+
+        Args:
+            scaling: Scalar value to multiply the atom by.
+
+        Returns:
+            Self: A new atom scaled by the given value, or NotImplemented if
+                scalar multiplication is not supported.
+        """
+        return NotImplemented

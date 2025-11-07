@@ -127,10 +127,9 @@ def _create_product(left, right, matmul: bool):
 
                 if isinstance(other, AtomExpression):
                     scalar = folded_const.value.item()
-                    try:
-                        return other._scale(scalar)
-                    except NotImplementedError:
-                        pass
+                    scaled = other._scale(scalar)
+                    if scaled is not NotImplemented:
+                        return scaled
 
                 # Distribute: const * (a + b) -> const*a + const*b
                 if isinstance(other, expr_types.add_expr()):
