@@ -156,8 +156,7 @@ class AtomExpression(Expression, ABC):
             >>> expr = x + y
             >>> atom.register_input(expr)  # Sets input_type to InputType.EXPRESSION
         """
-        # self._input_metadata = x
-
+    
         if isinstance(x, Variable):
             self._var_name = x.name
             self.register_parameter(self._var_name, x.value)
@@ -179,7 +178,3 @@ class AtomExpression(Expression, ABC):
         """Get the expression registered with the atom."""
         return getattr(self, "_expr_name", None)
 
-    # @property
-    # def input_metadata(self) -> Variable | Expression | None:
-    #     """Get the original input Variable or Expression for reconstruction."""
-    #     return getattr(self, "_input_metadata", None)
