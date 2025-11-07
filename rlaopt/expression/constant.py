@@ -72,6 +72,14 @@ class ConstExpression(Expression):
         """
         return self.value
 
+    def tree(self) -> str:
+        """Return tree representation for ConstExpression (leaf node).
+
+        Returns:
+            str: 'ConstExpression'
+        """
+        return "ConstExpression"
+
     def __neg__(self):
         """Negate the constant (keeps it as a constant).
 

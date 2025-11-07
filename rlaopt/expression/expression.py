@@ -100,6 +100,29 @@ class Expression(torch.nn.Module, ABC):
         """
         pass
 
+    @abstractmethod
+    def tree(self) -> tuple | str:
+        """Return a tree representation of the expression structure.
+
+        Returns a nested tuple structure showing how expressions are composed.
+        Useful for testing that expression optimizations (constant folding,
+        flattening, etc.) are working correctly.
+
+        Each subclass implements this method to expose its own structure without
+        leaking implementation details to the base class.
+
+        Returns:
+            tuple | str: Tree structure as (ClassName, child1, child2, ...) for
+                composite expressions, or just ClassName string for leaf expressions.
+
+        Examples:
+            >>> x = Variable((2,), name='x')
+            >>> expr = 2 * (3 * x)
+            >>> expr.tree()
+            ('ProductExpression', 'ConstExpression', 'Variable')
+        """
+        pass
+
     def evaluate(self, variable_values: TensorDict) -> torch.Tensor:
         """Evaluate the expression at specified variable values.
 

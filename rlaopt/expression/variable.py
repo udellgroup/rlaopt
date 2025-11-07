@@ -229,6 +229,14 @@ class Variable(Expression):
         """
         return self.value
 
+    def tree(self) -> str:
+        """Return tree representation for Variable (leaf node).
+
+        Returns:
+            str: 'Variable'
+        """
+        return "Variable"
+
     def sum(self, dim=None):
         """Create a sum operation over this variable.
 

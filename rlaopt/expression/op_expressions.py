@@ -186,6 +186,14 @@ class AddExpression(_NAryOpExpression):
                 proxes.append(expr.prox)
         return proxes
 
+    def tree(self) -> tuple:
+        """Return tree representation for AddExpression.
+
+        Returns:
+            tuple: ('AddExpression', child1_tree, child2_tree, ...)
+        """
+        return ("AddExpression",) + tuple(expr.tree() for expr in self.exprs)
+
 
 class ProductExpression(_NAryOpExpression):
     """Product of multiple expressions.
@@ -289,6 +297,14 @@ class ProductExpression(_NAryOpExpression):
             NotImplementedError: Always.
         """
         raise NotImplementedError("ProductExpression is not proxable")
+
+    def tree(self) -> tuple:
+        """Return tree representation for ProductExpression.
+
+        Returns:
+            tuple: ('ProductExpression', child1_tree, child2_tree, ...)
+        """
+        return ("ProductExpression",) + tuple(expr.tree() for expr in self.exprs)
 
     def _build_op(self) -> Callable[[list[torch.Tensor]], torch.Tensor]:
         if self.matmul:
