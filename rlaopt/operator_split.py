@@ -138,6 +138,10 @@ class OperatorSplit:
             composite_expr (Expression): An expression representing
                 a composite objective function.
 
+        Raises:
+            ValueError: If the expression cannot be split into smooth
+                and proximal parts.
+
         Returns:
             Self: An instance of OperatorSplit.
         """

@@ -12,7 +12,7 @@ def nary_op_expr():
     """Return _NAryOperatorExpression class to avoid circular imports."""
     from rlaopt.expression import _nary_op_expression
 
-    return _nary_op_expression._NAryOperatorExpression
+    return _nary_op_expression._NAryOpExpression
 
 
 def unary_op_expr():

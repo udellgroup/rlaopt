@@ -15,6 +15,7 @@ from collections import defaultdict
 import torch
 
 from rlaopt.expression import expr_types
+from rlaopt.expression.utils import _create_product
 from rlaopt.ext_tensordict import TensorDict
 
 
@@ -277,9 +278,10 @@ class Expression(torch.nn.Module, ABC):
             other: Expression, float, or int to multiply.
 
         Returns:
-            ProductExpression: Elementwise product of self and other.
+            ProductExpression or AddExpression: Elementwise product of self and other.
+                If multiplying a scalar by a sum, automatically distributes.
         """
-        return expr_types.prod_expr()(self, other, matmul=False)
+        return _create_product(self, other, matmul=False)
 
     def __rmul__(self, other):
         """Multiply a scalar by this expression (reverse operation).
@@ -288,9 +290,10 @@ class Expression(torch.nn.Module, ABC):
             other: Float or int to multiply.
 
         Returns:
-            ProductExpression: Elementwise product of other and self.
+            ProductExpression or AddExpression: Elementwise product of other and self.
+                If multiplying a scalar by a sum, automatically distributes.
         """
-        return expr_types.prod_expr()(other, self, matmul=False)
+        return _create_product(other, self, matmul=False)
 
     def __truediv__(self, other):
         """Divide this expression by a scalar.
@@ -299,11 +302,12 @@ class Expression(torch.nn.Module, ABC):
             other: Float or int to divide by.
 
         Returns:
-            ProductExpression: Result of division.
+            ProductExpression or AddExpression: Result of division.
+                If dividing a sum by a scalar, automatically distributes.
             NotImplemented: If other is not a scalar.
         """
         if isinstance(other, (int, float)):
-            return expr_types.prod_expr()(
+            return _create_product(
                 self, expr_types.constant()(1.0 / other), matmul=False
             )
         return NotImplemented
@@ -317,7 +321,7 @@ class Expression(torch.nn.Module, ABC):
         Returns:
             ProductExpression: Matrix product of self and other.
         """
-        return expr_types.prod_expr()(self, other, matmul=True)
+        return _create_product(self, other, matmul=True)
 
     def __rmatmul__(self, other):
         """Matrix multiply a value by this expression (reverse operation).
@@ -328,7 +332,7 @@ class Expression(torch.nn.Module, ABC):
         Returns:
             ProductExpression: Matrix product of other and self.
         """
-        return expr_types.prod_expr()(other, self, matmul=True)
+        return _create_product(other, self, matmul=True)
 
     def __pow__(self, exponent):
         """Raise this expression to a power (elementwise).
