@@ -157,3 +157,23 @@ class AtomExpression(Expression, ABC):
 
         self._expr_name = x._get_name()
         self.add_module(self._expr_name, x)
+
+    def __mul__(self, other):
+        """Support scalar multiplication for atoms."""
+        if isinstance(other, (int, float)):
+            try:
+                return self._scale(other)
+            except NotImplementedError:
+                pass  # Fall back to implementation in superclass
+        return super().__mul__(other)
+
+    def __rmul__(self, other):
+        """Support right scalar multiplication for atoms."""
+        if isinstance(other, (int, float)):
+            return self.__mul__(other)
+        return super().__rmul__(other)
+
+    def _scale(self, scaling: float) -> Self:
+        raise NotImplementedError(
+            f"{self.__class__.__name__} does not support scalar multiplication."
+        )

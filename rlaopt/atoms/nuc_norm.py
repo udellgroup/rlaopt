@@ -126,6 +126,11 @@ class NucNorm(AtomExpression):
         """
         raise NotImplementedError("Nuclear norm cannot be subsampled")
 
+    def _scale(self, scaling: float) -> Self:
+        """Scale the nuclear norm atom."""
+        new_scaling = self.scaling * scaling
+        return NucNorm(self.get_input(), scaling=new_scaling)
+
 
 class _prox_nuc_norm(torch.autograd.Function):
     """Proximal operator for the nuclear norm with custom backward pass.

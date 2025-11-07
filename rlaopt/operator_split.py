@@ -12,6 +12,7 @@ as proximal gradient descent and its variants.
 from typing import Callable
 
 import torch
+from typing_extensions import Self
 
 from rlaopt.expression import AddExpression, Expression
 from rlaopt.ext_tensordict import TensorDict
@@ -129,6 +130,26 @@ class OperatorSplit:
         """
         return self._prox(variable_values, eta)
 
+    @classmethod
+    def from_expression(cls, composite_expr: Expression) -> Self:
+        """Create an OperatorSplit instance from an expression.
+
+        Args:
+            composite_expr (Expression): An expression representing
+                a composite objective function.
+
+        Returns:
+            Self: An instance of OperatorSplit.
+        """
+        if isinstance(composite_expr, AddExpression):
+            smooth_expr = composite_expr.get_smooth_part()
+            prox_expr = composite_expr.get_non_smooth_part()
+            return cls(smooth_expr, prox_expr)
+        elif composite_expr.is_smooth():
+            return cls(composite_expr, None)
+        else:
+            raise ValueError("Cannot create OperatorSplit from expression.")
+
 
 def _validate_input(smooth_expr: Expression, prox_expr: Expression | None):
     if not smooth_expr.is_smooth():
@@ -143,7 +164,7 @@ def _build_prox(
 ) -> Callable[[TensorDict, float], TensorDict]:
     if prox_expr:
         if isinstance(prox_expr, AddExpression):
-            num_non_smooth_exprs = prox_expr._num_non_smooth_exprs
+            num_non_smooth_exprs = prox_expr.num_non_smooth_exprs
         else:
             num_non_smooth_exprs = 1
 

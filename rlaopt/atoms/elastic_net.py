@@ -128,3 +128,9 @@ class ElasticNet(AtomExpression):
             torch.nn.functional.relu(location - threshold)
             - torch.nn.functional.relu(-location - threshold)
         ) / l2_term
+
+    def _scale(self, scaling: float) -> Self:
+        """Scale the elastic net regularization atom."""
+        new_l1 = self.l1_scaling * scaling
+        new_l2 = self.l2_scaling * scaling
+        return ElasticNet(self.get_input(), l1_scaling=new_l1, l2_scaling=new_l2)

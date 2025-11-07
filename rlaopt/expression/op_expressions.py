@@ -7,6 +7,7 @@ import torch
 from rlaopt.expression import expr_types
 from rlaopt.expression._nary_op_expression import _NAryOpExpression
 from rlaopt.expression.constant import ConstExpression
+from rlaopt.expression.expression import Expression
 from rlaopt.ext_tensordict import TensorDict
 
 
@@ -50,7 +51,6 @@ class AddExpression(_NAryOpExpression):
 
         # Call parent constructor with flattened expressions
         super().__init__(*flattened_exprs)
-        self._num_non_smooth_exprs = self._count_non_smooth_terms()
         self._prox = self._build_prox()
 
         # Build op method for adding expressions
@@ -80,7 +80,7 @@ class AddExpression(_NAryOpExpression):
         Returns:
             bool: True if the sum is proxable.
         """
-        non_smooth_exprs = [e for e in self.exprs if not e.is_smooth()]
+        non_smooth_exprs = self._get_non_smooth_exprs()
 
         # All non-smooth terms must be proxable
         if any(not expr.is_proxable() for expr in non_smooth_exprs):
@@ -95,32 +95,6 @@ class AddExpression(_NAryOpExpression):
             seen_variables.update(expr_var_names)
 
         return True
-
-    def operator_split(self):
-        """Split sum into smooth and non-smooth parts.
-
-        Separates the sum into two expressions: one containing all smooth terms
-        and one containing all non-smooth terms. Useful for proximal algorithms.
-
-        Returns:
-            tuple: (smooth_expr, non_smooth_expr) where either can be None.
-
-        Examples:
-            >>> from rlaopt.atoms import L1Norm, SumSquares
-            >>> x = Variable((5,))
-            >>> expr = SumSquares(x) + L1Norm(x)
-            >>> smooth, non_smooth = expr.operator_split()
-            >>> smooth.is_smooth()
-            True
-            >>> non_smooth.is_smooth()
-            False
-        """
-        smooth = [e for e in self.exprs if e.is_smooth()]
-        non_smooth = [e for e in self.exprs if not e.is_smooth()]
-        smooth_expr = AddExpression(*smooth) if smooth else None
-        non_smooth_expr = AddExpression(*non_smooth) if non_smooth else None
-
-        return smooth_expr, non_smooth_expr
 
     def prox(self, location, prox_scaling):
         """Compute proximal operator of the sum.
@@ -137,6 +111,35 @@ class AddExpression(_NAryOpExpression):
         """
         return self._prox(location, prox_scaling)
 
+    def _get_smooth_exprs(self) -> list[Expression]:
+        return [e for e in self.exprs if e.is_smooth()]
+
+    def _get_non_smooth_exprs(self) -> list[Expression]:
+        return [e for e in self.exprs if not e.is_smooth()]
+
+    def get_smooth_part(self) -> Expression | None:
+        """Get the smooth part of the sum expression.
+
+        Returns:
+            Expression or None: Smooth part of the sum, or None if no smooth terms.
+        """
+        smooth_exprs = self._get_smooth_exprs()
+        if not smooth_exprs:
+            return None
+        return AddExpression(*smooth_exprs)
+
+    def get_non_smooth_part(self) -> Expression | None:
+        """Get the non-smooth part of the sum expression.
+
+        Returns:
+            Expression or None: Non-smooth part of the sum, or None if
+                no non-smooth terms.
+        """
+        non_smooth_exprs = self._get_non_smooth_exprs()
+        if not non_smooth_exprs:
+            return None
+        return AddExpression(*non_smooth_exprs)
+
     @property
     def num_non_smooth_exprs(self):
         """Get count of non-smooth terms.
@@ -144,7 +147,7 @@ class AddExpression(_NAryOpExpression):
         Returns:
             int: Number of non-smooth expressions in the sum.
         """
-        return self._num_non_smooth_exprs
+        return len(self._get_non_smooth_exprs())
 
     def _build_op(self) -> Callable[[list[torch.Tensor]], torch.Tensor]:
         """Build the addition op method for AddExpression."""
@@ -175,7 +178,7 @@ class AddExpression(_NAryOpExpression):
 
             return prox
 
-        elif self._num_non_smooth_exprs == 1:
+        elif self.num_non_smooth_exprs == 1:
             proxes = self._get_proxes()
             return proxes[0]
 
@@ -191,14 +194,6 @@ class AddExpression(_NAryOpExpression):
                 )
 
             return prox
-
-    def _count_non_smooth_terms(self):
-        """Count non-smooth expressions in the sum.
-
-        Returns:
-            int: Number of non-smooth terms.
-        """
-        return sum(1 for expr in self.exprs if not expr.is_smooth())
 
     def _get_proxes(self) -> list[Callable[[torch.Tensor, float], torch.Tensor]]:
         """Get proximal operators of non-smooth expressions.
