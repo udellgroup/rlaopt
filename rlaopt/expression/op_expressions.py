@@ -8,7 +8,6 @@ from rlaopt.expression import expr_types
 from rlaopt.expression._nary_op_expression import _NAryOpExpression
 from rlaopt.expression.constant import ConstExpression
 from rlaopt.expression.expression import Expression
-from rlaopt.expression.tree import ExprTree
 from rlaopt.ext_tensordict import TensorDict
 
 
@@ -187,13 +186,13 @@ class AddExpression(_NAryOpExpression):
                 proxes.append(expr.prox)
         return proxes
 
-    def tree(self) -> ExprTree:
-        """Return tree representation for AddExpression.
+    def is_commutative_operation(self) -> bool:
+        """Addition is commutative.
 
         Returns:
-            ExprTree: Tree with type 'AddExpression' and child trees.
+            bool: Always True.
         """
-        return ExprTree("AddExpression", *(expr.tree() for expr in self.exprs))
+        return True
 
 
 class ProductExpression(_NAryOpExpression):
@@ -299,13 +298,13 @@ class ProductExpression(_NAryOpExpression):
         """
         raise NotImplementedError("ProductExpression is not proxable")
 
-    def tree(self) -> ExprTree:
-        """Return tree representation for ProductExpression.
+    def is_commutative_operation(self) -> bool:
+        """Multiplication is commutative except for matrix multiplication.
 
         Returns:
-            ExprTree: Tree with type 'ProductExpression' and child trees.
+            bool: True if elementwise, False if matrix multiplication.
         """
-        return ExprTree("ProductExpression", *(expr.tree() for expr in self.exprs))
+        return not self.matmul
 
     def _build_op(self) -> Callable[[list[torch.Tensor]], torch.Tensor]:
         if self.matmul:

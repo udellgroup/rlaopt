@@ -10,21 +10,25 @@ class ExprTree:
     Each node has a type (class name) and zero or more children.
     """
 
-    def __init__(self, node_type: str, *children: Self):
+    def __init__(self, node_type: str, *children: Self, is_commutative: bool = False):
         """Initialize an expression tree node.
 
         Args:
             node_type: The expression class name.
             *children: Child ExprTree nodes.
+            is_commutative: Whether this operation is commutative (e.g., addition,
+                multiplication). For commutative operations, child order doesn't
+                matter for equality/hashing.
         """
         self.node_type = node_type
         self.children = children
+        self.is_commutative = is_commutative
 
     def __eq__(self, other) -> bool:
         """Check structural equality of two expression trees.
 
-        For commutative operations (AddExpression, ProductExpression), children
-        can be in any order. For other operations, order matters.
+        For commutative operations, children can be in any order.
+        For other operations, order matters.
 
         Args:
             other: Another ExprTree to compare with.
@@ -36,9 +40,11 @@ class ExprTree:
             return False
         if self.node_type != other.node_type:
             return False
+        if self.is_commutative != other.is_commutative:
+            return False
 
         # For commutative operations, ignore child order
-        if self.node_type in ("AddExpression", "ProductExpression"):
+        if self.is_commutative:
             return set(self.children) == set(other.children)
 
         # For other operations, order matters
@@ -52,10 +58,10 @@ class ExprTree:
         Returns:
             int: Hash of the tree structure.
         """
-        if self.node_type in ("AddExpression", "ProductExpression"):
+        if self.is_commutative:
             # Order-independent hash for commutative operations
-            return hash((self.node_type, frozenset(self.children)))
-        return hash((self.node_type, self.children))
+            return hash((self.node_type, frozenset(self.children), self.is_commutative))
+        return hash((self.node_type, self.children, self.is_commutative))
 
     def __repr__(self) -> str:
         """Return a code-like representation of the tree.
