@@ -3,6 +3,7 @@ from typing import Callable
 import torch
 
 from rlaopt.expression import Expression
+from rlaopt.expression.tree import ExprTree
 from rlaopt.expression.utils import _to_expr
 
 
@@ -30,17 +31,21 @@ class _UnaryOpExpression(Expression):
         self,
         operand: Expression | float | int | torch.Tensor,
         op: Callable[[torch.Tensor], torch.Tensor],
+        name: str | None = None,
     ):
         """Initialize unary operation expression.
 
         Args:
             operand: Expression or value to operate on.
             op: Function to apply.
+            name: Optional name for the operation (e.g., 'sum', 'transpose').
+                If not provided, uses the class name.
         """
         super().__init__()
         self.operand = _to_expr(operand)
         self.add_module("_operand", self.operand)
         self._op = op
+        self._op_name = name
 
     def forward(self) -> torch.Tensor:
         """Evaluate the unary operation.
@@ -67,13 +72,13 @@ class _UnaryOpExpression(Expression):
         """
         return False
 
-    def sum(self, dim=None):
-        """Create a sum operation.
+    def tree(self) -> ExprTree:
+        """Return tree representation for unary operation.
 
-        Args:
-            dim: Dimension to sum over (None for all dimensions).
+        Unary operations are not commutative since they have a single operand.
 
         Returns:
-            UnaryOpExpression: Expression computing the sum.
+            ExprTree: Tree with operation name and operand child.
         """
-        return _UnaryOpExpression(self, lambda t: torch.sum(t, dim=dim))
+        node_name = self._op_name if self._op_name else self.__class__.__name__
+        return ExprTree(node_name, self.operand.tree())

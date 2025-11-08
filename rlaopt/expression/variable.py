@@ -255,7 +255,8 @@ class Variable(Expression):
             >>> x.sum(dim=0).forward().shape
             torch.Size([4])
         """
-        return _UnaryOpExpression(self, lambda t: torch.sum(t, dim=dim))
+        name = f"sum_{dim}" if dim is not None else "sum"
+        return _UnaryOpExpression(self, lambda t: torch.sum(t, dim=dim), name=name)
 
     def transpose(self):
         """Create a transpose operation (for 2D variables).
@@ -279,7 +280,7 @@ class Variable(Expression):
         """
         if self.value.ndim == 1:
             return self
-        return _UnaryOpExpression(self, lambda t: t.transpose(-2, -1))
+        return _UnaryOpExpression(self, lambda t: t.transpose(-2, -1), name="transpose")
 
     @property
     def T(self):

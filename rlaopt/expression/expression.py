@@ -357,4 +357,6 @@ class Expression(torch.nn.Module, ABC):
         Returns:
             UnaryOpExpression: Result of exponentiation.
         """
-        return expr_types.unary_op_expr()(self, lambda t: torch.pow(t, exponent))
+        return expr_types.unary_op_expr()(
+            self, lambda t: torch.pow(t, exponent), name=f"power_{exponent}"
+        )
