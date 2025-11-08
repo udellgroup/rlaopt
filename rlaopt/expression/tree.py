@@ -33,14 +33,6 @@ class ExprTree:
             return False
         return self.node_type == other.node_type and self.children == other.children
 
-    def __hash__(self) -> int:
-        """Hash the tree for use in sets and dictionaries.
-
-        Returns:
-            int: Hash of the tree structure.
-        """
-        return hash((self.node_type, self.children))
-
     def __repr__(self) -> str:
         """Return a code-like representation of the tree.
 
@@ -113,19 +105,3 @@ class ExprTree:
             int: Total number of nodes (including this one).
         """
         return 1 + sum(child.count_nodes() for child in self.children)
-
-    def find_nodes(self, node_type: str) -> list[Self]:
-        """Find all nodes of a specific type in the tree.
-
-        Args:
-            node_type: The expression class name to search for.
-
-        Returns:
-            list[ExprTree]: List of all matching nodes.
-        """
-        matches = []
-        if self.node_type == node_type:
-            matches.append(self)
-        for child in self.children:
-            matches.extend(child.find_nodes(node_type))
-        return matches
