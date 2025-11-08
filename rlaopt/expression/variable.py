@@ -4,6 +4,7 @@ import torch
 
 from rlaopt.expression._unary_op_expression import _UnaryOpExpression
 from rlaopt.expression.expression import Expression
+from rlaopt.expression.tree import ExprTree
 from rlaopt.settings import VAR_PREFIX
 from rlaopt.utils.counter import get_id
 
@@ -229,13 +230,13 @@ class Variable(Expression):
         """
         return self.value
 
-    def tree(self) -> str:
+    def tree(self) -> ExprTree:
         """Return tree representation for Variable (leaf node).
 
         Returns:
-            str: 'Variable'
+            ExprTree: Leaf node with type 'Variable'.
         """
-        return "Variable"
+        return ExprTree("Variable")
 
     def sum(self, dim=None):
         """Create a sum operation over this variable.

@@ -6,6 +6,7 @@ import torch
 from typing_extensions import Self
 
 from rlaopt.expression import Expression, Variable
+from rlaopt.expression.tree import ExprTree
 
 
 class AtomExpression(Expression, ABC):
@@ -173,17 +174,16 @@ class AtomExpression(Expression, ABC):
         """
         return NotImplemented
 
-    def tree(self) -> tuple | str:
+    def tree(self) -> ExprTree:
         """Return tree representation for AtomExpression.
 
         If the atom has an input expression, includes it in the tree.
-        Otherwise, returns just the atom class name.
+        Otherwise, returns just the atom class name as a leaf node.
 
         Returns:
-            tuple | str: (AtomClassName, input_tree) if atom has input,
-                otherwise just AtomClassName string.
+            ExprTree: Tree with atom class name and optional input child.
         """
         if self._expr_name is not None:
             input_expr = self.get_input()
-            return (self.__class__.__name__, input_expr.tree())
-        return self.__class__.__name__
+            return ExprTree(self.__class__.__name__, input_expr.tree())
+        return ExprTree(self.__class__.__name__)

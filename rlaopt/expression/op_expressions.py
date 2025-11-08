@@ -8,6 +8,7 @@ from rlaopt.expression import expr_types
 from rlaopt.expression._nary_op_expression import _NAryOpExpression
 from rlaopt.expression.constant import ConstExpression
 from rlaopt.expression.expression import Expression
+from rlaopt.expression.tree import ExprTree
 from rlaopt.ext_tensordict import TensorDict
 
 
@@ -186,13 +187,13 @@ class AddExpression(_NAryOpExpression):
                 proxes.append(expr.prox)
         return proxes
 
-    def tree(self) -> tuple:
+    def tree(self) -> ExprTree:
         """Return tree representation for AddExpression.
 
         Returns:
-            tuple: ('AddExpression', child1_tree, child2_tree, ...)
+            ExprTree: Tree with type 'AddExpression' and child trees.
         """
-        return ("AddExpression",) + tuple(expr.tree() for expr in self.exprs)
+        return ExprTree("AddExpression", *(expr.tree() for expr in self.exprs))
 
 
 class ProductExpression(_NAryOpExpression):
@@ -298,13 +299,13 @@ class ProductExpression(_NAryOpExpression):
         """
         raise NotImplementedError("ProductExpression is not proxable")
 
-    def tree(self) -> tuple:
+    def tree(self) -> ExprTree:
         """Return tree representation for ProductExpression.
 
         Returns:
-            tuple: ('ProductExpression', child1_tree, child2_tree, ...)
+            ExprTree: Tree with type 'ProductExpression' and child trees.
         """
-        return ("ProductExpression",) + tuple(expr.tree() for expr in self.exprs)
+        return ExprTree("ProductExpression", *(expr.tree() for expr in self.exprs))
 
     def _build_op(self) -> Callable[[list[torch.Tensor]], torch.Tensor]:
         if self.matmul:

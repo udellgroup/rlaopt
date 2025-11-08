@@ -15,6 +15,7 @@ from collections import defaultdict
 import torch
 
 from rlaopt.expression import expr_types
+from rlaopt.expression.tree import ExprTree
 from rlaopt.expression.utils import _create_add, _create_product
 from rlaopt.ext_tensordict import TensorDict
 
@@ -101,10 +102,10 @@ class Expression(torch.nn.Module, ABC):
         pass
 
     @abstractmethod
-    def tree(self) -> tuple | str:
+    def tree(self) -> ExprTree:
         """Return a tree representation of the expression structure.
 
-        Returns a nested tuple structure showing how expressions are composed.
+        Returns an ExprTree object showing how expressions are composed.
         Useful for testing that expression optimizations (constant folding,
         flattening, etc.) are working correctly.
 
@@ -112,14 +113,7 @@ class Expression(torch.nn.Module, ABC):
         leaking implementation details to the base class.
 
         Returns:
-            tuple | str: Tree structure as (ClassName, child1, child2, ...) for
-                composite expressions, or just ClassName string for leaf expressions.
-
-        Examples:
-            >>> x = Variable((2,), name='x')
-            >>> expr = 2 * (3 * x)
-            >>> expr.tree()
-            ('ProductExpression', 'ConstExpression', 'Variable')
+            ExprTree: Tree structure with node type and children.
         """
         pass
 
