@@ -23,6 +23,9 @@ class ExprTree:
     def __eq__(self, other) -> bool:
         """Check structural equality of two expression trees.
 
+        For commutative operations (AddExpression, ProductExpression), children
+        can be in any order. For other operations, order matters.
+
         Args:
             other: Another ExprTree to compare with.
 
@@ -31,7 +34,28 @@ class ExprTree:
         """
         if not isinstance(other, ExprTree):
             return False
-        return self.node_type == other.node_type and self.children == other.children
+        if self.node_type != other.node_type:
+            return False
+
+        # For commutative operations, ignore child order
+        if self.node_type in ("AddExpression", "ProductExpression"):
+            return set(self.children) == set(other.children)
+
+        # For other operations, order matters
+        return self.children == other.children
+
+    def __hash__(self) -> int:
+        """Hash the tree for use in sets and dictionaries.
+
+        For commutative operations, hash is order-independent.
+
+        Returns:
+            int: Hash of the tree structure.
+        """
+        if self.node_type in ("AddExpression", "ProductExpression"):
+            # Order-independent hash for commutative operations
+            return hash((self.node_type, frozenset(self.children)))
+        return hash((self.node_type, self.children))
 
     def __repr__(self) -> str:
         """Return a code-like representation of the tree.
