@@ -236,7 +236,7 @@ class Variable(Expression):
         Returns:
             ExprTree: Leaf node with type 'Variable'.
         """
-        return ExprTree("Variable")
+        return ExprTree(f"Variable({self._name})")
 
     def sum(self, dim=None):
         """Create a sum operation over this variable.
