@@ -68,3 +68,144 @@ class TestExprTree:
         tree = ExprTree("OpUnary", ExprTree("LeafA"))
         assert len(tree.children) == 1
         assert tree.children[0].node_type == "LeafA"
+
+    # ----------------------
+    # Equality tests - non-commutative
+    # ----------------------
+
+    def test_eq_leaf_nodes_same_type(self):
+        """Test equality of leaf nodes with same type."""
+        tree1 = ExprTree("LeafA")
+        tree2 = ExprTree("LeafA")
+        assert tree1 == tree2
+
+    def test_eq_leaf_nodes_different_type(self):
+        """Test inequality of leaf nodes with different types."""
+        tree1 = ExprTree("LeafA")
+        tree2 = ExprTree("LeafB")
+        assert tree1 != tree2
+
+    def test_eq_non_commutative_same_order(self):
+        """Test equality of non-commutative trees with same child order."""
+        left1 = ExprTree("NodeX")
+        right1 = ExprTree("NodeY")
+        tree1 = ExprTree("OpSub", left1, right1)
+
+        left2 = ExprTree("NodeX")
+        right2 = ExprTree("NodeY")
+        tree2 = ExprTree("OpSub", left2, right2)
+
+        assert tree1 == tree2
+
+    def test_eq_non_commutative_different_order(self):
+        """Test inequality of non-commutative trees with different child order."""
+        left1 = ExprTree("NodeX")
+        right1 = ExprTree("NodeY")
+        tree1 = ExprTree("OpSub", left1, right1)
+
+        left2 = ExprTree("NodeY")
+        right2 = ExprTree("NodeX")
+        tree2 = ExprTree("OpSub", left2, right2)
+
+        assert tree1 != tree2
+
+    def test_eq_different_node_types(self):
+        """Test inequality when node types differ."""
+        tree1 = ExprTree("OpAdd", ExprTree("NodeX"), ExprTree("NodeY"))
+        tree2 = ExprTree("OpMul", ExprTree("NodeX"), ExprTree("NodeY"))
+        assert tree1 != tree2
+
+    def test_eq_different_number_of_children(self):
+        """Test inequality when number of children differs."""
+        tree1 = ExprTree("Op", ExprTree("NodeX"))
+        tree2 = ExprTree("Op", ExprTree("NodeX"), ExprTree("NodeY"))
+        assert tree1 != tree2
+
+    def test_eq_with_non_tree(self):
+        """Test inequality when comparing with non-ExprTree object."""
+        tree = ExprTree("LeafA")
+        assert tree != "LeafA"
+        assert tree != 42
+
+    # ----------------------
+    # Equality tests - commutative
+    # ----------------------
+
+    def test_eq_commutative_same_order(self):
+        """Test equality of commutative trees with same child order."""
+        tree1 = ExprTree(
+            "OpAdd", ExprTree("NodeX"), ExprTree("NodeY"), is_commutative=True
+        )
+        tree2 = ExprTree(
+            "OpAdd", ExprTree("NodeX"), ExprTree("NodeY"), is_commutative=True
+        )
+        assert tree1 == tree2
+
+    def test_eq_commutative_different_order(self):
+        """Test equality of commutative trees with different child order.
+
+        This is the key feature: commutative operations should be equal
+        regardless of child order.
+        """
+        tree1 = ExprTree(
+            "OpAdd", ExprTree("NodeX"), ExprTree("NodeY"), is_commutative=True
+        )
+        tree2 = ExprTree(
+            "OpAdd", ExprTree("NodeY"), ExprTree("NodeX"), is_commutative=True
+        )
+        assert tree1 == tree2
+
+    def test_eq_commutative_three_children_different_order(self):
+        """Test equality of commutative trees with three children in different order."""
+        tree1 = ExprTree(
+            "OpAdd",
+            ExprTree("NodeX"),
+            ExprTree("NodeY"),
+            ExprTree("NodeZ"),
+            is_commutative=True,
+        )
+        tree2 = ExprTree(
+            "OpAdd",
+            ExprTree("NodeZ"),
+            ExprTree("NodeX"),
+            ExprTree("NodeY"),
+            is_commutative=True,
+        )
+        tree3 = ExprTree(
+            "OpAdd",
+            ExprTree("NodeY"),
+            ExprTree("NodeZ"),
+            ExprTree("NodeX"),
+            is_commutative=True,
+        )
+        assert tree1 == tree2
+        assert tree2 == tree3
+        assert tree1 == tree3
+
+    def test_eq_commutative_flag_mismatch(self):
+        """Test inequality when is_commutative flags differ.
+
+        Even with same children, trees with different commutativity should not be equal.
+        """
+        tree1 = ExprTree(
+            "OpAdd", ExprTree("NodeX"), ExprTree("NodeY"), is_commutative=True
+        )
+        tree2 = ExprTree(
+            "OpAdd", ExprTree("NodeX"), ExprTree("NodeY"), is_commutative=False
+        )
+        assert tree1 != tree2
+
+    def test_eq_nested_commutative_operations(self):
+        """Test equality with nested commutative operations."""
+        # (NodeX + NodeY) + NodeZ vs (NodeY + NodeX) + NodeZ
+        inner1 = ExprTree(
+            "OpAdd", ExprTree("NodeX"), ExprTree("NodeY"), is_commutative=True
+        )
+        tree1 = ExprTree("OpAdd", inner1, ExprTree("NodeZ"), is_commutative=True)
+
+        inner2 = ExprTree(
+            "OpAdd", ExprTree("NodeY"), ExprTree("NodeX"), is_commutative=True
+        )
+        tree2 = ExprTree("OpAdd", inner2, ExprTree("NodeZ"), is_commutative=True)
+
+        assert tree1 == tree2
