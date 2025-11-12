@@ -1,5 +1,7 @@
 """Expression tree for testing and visualization."""
 
+from collections import Counter
+
 from typing_extensions import Self
 
 
@@ -45,7 +47,7 @@ class ExprTree:
 
         # For commutative operations, ignore child order
         if self.is_commutative:
-            return set(self.children) == set(other.children)
+            return Counter(self.children) == Counter(other.children)
 
         # For other operations, order matters
         return self.children == other.children
@@ -60,7 +62,14 @@ class ExprTree:
         """
         if self.is_commutative:
             # Order-independent hash for commutative operations
-            return hash((self.node_type, frozenset(self.children), self.is_commutative))
+            # Use Counter to preserve duplicates (frozenset would lose them)
+            return hash(
+                (
+                    self.node_type,
+                    frozenset(Counter(self.children).items()),
+                    self.is_commutative,
+                )
+            )
         return hash((self.node_type, self.children, self.is_commutative))
 
     def __repr__(self) -> str:
