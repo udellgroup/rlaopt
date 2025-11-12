@@ -137,6 +137,9 @@ class TestSumSquares:
             def forward(self):
                 return torch.ones(5)
 
+            def tree(self):
+                raise NotImplementedError()
+
         nonsmooth = NonSmoothExpr()
         ss = SumSquares(nonsmooth)
         assert ss.is_smooth() is False
