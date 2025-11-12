@@ -209,3 +209,121 @@ class TestExprTree:
         tree2 = ExprTree("OpAdd", inner2, ExprTree("NodeZ"), is_commutative=True)
 
         assert tree1 == tree2
+
+    # ----------------------
+    # Hash tests
+    # ----------------------
+
+    def test_hash_equality_contract_leaf_nodes(self):
+        """Test hash/equality contract: equal leaf nodes must have equal hashes."""
+        tree1 = ExprTree("LeafA")
+        tree2 = ExprTree("LeafA")
+        assert hash(tree1) == hash(tree2)
+
+    def test_hash_equality_contract_non_commutative(self):
+        """Test hash/equality contract for non-commutative trees."""
+        tree1 = ExprTree("OpSub", ExprTree("NodeX"), ExprTree("NodeY"))
+        tree2 = ExprTree("OpSub", ExprTree("NodeX"), ExprTree("NodeY"))
+        assert hash(tree1) == hash(tree2)
+
+    def test_hash_equality_contract_commutative_same_order(self):
+        """Test hash/equality contract for commutative trees with same order."""
+        tree1 = ExprTree(
+            "OpAdd", ExprTree("NodeX"), ExprTree("NodeY"), is_commutative=True
+        )
+        tree2 = ExprTree(
+            "OpAdd", ExprTree("NodeX"), ExprTree("NodeY"), is_commutative=True
+        )
+        assert hash(tree1) == hash(tree2)
+
+    def test_hash_equality_contract_commutative_different_order(self):
+        """Test hash/equality contract: commutative trees with different order."""
+        tree1 = ExprTree(
+            "OpAdd", ExprTree("NodeX"), ExprTree("NodeY"), is_commutative=True
+        )
+        tree2 = ExprTree(
+            "OpAdd", ExprTree("NodeY"), ExprTree("NodeX"), is_commutative=True
+        )
+        assert hash(tree1) == hash(tree2)
+
+    def test_hash_equality_contract_commutative_with_duplicates(self):
+        """Test hash/equality contract with duplicate children."""
+        tree1 = ExprTree(
+            "OpAdd",
+            ExprTree("NodeX"),
+            ExprTree("NodeX"),
+            ExprTree("NodeY"),
+            is_commutative=True,
+        )
+        tree2 = ExprTree(
+            "OpAdd",
+            ExprTree("NodeY"),
+            ExprTree("NodeX"),
+            ExprTree("NodeX"),
+            is_commutative=True,
+        )
+        assert tree1 == tree2
+        assert hash(tree1) == hash(tree2)
+
+    def test_hash_stability(self):
+        """Test that the same object always produces the same hash."""
+        tree = ExprTree("OpAdd", ExprTree("NodeX"), ExprTree("NodeY"))
+        hash1 = hash(tree)
+        hash2 = hash(tree)
+        assert hash1 == hash2
+
+    def test_hash_commutative_flag_affects_hash(self):
+        """Test that is_commutative flag affects the hash value."""
+        tree1 = ExprTree(
+            "OpAdd", ExprTree("NodeX"), ExprTree("NodeY"), is_commutative=True
+        )
+        tree2 = ExprTree(
+            "OpAdd", ExprTree("NodeX"), ExprTree("NodeY"), is_commutative=False
+        )
+
+        assert hash(tree1) != hash(tree2)
+
+    def test_hash_different_for_different_counts(self):
+        """Test that different duplicate counts produce different hashes."""
+        tree1 = ExprTree(
+            "OpAdd",
+            ExprTree("NodeX"),
+            ExprTree("NodeX"),
+            ExprTree("NodeY"),
+            is_commutative=True,
+        )
+        tree2 = ExprTree(
+            "OpAdd", ExprTree("NodeX"), ExprTree("NodeY"), is_commutative=True
+        )
+        assert hash(tree1) != hash(tree2)
+
+    def test_hash_in_set(self):
+        """Test that equal trees are treated as one element in a set."""
+        tree1 = ExprTree(
+            "OpAdd", ExprTree("NodeX"), ExprTree("NodeY"), is_commutative=True
+        )
+        tree2 = ExprTree(
+            "OpAdd", ExprTree("NodeY"), ExprTree("NodeX"), is_commutative=True
+        )
+        tree3 = ExprTree("OpMul", ExprTree("NodeX"), ExprTree("NodeY"))
+
+        tree_set = {tree1, tree2, tree3}
+
+        assert len(tree_set) == 2
+
+    def test_hash_in_dict(self):
+        """Test that equal trees map to the same dictionary key."""
+        tree1 = ExprTree(
+            "OpAdd", ExprTree("NodeX"), ExprTree("NodeY"), is_commutative=True
+        )
+        tree2 = ExprTree(
+            "OpAdd", ExprTree("NodeY"), ExprTree("NodeX"), is_commutative=True
+        )
+
+        tree_dict = {tree1: "first"}
+        tree_dict[tree2] = "second"
+
+        # tree1 and tree2 are equal, so should map to same key
+        assert len(tree_dict) == 1
+        assert tree_dict[tree1] == "second"
+        assert tree_dict[tree2] == "second"
