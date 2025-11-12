@@ -1,5 +1,7 @@
 """Utility functions for expression module."""
 
+from functools import reduce
+
 import torch
 
 from rlaopt.expression import expr_types
@@ -43,21 +45,20 @@ def _create_add(left, right):
 
     # Fold all constants into one
     if constants:
-        total = sum((c.value for c in constants[1:]), constants[0].value)
+        total_constants = reduce(torch.add, (c.value for c in constants))
         # Only add back if non-zero (or if it's the only term)
         if (
-            not torch.allclose(total, torch.zeros_like(total))
+            not torch.allclose(total_constants, torch.zeros_like(total_constants))
             or len(non_constants) == 0
         ):
-            non_constants.append(expr_types.constant()(total))
+            non_constants.append(expr_types.constant()(total_constants))
 
     # Return based on what's left
-    if len(non_constants) == 0:
-        return expr_types.constant()(0.0)
-    elif len(non_constants) == 1:
+    # We do not have to worry about len(non_constants) == 0 because of the check
+    # when the constants are folded
+    if len(non_constants) == 1:
         return non_constants[0]
-    else:
-        return expr_types.add_expr()(*non_constants)
+    return expr_types.add_expr()(*non_constants)
 
 
 def _create_product(left, right, matmul: bool):
