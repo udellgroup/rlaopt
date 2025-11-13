@@ -4,7 +4,7 @@ import pytest
 import torch
 
 from rlaopt.atoms.affine import Affine
-from rlaopt.expression import Variable
+from rlaopt.expression import Expression, Variable
 
 
 @pytest.fixture
@@ -129,9 +129,35 @@ class TestAffine:
     # ----------------------
 
     def test_is_smooth_returns_true(self, vector_var, simple_affine_data):
-        """Test affine transformation is smooth."""
+        """Test affine transformation is smooth when input is smooth."""
         affine = Affine(vector_var, **simple_affine_data)
         assert affine.is_smooth() is True
+
+    def test_is_smooth_returns_false_with_nonsmooth_input(self, vector_var):
+        """Test is_smooth() returns False when input expression is non-smooth."""
+
+        # Create a mock non-smooth expression
+        class NonSmoothExpr(Expression):
+            def __init__(self):
+                super().__init__()
+
+            def is_smooth(self):
+                return False
+
+            def is_proxable(self):
+                return False
+
+            def forward(self):
+                return torch.ones(5)
+
+            def tree(self):
+                raise NotImplementedError()
+
+        nonsmooth = NonSmoothExpr()
+        A = torch.eye(5)
+        b = torch.zeros(5)
+        affine = Affine(nonsmooth, A, b)
+        assert affine.is_smooth() is False
 
     def test_is_proxable_returns_false(self, vector_var, simple_affine_data):
         """Test affine transformation is not proxable."""
