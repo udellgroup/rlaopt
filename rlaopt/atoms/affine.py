@@ -50,9 +50,9 @@ class Affine(AtomExpression):
         """Check if the affine transformation is smooth.
 
         Returns:
-            bool: Always True, as affine functions are smooth everywhere.
+            bool: True if the input expression is smooth, False otherwise.
         """
-        return True
+        return self.get_input().is_smooth()
 
     def forward(self) -> torch.Tensor:
         """Evaluate the affine transformation at the current variable value.

@@ -229,3 +229,171 @@ class TestOperatorSplitProx:
         # Test equality
         assert torch.allclose(prox_x, prox["x"])
         assert torch.allclose(prox_y, prox["y"])
+
+
+class TestOperatorSplitVariableValues:
+    """Tests for OperatorSplit variable_values property."""
+
+    def test_variable_values_smooth_only(self, smooth_only_problem):
+        """Test variable_values returns variables from smooth term only."""
+        obj, _, _, x = smooth_only_problem
+        var_vals = obj.variable_values
+
+        assert var_vals.keys() == {"x"}
+        assert torch.equal(var_vals["x"], x.value)
+
+    def test_variable_values_with_nonsmooth(self, lasso_problem):
+        """Test variable_values with smooth and non-smooth terms."""
+        obj, _, _, x, _ = lasso_problem
+        var_vals = obj.variable_values
+
+        assert var_vals.keys() == {"x"}
+        assert torch.equal(var_vals["x"], x.value)
+
+    def test_variable_values_multiple_params(self, mult_params_problem):
+        """Test variable_values with multiple parameters."""
+        obj, x, Y = mult_params_problem
+        var_vals = obj.variable_values
+
+        assert var_vals.keys() == {"x", "Y"}
+        assert torch.equal(var_vals["x"], x.value)
+        assert torch.equal(var_vals["Y"], Y.value)
+
+    def test_variable_values_disjoint_vars_in_f_and_r(self):
+        """Test variable_values when f and r have disjoint variables."""
+        x = Variable(torch.ones(5), name="x")
+        y = Variable(torch.zeros(5), name="y")
+
+        f = SumSquares(x)
+        r = L1Norm(y)
+
+        obj = OperatorSplit(f, r)
+        var_vals = obj.variable_values
+
+        assert var_vals.keys() == {"x", "y"}
+        assert torch.equal(var_vals["x"], x.value)
+        assert torch.equal(var_vals["y"], y.value)
+
+    def test_variable_values_overlapping_vars_in_f_and_r(self):
+        """Test variable_values when f and r share some variables."""
+        x = Variable(torch.ones(5), name="x")
+        y = Variable(torch.zeros(5), name="y")
+
+        f = SumSquares(x) + SumSquares(y)
+        r = L1Norm(x) + NonNegative(y)
+
+        obj = OperatorSplit(f, r)
+        var_vals = obj.variable_values
+
+        assert var_vals.keys() == {"x", "y"}
+        assert torch.equal(var_vals["x"], x.value)
+        assert torch.equal(var_vals["y"], y.value)
+
+
+class TestOperatorSplitFromExpression:
+    """Tests for OperatorSplit.from_expression classmethod."""
+
+    def test_from_expression_smooth_only(self):
+        """Test from_expression with a smooth-only expression."""
+        x = Variable(torch.ones(5), name="x")
+        expr = SumSquares(x)
+
+        obj = OperatorSplit.from_expression(expr)
+
+        assert obj.f is not None
+        assert obj.r is None
+
+    def test_from_expression_all_smooth_add_expression(self):
+        """Test from_expression with AddExpression containing all smooth terms."""
+        x = Variable(torch.ones(5), name="x")
+        y = Variable(torch.zeros(5), name="y")
+        expr = SumSquares(x) + SumSquares(y)
+
+        obj = OperatorSplit.from_expression(expr)
+
+        assert obj.f is not None
+        assert obj.r is None
+
+    def test_from_expression_mixed_add_expression(self):
+        """Test from_expression with AddExpression containing mixed terms."""
+        x = Variable(torch.ones(5), name="x")
+        y = Variable(torch.zeros(5), name="y")
+        expr = SumSquares(x) + L1Norm(y)
+
+        obj = OperatorSplit.from_expression(expr)
+
+        assert obj.f is not None
+        assert obj.r is not None
+        assert obj.f.is_smooth()
+        assert obj.r.is_proxable()
+
+    def test_from_expression_matches_direct_initialization(self):
+        """Test from_expression produces same results as direct initialization."""
+        n, p = 32, 16
+        torch.manual_seed(0)
+        A = torch.randn(n, p, dtype=torch.float32) / (n**0.5)
+        b = torch.randn(n, dtype=torch.float32) / (n**0.5)
+        x = Variable(torch.ones(p, dtype=torch.float32), name="x")
+
+        expr = 0.5 * SumSquares(A @ x - b) + L1Norm(x)
+
+        obj = OperatorSplit.from_expression(expr)
+        obj_direct = OperatorSplit(0.5 * SumSquares(A @ x - b), L1Norm(x))
+
+        test_params = TensorDict({"x": torch.randn(p)})
+        assert torch.allclose(
+            obj.evaluate(test_params), obj_direct.evaluate(test_params)
+        )
+
+    def test_from_expression_partitions_correctly(self):
+        """Test from_expression correctly partitions smooth and non-smooth terms."""
+        x = Variable(torch.ones(5), name="x")
+        y = Variable(torch.zeros(5), name="y")
+        z = Variable(torch.ones(3), name="z")
+
+        expr = SumSquares(x) + SumSquares(y) + L1Norm(z) + NonNegative(y)
+
+        obj = OperatorSplit.from_expression(expr)
+
+        assert obj.f is not None
+        assert obj.r is not None
+
+        f_vars = set(obj.f.get_variable_names())
+        r_vars = set(obj.r.get_variable_names())
+
+        assert f_vars == {"x", "y"}
+        assert r_vars == {"z", "y"}
+
+    def test_from_expression_non_proxable_raises_error(self):
+        """Test from_expression raises error for non-proxable non-smooth term."""
+        x = Variable(torch.ones(5), name="x")
+        f = SumSquares(x)
+        r = L1Norm(x)
+        non_proxable = Affine(r, torch.tensor(1.0), torch.tensor(0.0))
+
+        expr = f + non_proxable
+
+        with pytest.raises(ValueError, match="Proximal expression is not proxable"):
+            OperatorSplit.from_expression(expr)
+
+    def test_from_expression_pure_nonsmooth_raises_error(self):
+        """Test from_expression raises error when expression is purely non-smooth."""
+        x = Variable(torch.ones(5), name="x")
+        expr = L1Norm(x)
+
+        with pytest.raises(ValueError, match="Cannot create OperatorSplit"):
+            OperatorSplit.from_expression(expr)
+
+    def test_from_expression_preserves_variable_values(self):
+        """Test from_expression preserves variable values from original expression."""
+        x = Variable(torch.tensor([1.0, 2.0, 3.0]), name="x")
+        y = Variable(torch.tensor([4.0, 5.0]), name="y")
+
+        expr = SumSquares(x) + L1Norm(y)
+
+        obj = OperatorSplit.from_expression(expr)
+        var_vals = obj.variable_values
+
+        assert var_vals.keys() == {"x", "y"}
+        assert torch.equal(var_vals["x"], x.value)
+        assert torch.equal(var_vals["y"], y.value)

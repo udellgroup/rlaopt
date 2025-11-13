@@ -65,11 +65,12 @@ class OperatorSplit:
         """Returns the variable values associated with the composite function."""
         if self._r:
             # Return variable values from f and r, avoiding duplication
+            f_var_vals = self._f.variable_values
             r_var_vals = self._r.variable_values
-            _, r_var_vals_excluding_f = r_var_vals.split_keys(
-                self._f.get_variable_names()
-            )
-            return merge_tensordicts(self._f.variable_values, r_var_vals_excluding_f)
+
+            # Exclude keys from r that are already in f, then merge
+            r_only_vals = r_var_vals.exclude(*self._f.get_variable_names())
+            return merge_tensordicts(f_var_vals, r_only_vals)
         return self._f.variable_values
 
     def evaluate(self, variable_values: TensorDict) -> torch.Tensor:
