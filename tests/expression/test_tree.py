@@ -404,3 +404,120 @@ class TestExprTree:
         # Get repr and evaluate it
         tree_repr = repr(tree1)
         assert tree1 == eval(tree_repr)
+
+    # ----------------------
+    # String tests
+    # ----------------------
+
+    def test_str_leaf_node(self):
+        """Test __str__ for leaf node."""
+        tree = ExprTree("LeafA")
+        result = str(tree)
+        assert result == "LeafA\n"
+
+    def test_str_single_child(self):
+        """Test __str__ for tree with single child."""
+        tree = ExprTree("OpUnary", ExprTree("NodeX"))
+        result = str(tree)
+
+        # fmt: off
+        expected = (
+            "OpUnary\n"
+            "└─ NodeX\n"
+        )
+        # fmt: on
+
+        assert result == expected
+
+    def test_str_two_children(self):
+        """Test __str__ for simple tree with two children."""
+        tree = ExprTree("OpAdd", ExprTree("NodeX"), ExprTree("NodeY"))
+        result = str(tree)
+
+        # fmt: off
+        expected = (
+            "OpAdd\n"
+            "├─ NodeX\n"
+            "└─ NodeY\n"
+        )
+        # fmt: on
+
+        assert result == expected
+
+    def test_str_three_children(self):
+        """Test __str__ for tree with three children."""
+        tree = ExprTree(
+            "OpMulti", ExprTree("NodeX"), ExprTree("NodeY"), ExprTree("NodeZ")
+        )
+        result = str(tree)
+
+        # fmt: off
+        expected = (
+            "OpMulti\n"
+            "├─ NodeX\n"
+            "├─ NodeY\n"
+            "└─ NodeZ\n"
+        )
+        # fmt: on
+
+        assert result == expected
+
+    def test_str_nested_two_levels(self):
+        """Test __str__ for nested tree structure (two levels deep)."""
+        inner = ExprTree("OpMul", ExprTree("NodeX"), ExprTree("NodeY"))
+        outer = ExprTree("OpAdd", inner, ExprTree("NodeZ"))
+        result = str(outer)
+
+        # fmt: off
+        expected = (
+            "OpAdd\n"
+            "├─ OpMul\n"
+            "│  ├─ NodeX\n"
+            "│  └─ NodeY\n"
+            "└─ NodeZ\n"
+        )
+        # fmt: on
+
+        assert result == expected
+
+    def test_str_deeply_nested(self):
+        """Test __str__ for deeply nested tree (three levels)."""
+        innermost = ExprTree("Level3", ExprTree("LeafA"), ExprTree("LeafB"))
+        middle = ExprTree("Level2", innermost, ExprTree("LeafC"))
+        outer = ExprTree("Level1", middle, ExprTree("LeafD"))
+        result = str(outer)
+
+        # fmt: off
+        expected = (
+            "Level1\n"
+            "├─ Level2\n"
+            "│  ├─ Level3\n"
+            "│  │  ├─ LeafA\n"
+            "│  │  └─ LeafB\n"
+            "│  └─ LeafC\n"
+            "└─ LeafD\n"
+        )
+        # fmt: on
+
+        assert result == expected
+
+    def test_str_multiple_nested_children(self):
+        """Test __str__ with multiple nested children."""
+        left = ExprTree("OpLeft", ExprTree("L1"), ExprTree("L2"))
+        right = ExprTree("OpRight", ExprTree("R1"), ExprTree("R2"))
+        tree = ExprTree("OpRoot", left, right)
+        result = str(tree)
+
+        # fmt: off
+        expected = (
+            "OpRoot\n"
+            "├─ OpLeft\n"
+            "│  ├─ L1\n"
+            "│  └─ L2\n"
+            "└─ OpRight\n"
+            "   ├─ R1\n"
+            "   └─ R2\n"
+        )
+        # fmt: on
+
+        assert result == expected
