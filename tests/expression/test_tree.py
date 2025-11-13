@@ -327,3 +327,80 @@ class TestExprTree:
         assert len(tree_dict) == 1
         assert tree_dict[tree1] == "second"
         assert tree_dict[tree2] == "second"
+
+    # ----------------------
+    # Repr tests
+    # ----------------------
+
+    def test_repr_leaf_node(self):
+        """Test __repr__ for leaf node without children."""
+        tree = ExprTree("LeafA")
+        assert repr(tree) == "ExprTree('LeafA')"
+
+    def test_repr_leaf_node_commutative(self):
+        """Test __repr__ for leaf node with is_commutative=True."""
+        tree = ExprTree("LeafA", is_commutative=True)
+        assert repr(tree) == "ExprTree('LeafA', is_commutative=True)"
+
+    def test_repr_simple_tree(self):
+        """Test __repr__ for tree with children."""
+        tree = ExprTree("OpAdd", ExprTree("NodeX"), ExprTree("NodeY"))
+        expected = "ExprTree('OpAdd', ExprTree('NodeX'), ExprTree('NodeY'))"
+        assert repr(tree) == expected
+
+    def test_repr_simple_tree_commutative(self):
+        """Test __repr__ for commutative tree shows is_commutative flag."""
+        tree = ExprTree(
+            "OpAdd", ExprTree("NodeX"), ExprTree("NodeY"), is_commutative=True
+        )
+        expected = (
+            "ExprTree('OpAdd', ExprTree('NodeX'), ExprTree('NodeY'), "
+            "is_commutative=True)"
+        )
+        assert repr(tree) == expected
+
+    def test_repr_nested_tree(self):
+        """Test __repr__ for nested tree structure."""
+        inner = ExprTree("OpMul", ExprTree("NodeX"), ExprTree("NodeY"))
+        outer = ExprTree("OpAdd", inner, ExprTree("NodeZ"))
+        expected = (
+            "ExprTree('OpAdd', "
+            "ExprTree('OpMul', ExprTree('NodeX'), ExprTree('NodeY')), "
+            "ExprTree('NodeZ'))"
+        )
+        assert repr(outer) == expected
+
+    def test_repr_three_children(self):
+        """Test __repr__ for tree with three children."""
+        tree = ExprTree(
+            "OpMulti", ExprTree("NodeX"), ExprTree("NodeY"), ExprTree("NodeZ")
+        )
+        expected = (
+            "ExprTree('OpMulti', ExprTree('NodeX'), ExprTree('NodeY'), "
+            "ExprTree('NodeZ'))"
+        )
+        assert repr(tree) == expected
+
+    def test_repr_nested_commutative(self):
+        """Test __repr__ with nested commutative operations."""
+        inner = ExprTree(
+            "OpAdd", ExprTree("NodeX"), ExprTree("NodeY"), is_commutative=True
+        )
+        outer = ExprTree("OpMul", inner, ExprTree("NodeZ"), is_commutative=True)
+        expected = (
+            "ExprTree('OpMul', "
+            "ExprTree('OpAdd', ExprTree('NodeX'), ExprTree('NodeY'), "
+            "is_commutative=True), "
+            "ExprTree('NodeZ'), "
+            "is_commutative=True)"
+        )
+        assert repr(outer) == expected
+
+    def test_repr_evaluable(self):
+        """Test that repr output can be evaluated to recreate equivalent tree."""
+        tree1 = ExprTree(
+            "OpAdd", ExprTree("NodeX"), ExprTree("NodeY"), is_commutative=True
+        )
+        # Get repr and evaluate it
+        tree_repr = repr(tree1)
+        assert tree1 == eval(tree_repr)

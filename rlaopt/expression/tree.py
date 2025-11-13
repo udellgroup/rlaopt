@@ -78,10 +78,12 @@ class ExprTree:
         Returns:
             str: String representation suitable for debugging.
         """
+        parts = [repr(self.node_type)]
         if self.children:
-            children_repr = ", ".join(repr(c) for c in self.children)
-            return f"ExprTree({self.node_type!r}, {children_repr})"
-        return f"ExprTree({self.node_type!r})"
+            parts.extend(repr(c) for c in self.children)
+        if self.is_commutative:
+            parts.append("is_commutative=True")
+        return f"ExprTree({', '.join(parts)})"
 
     def __str__(self) -> str:
         """Return a pretty-printed tree visualization.
