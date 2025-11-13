@@ -521,3 +521,64 @@ class TestExprTree:
         # fmt: on
 
         assert result == expected
+
+    # ----------------------
+    # Depth tests
+    # ----------------------
+
+    def test_depth_leaf_node(self):
+        """Test depth of leaf node is 0."""
+        tree = ExprTree("LeafA")
+        assert tree.depth() == 0
+
+    def test_depth_one_level(self):
+        """Test depth of tree with one level of children."""
+        tree = ExprTree("OpBinary", ExprTree("NodeX"), ExprTree("NodeY"))
+        assert tree.depth() == 1
+
+    def test_depth_two_levels(self):
+        """Test depth of tree with two levels."""
+        inner = ExprTree("OpInner", ExprTree("LeafA"))
+        outer = ExprTree("OpOuter", inner)
+        assert outer.depth() == 2
+
+    def test_depth_three_levels(self):
+        """Test depth of tree with three levels."""
+        innermost = ExprTree("Level3", ExprTree("LeafA"))
+        middle = ExprTree("Level2", innermost)
+        outer = ExprTree("Level1", middle)
+        assert outer.depth() == 3
+
+    def test_depth_asymmetric_tree(self):
+        """Test depth of asymmetric tree."""
+        # Left branch: 2 levels deep, Right branch: 0 levels (leaf)
+        deep_left = ExprTree("Level2", ExprTree("Level1", ExprTree("Leaf")))
+        shallow_right = ExprTree("LeafB")
+        tree = ExprTree("Root", deep_left, shallow_right)
+        # Max depth is 3 (Root -> Level2 -> Level1 -> Leaf)
+        assert tree.depth() == 3
+
+    def test_depth_balanced_tree(self):
+        """Test depth of balanced binary tree."""
+        # Level 2: leaves
+        ll = ExprTree("LL")
+        lr = ExprTree("LR")
+        rl = ExprTree("RL")
+        rr = ExprTree("RR")
+
+        # Level 1: nodes
+        left = ExprTree("Left", ll, lr)
+        right = ExprTree("Right", rl, rr)
+
+        # Level 0: root
+        root = ExprTree("Root", left, right)
+
+        assert root.depth() == 2
+
+    def test_depth_deep_chain(self):
+        """Test depth of very deep linear chain."""
+        # Create chain: Node4 -> Node3 -> Node2 -> Node1 -> Leaf
+        tree = ExprTree("Leaf")
+        for i in range(1, 5):
+            tree = ExprTree(f"Node{i}", tree)
+        assert tree.depth() == 4
