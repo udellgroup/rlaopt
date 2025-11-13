@@ -4,7 +4,7 @@ import pytest
 import torch
 
 from rlaopt.atoms.atom_expression import AtomExpression
-from rlaopt.expression import Variable
+from rlaopt.expression import ExprTree, Variable
 
 
 class MockAtom(AtomExpression):
@@ -125,3 +125,34 @@ class TestRegisterAtomBuffer:
             MockAtom(
                 simple_variable, buffer_name="invalid", buffer_value=invalid_buffer
             )
+
+
+class TestTree:
+    """Tests for AtomExpression.tree() method."""
+
+    def test_tree_with_variable_input(self, simple_variable):
+        """Test tree() returns correct structure for atom with Variable input."""
+        atom = MockAtom(simple_variable, variable_only=False)
+        expected = ExprTree("MockAtom", ExprTree("Variable(x)"))
+        assert atom.tree() == expected
+
+    def test_tree_with_expression_input(self, add_expression):
+        """Test tree() returns correct structure for atom with Expression input."""
+        atom = MockAtom(add_expression, variable_only=False)
+        expected = ExprTree(
+            "MockAtom",
+            ExprTree(
+                "AddExpression",
+                ExprTree("Variable(x)"),
+                ExprTree("ConstExpression"),
+                is_commutative=True,
+            ),
+        )
+        assert atom.tree() == expected
+
+    def test_tree_structure_preserves_nesting(self, simple_variable):
+        """Test tree() correctly represents nested atom structures."""
+        inner_atom = MockAtom(simple_variable, variable_only=False)
+        outer_atom = MockAtom(inner_atom, variable_only=False)
+        expected = ExprTree("MockAtom", ExprTree("MockAtom", ExprTree("Variable(x)")))
+        assert outer_atom.tree() == expected

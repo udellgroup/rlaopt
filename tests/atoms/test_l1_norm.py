@@ -4,13 +4,13 @@ import pytest
 import torch
 
 from rlaopt.atoms.l1_norm import L1Norm
-from rlaopt.expression import Variable
+from rlaopt.expression import ExprTree, Variable
 
 
 @pytest.fixture
 def simple_variable():
     """Creates a simple 1D variable for testing."""
-    return Variable(torch.tensor([1.0, -2.0, 3.0]))
+    return Variable(torch.tensor([1.0, -2.0, 3.0]), name="x")
 
 
 @pytest.fixture
@@ -118,3 +118,16 @@ class TestL1NormProperties:
         atom = L1Norm(simple_variable, scaling=1.0)
         with pytest.raises(NotImplementedError, match="cannot be subsampled"):
             atom.subsample([0, 1])
+
+
+class TestL1NormScaling:
+    """Tests for L1Norm scalar multiplication."""
+
+    def test_scalar_multiplication_optimization(self, simple_variable):
+        """Test that scalar multiplication optimizes to scaled L1Norm."""
+        atom = L1Norm(simple_variable, scaling=2.0)
+        scaled = 3.0 * atom
+
+        assert isinstance(scaled, L1Norm)
+        assert scaled.tree() == ExprTree("L1Norm", ExprTree("Variable(x)"))
+        assert torch.allclose(scaled.forward(), torch.tensor(36.0))

@@ -4,7 +4,7 @@ import pytest
 import torch
 
 from rlaopt.atoms.nuc_norm import NucNorm
-from rlaopt.expression import Variable
+from rlaopt.expression import ExprTree, Variable
 
 
 @pytest.fixture
@@ -199,3 +199,18 @@ class TestNucNorm:
         location = torch.zeros(4, 3)
         result = nuc.prox(location, prox_scaling=1.0)
         assert torch.allclose(result, torch.zeros(4, 3))
+
+
+class TestNucNormScaling:
+    """Tests for NucNorm scalar multiplication."""
+
+    def test_scalar_multiplication_optimization(self, matrix_var):
+        """Test that scalar multiplication optimizes to scaled NucNorm."""
+        # Set to identity-like matrix with known singular values
+        matrix_var.value.data = torch.eye(4, 3)
+        nuc = NucNorm(matrix_var, scaling=2.0)
+        scaled = 4.0 * nuc
+
+        assert isinstance(scaled, NucNorm)
+        assert scaled.tree() == ExprTree("NucNorm", ExprTree("Variable(X)"))
+        assert torch.allclose(scaled.forward(), torch.tensor(24.0))
