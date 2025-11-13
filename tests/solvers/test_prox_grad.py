@@ -5,6 +5,7 @@ import torch
 
 from rlaopt.atoms import Box, L1Norm, NonNegative, SumSquares
 from rlaopt.expression import Variable
+from rlaopt.operator_split import OperatorSplit
 from rlaopt.solvers.prox_grad import ProxGrad, ProxGradConfig, ProxGradStoppingCriteria
 
 TOLERANCES = {torch.float32: 1e-4, torch.float64: 1e-10}
@@ -207,3 +208,47 @@ def _build_opt(obj, eta, use_acceleration, use_linesearch):
         use_linesearch=use_linesearch,
     )
     return ProxGrad(obj, config)
+
+
+# ============================================================================
+# Tests for OperatorSplit Input
+# ============================================================================
+
+
+class TestProxGradWithOperatorSplit:
+    """Tests ProxGrad produces same results with Expression vs OperatorSplit."""
+
+    def test_expression_vs_operator_split(self, reset_torch_state, precision):
+        """Test that ProxGrad gives same results with Expression vs OperatorSplit."""
+        torch.set_default_dtype(precision)
+
+        # Generate problem
+        A, b, x, _ = generate_lasso_data(n=512, p=64, s=16, precision=precision)
+        mu = 0.1 * torch.linalg.norm(A.T @ b, ord=torch.inf)
+        obj = SumSquares(A @ x - b) + L1Norm(x, scaling=mu)
+        eta = compute_lipschitz_stepsize(A)
+        config = ProxGradConfig(eta=eta, use_acceleration=False, use_linesearch=False)
+
+        # Run with Expression
+        x.value.data = torch.zeros_like(x.value)
+        opt_expr = ProxGrad(obj, config)
+        params_expr = obj.variable_values
+        state_expr = opt_expr.init_state(params_expr)
+        for _ in range(10):
+            params_expr, state_expr = opt_expr.step(params_expr, state_expr)
+
+        # Run with explicit OperatorSplit
+        x.value.data = torch.zeros_like(x.value)
+        op_split = OperatorSplit.from_expression(obj)
+        opt_split = ProxGrad(op_split, config)
+        params_split = op_split.variable_values
+        state_split = opt_split.init_state(params_split)
+        for _ in range(10):
+            params_split, state_split = opt_split.step(params_split, state_split)
+
+        # Results should be identical
+        assert params_expr.keys() == params_split.keys()
+        for key in params_expr.keys():
+            assert torch.allclose(
+                params_expr[key], params_split[key], atol=1e-10, rtol=1e-10
+            ), f"Mismatch for key {key}"

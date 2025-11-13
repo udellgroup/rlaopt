@@ -156,67 +156,6 @@ class TestAddExpression:
         assert add_expr.is_proxable() is False
 
     # ----------------------
-    # Operator splitting tests
-    # ----------------------
-
-    # def test_operator_split_scenarios(self):
-    #     """Test operator_split with all smooth, all non-smooth, and mixed."""
-    #     # All smooth
-    #     x1 = Variable((5,), name="x1")
-    #     y1 = Variable((5,), name="y1")
-    #     all_smooth = AddExpression(x1, y1)
-    #     smooth, non_smooth = all_smooth.operator_split()
-    #     assert smooth is not None and smooth.n_exprs == 2
-    #     assert non_smooth is None
-
-    #     # All non-smooth
-    #     class MockNonSmooth(Expression):
-    #         def __init__(self):
-    #             super().__init__()
-
-    #         def is_smooth(self):
-    #             return False
-
-    #         def is_proxable(self):
-    #             return True
-
-    #         def prox(self, location, prox_scaling):  # <-- ADD THIS
-    #             return location * 0.5
-
-    #         def forward(self):
-    #             return torch.ones(5)
-
-    #     class MockNonProxable(Expression):
-    #         def __init__(self):
-    #             super().__init__()
-
-    #         def is_smooth(self):
-    #             return False
-
-    #         def is_proxable(self):
-    #             return False
-
-    #         def forward(self):
-    #             return torch.ones(5)
-
-    #     ns1 = MockNonSmooth()
-    #     ns2 = MockNonProxable()
-    #     all_non_smooth = AddExpression(ns1, ns2)
-    #     smooth, non_smooth = all_non_smooth.operator_split()
-    #     assert smooth is None
-    #     assert non_smooth is not None and non_smooth.n_exprs == 2
-
-    #     # Mixed
-    #     x2 = Variable((5,), name="x2")
-    #     ns3 = MockNonSmooth()
-    #     mixed = AddExpression(x2, ns3)
-    #     smooth, non_smooth = mixed.operator_split()
-    #     assert smooth is not None and smooth.n_exprs == 1
-    #     assert non_smooth is not None and non_smooth.n_exprs == 1
-    #     assert smooth.is_smooth() is True
-    #     assert non_smooth.is_smooth() is False
-
-    # ----------------------
     # Proximal operator tests
     # ----------------------
 
