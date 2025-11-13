@@ -582,3 +582,43 @@ class TestExprTree:
         for i in range(1, 5):
             tree = ExprTree(f"Node{i}", tree)
         assert tree.depth() == 4
+
+    # ----------------------
+    # Count nodes tests
+    # ----------------------
+
+    def test_count_nodes_leaf(self):
+        """Test node count for leaf node is 1."""
+        tree = ExprTree("LeafA")
+        assert tree.count_nodes() == 1
+
+    def test_count_nodes_simple_tree(self):
+        """Test node count for simple tree."""
+        tree = ExprTree("Root", ExprTree("ChildA"), ExprTree("ChildB"))
+        assert tree.count_nodes() == 3
+
+    def test_count_nodes_single_child(self):
+        """Test node count with single child."""
+        tree = ExprTree("Parent", ExprTree("Child"))
+        assert tree.count_nodes() == 2
+
+    def test_count_nodes_nested_two_levels(self):
+        """Test node count for nested tree (two levels)."""
+        inner = ExprTree("Inner", ExprTree("LeafA"), ExprTree("LeafB"))
+        outer = ExprTree("Outer", inner, ExprTree("LeafC"))
+        assert outer.count_nodes() == 5
+
+    def test_count_nodes_deep_chain(self):
+        """Test node count for deep linear chain."""
+        tree = ExprTree("Leaf")
+        for i in range(1, 5):
+            tree = ExprTree(f"Node{i}", tree)
+        assert tree.count_nodes() == 5
+
+    def test_count_nodes_three_levels(self):
+        """Test node count for three-level tree."""
+        innermost = ExprTree("Level3", ExprTree("LeafA"), ExprTree("LeafB"))
+        middle = ExprTree("Level2", innermost, ExprTree("LeafC"))
+        outer = ExprTree("Level1", middle, ExprTree("LeafD"))
+
+        assert outer.count_nodes() == 7
