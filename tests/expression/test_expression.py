@@ -9,6 +9,12 @@ from rlaopt.expression.expression import Expression
 from rlaopt.ext_tensordict import TensorDict
 
 
+def _assert_expression_equals(result, expected_tree, expected_value):
+    """Helper to assert expression has correct tree and forward value."""
+    assert result.tree() == expected_tree
+    assert torch.allclose(result.forward(), expected_value)
+
+
 @pytest.fixture
 def concrete_expression():
     """Create a minimal concrete Expression for testing."""
@@ -202,9 +208,9 @@ class TestExpression:
 
         result = a + b + c
 
-        # Should fold into single constant
-        assert result.tree() == ExprTree("ConstExpression")
-        assert torch.allclose(result.forward(), torch.tensor(6.0))
+        _assert_expression_equals(
+            result, ExprTree("ConstExpression"), torch.tensor(6.0)
+        )
 
     def test_addition_flattening(self):
         """Test that (a + b) + c flattens to AddExpression(a, b, c)."""
@@ -215,15 +221,16 @@ class TestExpression:
 
         result = (a + b) + x
 
-        # Should flatten: single AddExpression with folded constant and x
-        expected = ExprTree(
-            "AddExpression",
-            ExprTree("ConstExpression"),
-            ExprTree("Variable(x)"),
-            is_commutative=True,
+        _assert_expression_equals(
+            result,
+            ExprTree(
+                "AddExpression",
+                ExprTree("ConstExpression"),
+                ExprTree("Variable(x)"),
+                is_commutative=True,
+            ),
+            torch.tensor(6.0),
         )
-        assert result.tree() == expected
-        assert torch.allclose(result.forward(), torch.tensor(6.0))
 
     def test_zero_elimination_in_addition(self):
         """Test that expr + 0 simplifies to expr."""
@@ -232,9 +239,7 @@ class TestExpression:
 
         result = x + zero
 
-        # Should eliminate zero, leaving just x
-        assert result.tree() == ExprTree("Variable(x)")
-        assert torch.allclose(result.forward(), torch.tensor(5.0))
+        _assert_expression_equals(result, ExprTree("Variable(x)"), torch.tensor(5.0))
 
     def test_constants_cancel_to_zero(self):
         """Test that constants that sum to zero are eliminated."""
@@ -244,9 +249,7 @@ class TestExpression:
 
         result = x + a + b
 
-        # Constants should cancel: 3 + (-3) = 0, leaving just x
-        assert result.tree() == ExprTree("Variable(x)")
-        assert torch.allclose(result.forward(), torch.tensor(5.0))
+        _assert_expression_equals(result, ExprTree("Variable(x)"), torch.tensor(5.0))
 
     def test_broadcast_constant_matrix_plus_scalar(self):
         """Test that constant matrix + constant scalar broadcasts and folds."""
@@ -255,10 +258,11 @@ class TestExpression:
 
         result = matrix + scalar
 
-        # Should broadcast and fold into single constant
-        assert result.tree() == ExprTree("ConstExpression")
-        expected_value = torch.tensor([[11.0, 12.0], [13.0, 14.0]])
-        assert torch.allclose(result.forward(), expected_value)
+        _assert_expression_equals(
+            result,
+            ExprTree("ConstExpression"),
+            torch.tensor([[11.0, 12.0], [13.0, 14.0]]),
+        )
 
     def test_broadcast_constant_matrix_plus_vector(self):
         """Test that constant matrix + constant vector broadcasts and folds."""
@@ -267,10 +271,11 @@ class TestExpression:
 
         result = matrix + vector
 
-        # Should broadcast and fold into single constant
-        assert result.tree() == ExprTree("ConstExpression")
-        expected_value = torch.tensor([[11.0, 22.0], [13.0, 24.0]])
-        assert torch.allclose(result.forward(), expected_value)
+        _assert_expression_equals(
+            result,
+            ExprTree("ConstExpression"),
+            torch.tensor([[11.0, 22.0], [13.0, 24.0]]),
+        )
 
     def test_subtraction_as_negation(self):
         """Test that a - b becomes a + (-b)."""
@@ -279,9 +284,9 @@ class TestExpression:
 
         result = a - b
 
-        # Should fold constants
-        assert result.tree() == ExprTree("ConstExpression")
-        assert torch.allclose(result.forward(), torch.tensor(7.0))
+        _assert_expression_equals(
+            result, ExprTree("ConstExpression"), torch.tensor(7.0)
+        )
 
     def test_negation(self):
         """Test that -expr creates ProductExpression(-1, expr)."""
@@ -289,15 +294,16 @@ class TestExpression:
 
         result = -x
 
-        # Should be ProductExpression with -1 constant and x
-        expected = ExprTree(
-            "ProductExpression",
-            ExprTree("ConstExpression"),
-            ExprTree("Variable(x)"),
-            is_commutative=True,
+        _assert_expression_equals(
+            result,
+            ExprTree(
+                "ProductExpression",
+                ExprTree("ConstExpression"),
+                ExprTree("Variable(x)"),
+                is_commutative=True,
+            ),
+            torch.tensor(-5.0),
         )
-        assert result.tree() == expected
-        assert torch.allclose(result.forward(), torch.tensor(-5.0))
 
     def test_multiplication_flattening(self):
         """Test that (a * 2) * 3 flattens and folds constants."""
@@ -305,15 +311,16 @@ class TestExpression:
 
         result = (x * 2) * 3
 
-        # Should flatten and fold: 2*3=6
-        expected = ExprTree(
-            "ProductExpression",
-            ExprTree("ConstExpression"),
-            ExprTree("Variable(x)"),
-            is_commutative=True,
+        _assert_expression_equals(
+            result,
+            ExprTree(
+                "ProductExpression",
+                ExprTree("ConstExpression"),
+                ExprTree("Variable(x)"),
+                is_commutative=True,
+            ),
+            torch.tensor(30.0),
         )
-        assert result.tree() == expected
-        assert torch.allclose(result.forward(), torch.tensor(30.0))
 
     def test_distribution_over_addition_constants(self):
         """Test that 2 * (a + b) turns into a constant for constant inputs."""
@@ -322,10 +329,9 @@ class TestExpression:
 
         result = 2 * (a + b)
 
-        # Should distribute
-        expected = ExprTree("ConstExpression")
-        assert result.tree() == expected
-        assert torch.allclose(result.forward(), torch.tensor(16.0))
+        _assert_expression_equals(
+            result, ExprTree("ConstExpression"), torch.tensor(16.0)
+        )
 
     def test_division_as_multiplication(self):
         """Test that expr / 2 becomes expr * 0.5."""
@@ -333,15 +339,16 @@ class TestExpression:
 
         result = x / 2.0
 
-        # Should be ProductExpression with 0.5 and x
-        expected = ExprTree(
-            "ProductExpression",
-            ExprTree("ConstExpression"),
-            ExprTree("Variable(x)"),
-            is_commutative=True,
+        _assert_expression_equals(
+            result,
+            ExprTree(
+                "ProductExpression",
+                ExprTree("ConstExpression"),
+                ExprTree("Variable(x)"),
+                is_commutative=True,
+            ),
+            torch.tensor(5.0),
         )
-        assert result.tree() == expected
-        assert torch.allclose(result.forward(), torch.tensor(5.0))
 
     def test_truediv_with_non_scalar_raises_error(self):
         """Test that dividing by non-scalar raises TypeError."""
@@ -357,13 +364,11 @@ class TestExpression:
 
         result = x**2
 
-        # Should create UnaryOpExpression
-        expected = ExprTree(
-            "power_2",
-            ExprTree("Variable(x)"),
+        _assert_expression_equals(
+            result,
+            ExprTree("power_2", ExprTree("Variable(x)")),
+            torch.tensor(9.0),
         )
-        assert result.tree() == expected
-        assert torch.allclose(result.forward(), torch.tensor(9.0))
 
     def test_distribution_over_addition_variables(self):
         """Test that 2 * (x + y) distributes to 2*x + 2*y for variables."""
@@ -372,25 +377,26 @@ class TestExpression:
 
         result = 2 * (x + y)
 
-        # Should distribute: AddExpression(2*x, 2*y)
-        expected = ExprTree(
-            "AddExpression",
+        _assert_expression_equals(
+            result,
             ExprTree(
-                "ProductExpression",
-                ExprTree("ConstExpression"),
-                ExprTree("Variable(x)"),
+                "AddExpression",
+                ExprTree(
+                    "ProductExpression",
+                    ExprTree("ConstExpression"),
+                    ExprTree("Variable(x)"),
+                    is_commutative=True,
+                ),
+                ExprTree(
+                    "ProductExpression",
+                    ExprTree("ConstExpression"),
+                    ExprTree("Variable(y)"),
+                    is_commutative=True,
+                ),
                 is_commutative=True,
             ),
-            ExprTree(
-                "ProductExpression",
-                ExprTree("ConstExpression"),
-                ExprTree("Variable(y)"),
-                is_commutative=True,
-            ),
-            is_commutative=True,
+            torch.tensor(16.0),
         )
-        assert result.tree() == expected
-        assert torch.allclose(result.forward(), torch.tensor(16.0))
 
     def test_matmul_no_optimization(self):
         """Test that matrix multiplication is not optimized."""
@@ -399,15 +405,15 @@ class TestExpression:
 
         result = a @ b
 
-        # Should create ProductExpression with matmul=True, no optimizations
-        expected = ExprTree(
-            "ProductExpression",
-            ExprTree("Variable(a)"),
-            ExprTree("Variable(b)"),
+        _assert_expression_equals(
+            result,
+            ExprTree(
+                "ProductExpression",
+                ExprTree("Variable(a)"),
+                ExprTree("Variable(b)"),
+            ),
+            torch.tensor([[19.0, 22.0], [43.0, 50.0]]),
         )
-        assert result.tree() == expected
-        expected_value = torch.tensor([[19.0, 22.0], [43.0, 50.0]])
-        assert torch.allclose(result.forward(), expected_value)
 
     def test_matmul_no_flattening(self):
         """Test that (a @ b) @ c does not flatten."""
@@ -417,18 +423,19 @@ class TestExpression:
 
         result = (a @ b) @ c
 
-        # Should NOT flatten - nested ProductExpressions
-        expected = ExprTree(
-            "ProductExpression",
+        _assert_expression_equals(
+            result,
             ExprTree(
                 "ProductExpression",
-                ExprTree("Variable(a)"),
-                ExprTree("Variable(b)"),
+                ExprTree(
+                    "ProductExpression",
+                    ExprTree("Variable(a)"),
+                    ExprTree("Variable(b)"),
+                ),
+                ExprTree("Variable(c)"),
             ),
-            ExprTree("Variable(c)"),
+            torch.tensor([[55.0]]),
         )
-        assert result.tree() == expected
-        assert torch.allclose(result.forward(), torch.tensor([[55.0]]))
 
     def test_scalar_times_matmul_no_distribution(self):
         """Test that 2 * (a @ b) does not distribute for matmul."""
@@ -437,19 +444,20 @@ class TestExpression:
 
         result = 2 * (a @ b)
 
-        # Should NOT distribute - ProductExpression(2, ProductExpression(a, b))
-        expected = ExprTree(
-            "ProductExpression",
-            ExprTree("ConstExpression"),  # 2
+        _assert_expression_equals(
+            result,
             ExprTree(
                 "ProductExpression",
-                ExprTree("Variable(a)"),
-                ExprTree("Variable(b)"),
+                ExprTree("ConstExpression"),
+                ExprTree(
+                    "ProductExpression",
+                    ExprTree("Variable(a)"),
+                    ExprTree("Variable(b)"),
+                ),
+                is_commutative=True,
             ),
-            is_commutative=True,
+            torch.tensor([[22.0]]),
         )
-        assert result.tree() == expected
-        assert torch.allclose(result.forward(), torch.tensor([[22.0]]))
 
     def test_matmul_constants_creates_product_expression(self):
         """Test that matmul between constants creates ProductExpression (not folded)."""
@@ -458,15 +466,15 @@ class TestExpression:
 
         result = a @ b
 
-        # Matmul is not optimized even for constants
-        expected = ExprTree(
-            "ProductExpression",
-            ExprTree("ConstExpression"),
-            ExprTree("ConstExpression"),
+        _assert_expression_equals(
+            result,
+            ExprTree(
+                "ProductExpression",
+                ExprTree("ConstExpression"),
+                ExprTree("ConstExpression"),
+            ),
+            torch.tensor([[19.0, 22.0], [43.0, 50.0]]),
         )
-        assert result.tree() == expected
-        expected_value = torch.tensor([[19.0, 22.0], [43.0, 50.0]])
-        assert torch.allclose(result.forward(), expected_value)
 
     def test_matmul_no_distribution_over_sum(self):
         """Test that A @ (x + y) does not distribute to (A @ x) + (A @ y)."""
@@ -476,19 +484,20 @@ class TestExpression:
 
         result = A @ (x + y)
 
-        # Should NOT distribute - ProductExpression(A, AddExpression(x, y))
-        expected = ExprTree(
-            "ProductExpression",
-            ExprTree("ConstExpression"),
+        _assert_expression_equals(
+            result,
             ExprTree(
-                "AddExpression",
-                ExprTree("Variable(x)"),
-                ExprTree("Variable(y)"),
-                is_commutative=True,
+                "ProductExpression",
+                ExprTree("ConstExpression"),
+                ExprTree(
+                    "AddExpression",
+                    ExprTree("Variable(x)"),
+                    ExprTree("Variable(y)"),
+                    is_commutative=True,
+                ),
             ),
+            torch.tensor([[28.0]]),
         )
-        assert result.tree() == expected
-        assert torch.allclose(result.forward(), torch.tensor([[28.0]]))
 
     def test_atom_scaling_optimization(self):
         """Test that scalar * atom calls returns the same type of atom."""
@@ -497,9 +506,11 @@ class TestExpression:
 
         result = 2.0 * atom
 
-        expected = ExprTree("L1Norm", ExprTree("Variable(x)"))
-        assert result.tree() == expected
-        assert torch.allclose(result.forward(), torch.tensor(12.0))
+        _assert_expression_equals(
+            result,
+            ExprTree("L1Norm", ExprTree("Variable(x)")),
+            torch.tensor(12.0),
+        )
 
     def test_atom_scaling_with_folded_constants(self):
         """Test that (2 * 3) * atom folds constants before scaling."""
@@ -508,9 +519,11 @@ class TestExpression:
 
         result = 2.0 * (3.0 * atom)
 
-        expected = ExprTree("L1Norm", ExprTree("Variable(x)"))
-        assert result.tree() == expected
-        assert torch.allclose(result.forward(), torch.tensor(36.0))
+        _assert_expression_equals(
+            result,
+            ExprTree("L1Norm", ExprTree("Variable(x)")),
+            torch.tensor(36.0),
+        )
 
     def test_atom_scaling_preserves_existing_scaling(self):
         """Test that scaling an already-scaled atom multiplies the scalings."""
@@ -519,9 +532,11 @@ class TestExpression:
 
         result = 2.0 * atom
 
-        expected = ExprTree("L1Norm", ExprTree("Variable(x)"))
-        assert result.tree() == expected
-        assert torch.allclose(result.forward(), torch.tensor(60.0))
+        _assert_expression_equals(
+            result,
+            ExprTree("L1Norm", ExprTree("Variable(x)")),
+            torch.tensor(60.0),
+        )
 
     def test_atom_without_scale_falls_back_to_product(self):
         """Test that atoms without _scale() support fall back to ProductExpression."""
@@ -530,14 +545,16 @@ class TestExpression:
 
         result = 2.0 * atom
 
-        expected = ExprTree(
-            "ProductExpression",
-            ExprTree("ConstExpression"),
-            ExprTree("SumSquares", ExprTree("Variable(x)")),
-            is_commutative=True,
+        _assert_expression_equals(
+            result,
+            ExprTree(
+                "ProductExpression",
+                ExprTree("ConstExpression"),
+                ExprTree("SumSquares", ExprTree("Variable(x)")),
+                is_commutative=True,
+            ),
+            torch.tensor(28.0),
         )
-        assert result.tree() == expected
-        assert torch.allclose(result.forward(), torch.tensor(28.0))
 
     # ----------------------
     # Stress tests - complex combinations
@@ -551,31 +568,32 @@ class TestExpression:
 
         result = 2 * x + 3 * y + 4 * z
 
-        # Should flatten additions and have three ProductExpressions
-        expected = ExprTree(
-            "AddExpression",
+        _assert_expression_equals(
+            result,
             ExprTree(
-                "ProductExpression",
-                ExprTree("ConstExpression"),  # 2
-                ExprTree("Variable(x)"),
+                "AddExpression",
+                ExprTree(
+                    "ProductExpression",
+                    ExprTree("ConstExpression"),
+                    ExprTree("Variable(x)"),
+                    is_commutative=True,
+                ),
+                ExprTree(
+                    "ProductExpression",
+                    ExprTree("ConstExpression"),
+                    ExprTree("Variable(y)"),
+                    is_commutative=True,
+                ),
+                ExprTree(
+                    "ProductExpression",
+                    ExprTree("ConstExpression"),
+                    ExprTree("Variable(z)"),
+                    is_commutative=True,
+                ),
                 is_commutative=True,
             ),
-            ExprTree(
-                "ProductExpression",
-                ExprTree("ConstExpression"),  # 3
-                ExprTree("Variable(y)"),
-                is_commutative=True,
-            ),
-            ExprTree(
-                "ProductExpression",
-                ExprTree("ConstExpression"),  # 4
-                ExprTree("Variable(z)"),
-                is_commutative=True,
-            ),
-            is_commutative=True,
+            torch.tensor(20.0),
         )
-        assert result.tree() == expected
-        assert torch.allclose(result.forward(), torch.tensor(20.0))
 
     def test_nested_distribution(self):
         """Test 2 * (3 * x + 4 * y) with nested distribution."""
@@ -584,25 +602,26 @@ class TestExpression:
 
         result = 2 * (3 * x + 4 * y)
 
-        # Should distribute: 2*3*x + 2*4*y = 6*x + 8*y
-        expected = ExprTree(
-            "AddExpression",
+        _assert_expression_equals(
+            result,
             ExprTree(
-                "ProductExpression",
-                ExprTree("ConstExpression"),
-                ExprTree("Variable(x)"),
+                "AddExpression",
+                ExprTree(
+                    "ProductExpression",
+                    ExprTree("ConstExpression"),
+                    ExprTree("Variable(x)"),
+                    is_commutative=True,
+                ),
+                ExprTree(
+                    "ProductExpression",
+                    ExprTree("ConstExpression"),
+                    ExprTree("Variable(y)"),
+                    is_commutative=True,
+                ),
                 is_commutative=True,
             ),
-            ExprTree(
-                "ProductExpression",
-                ExprTree("ConstExpression"),
-                ExprTree("Variable(y)"),
-                is_commutative=True,
-            ),
-            is_commutative=True,
+            torch.tensor(22.0),
         )
-        assert result.tree() == expected
-        assert torch.allclose(result.forward(), torch.tensor(22.0))
 
     def test_matmul_with_scalar_mult_and_addition(self):
         """Test 2*(A@x) + 3*(B@y) with matmul and scalar multiplication."""
@@ -613,33 +632,34 @@ class TestExpression:
 
         result = 2 * (A @ x) + 3 * (B @ y)
 
-        # Should have AddExpression with two ProductExpressions containing matmuls
-        expected = ExprTree(
-            "AddExpression",
+        _assert_expression_equals(
+            result,
             ExprTree(
-                "ProductExpression",
-                ExprTree("ConstExpression"),
+                "AddExpression",
                 ExprTree(
                     "ProductExpression",
                     ExprTree("ConstExpression"),
-                    ExprTree("Variable(x)"),
+                    ExprTree(
+                        "ProductExpression",
+                        ExprTree("ConstExpression"),
+                        ExprTree("Variable(x)"),
+                    ),
+                    is_commutative=True,
                 ),
-                is_commutative=True,
-            ),
-            ExprTree(
-                "ProductExpression",
-                ExprTree("ConstExpression"),
                 ExprTree(
                     "ProductExpression",
                     ExprTree("ConstExpression"),
-                    ExprTree("Variable(y)"),
+                    ExprTree(
+                        "ProductExpression",
+                        ExprTree("ConstExpression"),
+                        ExprTree("Variable(y)"),
+                    ),
+                    is_commutative=True,
                 ),
                 is_commutative=True,
             ),
-            is_commutative=True,
+            torch.tensor([[193.0]]),
         )
-        assert result.tree() == expected
-        assert torch.allclose(result.forward(), torch.tensor([[193.0]]))
 
     def test_complex_mix_matmul_scalar_add(self):
         """Test 2*(A@x) + 3*y + 4 mixing matmul, scalar mult, and constants."""
@@ -649,30 +669,31 @@ class TestExpression:
 
         result = 2 * (A @ x) + 3 * y + 4
 
-        # Should flatten addition but preserve matmul structure
-        expected = ExprTree(
-            "AddExpression",
+        _assert_expression_equals(
+            result,
             ExprTree(
-                "ProductExpression",
-                ExprTree("ConstExpression"),
+                "AddExpression",
                 ExprTree(
                     "ProductExpression",
                     ExprTree("ConstExpression"),
-                    ExprTree("Variable(x)"),
+                    ExprTree(
+                        "ProductExpression",
+                        ExprTree("ConstExpression"),
+                        ExprTree("Variable(x)"),
+                    ),
+                    is_commutative=True,
                 ),
-                is_commutative=True,
-            ),
-            ExprTree(
-                "ProductExpression",
+                ExprTree(
+                    "ProductExpression",
+                    ExprTree("ConstExpression"),
+                    ExprTree("Variable(y)"),
+                    is_commutative=True,
+                ),
                 ExprTree("ConstExpression"),
-                ExprTree("Variable(y)"),
                 is_commutative=True,
             ),
-            ExprTree("ConstExpression"),
-            is_commutative=True,
+            torch.tensor([[41.0]]),
         )
-        assert result.tree() == expected
-        assert torch.allclose(result.forward(), torch.tensor([[41.0]]))
 
     def test_atom_with_scalar_mult_and_addition(self):
         """Test 2*L1Norm(x) + 3*y mixing atom scaling with other operations."""
@@ -682,20 +703,21 @@ class TestExpression:
 
         result = 2 * atom + 3 * y
 
-        # Should have scaled atom and scalar mult in an addition
-        expected = ExprTree(
-            "AddExpression",
-            ExprTree("L1Norm", ExprTree("Variable(x)")),
+        _assert_expression_equals(
+            result,
             ExprTree(
-                "ProductExpression",
-                ExprTree("ConstExpression"),
-                ExprTree("Variable(y)"),
+                "AddExpression",
+                ExprTree("L1Norm", ExprTree("Variable(x)")),
+                ExprTree(
+                    "ProductExpression",
+                    ExprTree("ConstExpression"),
+                    ExprTree("Variable(y)"),
+                    is_commutative=True,
+                ),
                 is_commutative=True,
             ),
-            is_commutative=True,
+            torch.tensor(27.0),
         )
-        assert result.tree() == expected
-        assert torch.allclose(result.forward(), torch.tensor(27.0))
 
     def test_distribution_with_constants_and_matmul(self):
         """Test 2*(x + 3) + (A@y) mixing distribution, constants, and matmul."""
@@ -705,25 +727,26 @@ class TestExpression:
 
         result = 2 * (x + 3) + (A @ y)
 
-        # Should distribute 2*(x+3) = 2*x + 6, then add matmul
-        expected = ExprTree(
-            "AddExpression",
+        _assert_expression_equals(
+            result,
             ExprTree(
-                "ProductExpression",
+                "AddExpression",
+                ExprTree(
+                    "ProductExpression",
+                    ExprTree("ConstExpression"),
+                    ExprTree("Variable(x)"),
+                    is_commutative=True,
+                ),
                 ExprTree("ConstExpression"),
-                ExprTree("Variable(x)"),
+                ExprTree(
+                    "ProductExpression",
+                    ExprTree("ConstExpression"),
+                    ExprTree("Variable(y)"),
+                ),
                 is_commutative=True,
             ),
-            ExprTree("ConstExpression"),
-            ExprTree(
-                "ProductExpression",
-                ExprTree("ConstExpression"),
-                ExprTree("Variable(y)"),
-            ),
-            is_commutative=True,
+            torch.tensor([[27.0]]),
         )
-        assert result.tree() == expected
-        assert torch.allclose(result.forward(), torch.tensor([[27.0]]))
 
     def test_deeply_nested_operations(self):
         """Test ((2*x + 3) * 4 + 5*y) * 6 with deep nesting."""
@@ -732,26 +755,24 @@ class TestExpression:
 
         result = ((2 * x + 3) * 4 + 5 * y) * 6
 
-        # Should distribute and flatten appropriately
-        # (2*x + 3) * 4 = 8*x + 12
-        # 8*x + 12 + 5*y = 8*x + 5*y + 12
-        # (8*x + 5*y + 12) * 6 = 48*x + 30*y + 72
-        expected = ExprTree(
-            "AddExpression",
+        _assert_expression_equals(
+            result,
             ExprTree(
-                "ProductExpression",
+                "AddExpression",
+                ExprTree(
+                    "ProductExpression",
+                    ExprTree("ConstExpression"),
+                    ExprTree("Variable(x)"),
+                    is_commutative=True,
+                ),
+                ExprTree(
+                    "ProductExpression",
+                    ExprTree("ConstExpression"),
+                    ExprTree("Variable(y)"),
+                    is_commutative=True,
+                ),
                 ExprTree("ConstExpression"),
-                ExprTree("Variable(x)"),
                 is_commutative=True,
             ),
-            ExprTree(
-                "ProductExpression",
-                ExprTree("ConstExpression"),
-                ExprTree("Variable(y)"),
-                is_commutative=True,
-            ),
-            ExprTree("ConstExpression"),
-            is_commutative=True,
+            torch.tensor(180.0),
         )
-        assert result.tree() == expected
-        assert torch.allclose(result.forward(), torch.tensor(180.0))

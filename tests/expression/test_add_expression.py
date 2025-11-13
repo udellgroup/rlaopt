@@ -270,3 +270,131 @@ class TestAddExpression:
         assert isinstance(result, TensorDict)
         assert torch.equal(result["param1"], torch.ones(3) * 5)
         assert torch.equal(result["param2"], torch.ones(3) * 10)
+
+    # ----------------------
+    # Smooth/non-smooth partitioning tests
+    # ----------------------
+
+    def test_get_smooth_part_mixed_terms(self, smooth_expr, non_smooth_expr):
+        """Test get_smooth_part returns only smooth terms."""
+        mixed = AddExpression(smooth_expr, non_smooth_expr)
+
+        smooth_part = mixed.get_smooth_part()
+
+        assert smooth_part is not None
+        assert smooth_part.is_smooth() is True
+        assert smooth_part.n_exprs == 1
+        # Verify it evaluates to the smooth term's value
+        assert torch.equal(smooth_part.forward(), smooth_expr.forward())
+
+    def test_get_non_smooth_part_mixed_terms(self, smooth_expr, non_smooth_expr):
+        """Test get_non_smooth_part returns only non-smooth terms."""
+        mixed = AddExpression(smooth_expr, non_smooth_expr)
+
+        non_smooth_part = mixed.get_non_smooth_part()
+
+        assert non_smooth_part is not None
+        assert non_smooth_part.is_smooth() is False
+        assert non_smooth_part.n_exprs == 1
+        # Verify it evaluates to the non-smooth term's value
+        assert torch.equal(non_smooth_part.forward(), non_smooth_expr.forward())
+
+    def test_get_smooth_part_all_smooth(self, smooth_expr, another_smooth_expr):
+        """Test get_smooth_part with all smooth terms returns all terms."""
+        all_smooth = AddExpression(smooth_expr, another_smooth_expr)
+
+        smooth_part = all_smooth.get_smooth_part()
+
+        assert smooth_part is not None
+        assert smooth_part.n_exprs == 2
+        assert smooth_part.is_smooth() is True
+        # Should equal the original sum
+        assert torch.equal(smooth_part.forward(), all_smooth.forward())
+
+    def test_get_non_smooth_part_all_smooth(self, smooth_expr, another_smooth_expr):
+        """Test get_non_smooth_part returns None when all terms are smooth."""
+        all_smooth = AddExpression(smooth_expr, another_smooth_expr)
+
+        non_smooth_part = all_smooth.get_non_smooth_part()
+
+        assert non_smooth_part is None
+
+    def test_get_smooth_part_all_non_smooth(self, non_smooth_expr, non_proxable_expr):
+        """Test get_smooth_part returns None when all terms are non-smooth."""
+        all_non_smooth = AddExpression(non_smooth_expr, non_proxable_expr)
+
+        smooth_part = all_non_smooth.get_smooth_part()
+
+        assert smooth_part is None
+
+    def test_get_non_smooth_part_all_non_smooth(
+        self, non_smooth_expr, non_proxable_expr
+    ):
+        """Test get_non_smooth_part with all non-smooth returns all terms."""
+        all_non_smooth = AddExpression(non_smooth_expr, non_proxable_expr)
+
+        non_smooth_part = all_non_smooth.get_non_smooth_part()
+
+        assert non_smooth_part is not None
+        assert non_smooth_part.n_exprs == 2
+        assert non_smooth_part.is_smooth() is False
+        # Should equal the original sum
+        assert torch.equal(non_smooth_part.forward(), all_non_smooth.forward())
+
+    def test_partition_completeness(self, smooth_expr, non_smooth_expr):
+        """Test that smooth + non-smooth parts equal the original sum."""
+        mixed = AddExpression(smooth_expr, non_smooth_expr)
+
+        smooth_part = mixed.get_smooth_part()
+        non_smooth_part = mixed.get_non_smooth_part()
+
+        # Both parts should exist
+        assert smooth_part is not None
+        assert non_smooth_part is not None
+
+        # Sum of parts should equal original
+        combined = smooth_part.forward() + non_smooth_part.forward()
+        assert torch.equal(combined, mixed.forward())
+
+    def test_multiple_smooth_and_non_smooth_terms(
+        self, smooth_expr, another_smooth_expr, non_smooth_expr, non_proxable_expr
+    ):
+        """Test partitioning with multiple terms of each type."""
+        mixed = AddExpression(
+            smooth_expr, non_smooth_expr, another_smooth_expr, non_proxable_expr
+        )
+
+        smooth_part = mixed.get_smooth_part()
+        non_smooth_part = mixed.get_non_smooth_part()
+
+        # Should have 2 smooth terms
+        assert smooth_part is not None
+        assert smooth_part.n_exprs == 2
+        assert smooth_part.is_smooth() is True
+
+        # Should have 2 non-smooth terms
+        assert non_smooth_part is not None
+        assert non_smooth_part.n_exprs == 2
+        assert non_smooth_part.is_smooth() is False
+
+        # Verify sum
+        combined = smooth_part.forward() + non_smooth_part.forward()
+        assert torch.equal(combined, mixed.forward())
+
+    # ----------------------
+    # Tree representation tests
+    # ----------------------
+
+    def test_tree_structure(self, smooth_expr, another_smooth_expr):
+        """Test tree() returns correct structure."""
+        from rlaopt.expression import ExprTree
+
+        add_expr = AddExpression(smooth_expr, another_smooth_expr)
+
+        expected = ExprTree(
+            "AddExpression",
+            smooth_expr.tree(),
+            another_smooth_expr.tree(),
+            is_commutative=True,
+        )
+        assert add_expr.tree() == expected
