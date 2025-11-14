@@ -144,9 +144,6 @@ def _create_product(left, right, matmul: bool):
             all_factors = [folded_const] + other_factors
             return expr_types.prod_expr()(*all_factors, matmul=False)
 
-        # No scalar constants to fold
-        if len(other_factors) == 1:
-            return other_factors[0]
         return expr_types.prod_expr()(*other_factors, matmul=False)
 
     # No optimization for matmul
@@ -168,6 +165,6 @@ def _to_expr(val):
     """
     if isinstance(val, expr_types.expression()):
         return val
-    if isinstance(val, (float, int, torch.Tensor)):
+    if isinstance(val, (float, int, torch.Tensor)) and not isinstance(val, bool):
         return expr_types.constant()(val)
-    raise TypeError(f"Cannot convert {type(val)} to Expression")
+    raise TypeError(f"Cannot convert {type(val).__name__} to Expression")

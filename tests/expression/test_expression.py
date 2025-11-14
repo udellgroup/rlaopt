@@ -241,6 +241,45 @@ class TestExpression:
 
         _assert_expression_equals(result, ExprTree("Variable(x)"), torch.tensor(5.0))
 
+    def test_radd_with_scalar(self):
+        """Test to trigger __radd__."""
+        x = expr_types.variable()(torch.tensor(5.0), name="x")
+
+        result = 3.0 + x
+
+        _assert_expression_equals(
+            result,
+            ExprTree(
+                "AddExpression",
+                ExprTree("ConstExpression"),
+                ExprTree("Variable(x)"),
+                is_commutative=True,
+            ),
+            torch.tensor(8.0),
+        )
+
+    def test_rsub_with_scalar(self):
+        """Test to trigger __rsub__."""
+        x = expr_types.variable()(torch.tensor(5.0), name="x")
+
+        result = 10.0 - x
+
+        _assert_expression_equals(
+            result,
+            ExprTree(
+                "AddExpression",
+                ExprTree("ConstExpression"),
+                ExprTree(
+                    "ProductExpression",
+                    ExprTree("ConstExpression"),
+                    ExprTree("Variable(x)"),
+                    is_commutative=True,
+                ),
+                is_commutative=True,
+            ),
+            torch.tensor(5.0),
+        )
+
     def test_constants_cancel_to_zero(self):
         """Test that constants that sum to zero are eliminated."""
         x = expr_types.variable()(torch.tensor(5.0), name="x")
@@ -320,6 +359,24 @@ class TestExpression:
                 is_commutative=True,
             ),
             torch.tensor(30.0),
+        )
+
+    def test_elementwise_product_no_constants(self):
+        """Test elementwise product between variables with no scalar constants."""
+        x = expr_types.variable()(torch.tensor([2.0, 3.0]), name="x")
+        y = expr_types.variable()(torch.tensor([4.0, 5.0]), name="y")
+
+        result = x * y
+
+        _assert_expression_equals(
+            result,
+            ExprTree(
+                "ProductExpression",
+                ExprTree("Variable(x)"),
+                ExprTree("Variable(y)"),
+                is_commutative=True,
+            ),
+            torch.tensor([8.0, 15.0]),
         )
 
     def test_distribution_over_addition_constants(self):
@@ -555,6 +612,21 @@ class TestExpression:
             ),
             torch.tensor(28.0),
         )
+
+    @pytest.mark.parametrize(
+        "invalid_value", ["string", True, [1, 2, 3], {"key": "val"}, None]
+    )
+    def test_invalid_type_conversion_raises_error(self, invalid_value):
+        """Test that operations with unconvertible types raise TypeError."""
+        x = expr_types.variable()(torch.tensor(5.0), name="x")
+
+        # Test addition
+        with pytest.raises(TypeError, match="Cannot convert .* to Expression"):
+            x + invalid_value
+
+        # Test multiplication
+        with pytest.raises(TypeError, match="Cannot convert .* to Expression"):
+            x * invalid_value
 
     # ----------------------
     # Stress tests - complex combinations

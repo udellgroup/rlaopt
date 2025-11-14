@@ -34,7 +34,7 @@ class _NAryOpExpression(Expression, ABC):
 
         if not exprs:
             raise ValueError(f"{self.__class__.__name__} requires at least one operand")
-        self.exprs = torch.nn.ModuleList(expr for expr in exprs)
+        self.exprs = torch.nn.ModuleList(exprs)
 
     @abstractmethod
     def op(self, values: list[torch.Tensor]):

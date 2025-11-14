@@ -207,7 +207,7 @@ class TestNucNormScaling:
     def test_scalar_multiplication_optimization(self, matrix_var):
         """Test that scalar multiplication optimizes to scaled NucNorm."""
         # Set to identity-like matrix with known singular values
-        matrix_var.value.data = torch.eye(4, 3)
+        matrix_var.value = torch.eye(4, 3)
         nuc = NucNorm(matrix_var, scaling=2.0)
         scaled = 4.0 * nuc
 
