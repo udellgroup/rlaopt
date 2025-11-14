@@ -6,7 +6,7 @@ import torch
 
 from rlaopt.expression import expr_types
 from rlaopt.expression._nary_op_expression import _NAryOpExpression
-from rlaopt.expression.constant import ConstExpression
+from rlaopt.expression.constant import Constant
 from rlaopt.expression.expression import Expression
 from rlaopt.ext_tensordict import TensorDict
 
@@ -256,7 +256,7 @@ class ProductExpression(_NAryOpExpression):
         Returns:
             bool: True if tree contains only simple expressions.
         """
-        if isinstance(expr, (expr_types.variable(), ConstExpression)):
+        if isinstance(expr, (expr_types.variable(), Constant)):
             return True
         if isinstance(expr, (ProductExpression, AddExpression)):
             return all(self._is_var_or_const_tree(child) for child in expr.exprs)

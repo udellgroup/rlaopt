@@ -1,4 +1,4 @@
-"""Module for ConstExpression class."""
+"""Module for Constant class."""
 
 import torch
 
@@ -6,7 +6,7 @@ from rlaopt.expression.expression import Expression
 from rlaopt.expression.tree import ExprTree
 
 
-class ConstExpression(Expression):
+class Constant(Expression):
     """Constant value expression.
 
     Represents a constant (non-trainable) value in an expression tree.
@@ -20,10 +20,10 @@ class ConstExpression(Expression):
         _value: The constant value stored as a buffer.
 
     Examples:
-        >>> c = ConstExpression(3.14)
+        >>> c = Constant(3.14)
         >>> c.forward()
         tensor(3.1400)
-        >>> c2 = ConstExpression(torch.ones(5))
+        >>> c2 = Constant(torch.ones(5))
         >>> c2.forward().shape
         torch.Size([5])
     """
@@ -74,17 +74,17 @@ class ConstExpression(Expression):
         return self.value
 
     def tree(self) -> ExprTree:
-        """Return tree representation for ConstExpression (leaf node).
+        """Return tree representation for Constant (leaf node).
 
         Returns:
-            ExprTree: Leaf node with type 'ConstExpression'.
+            ExprTree: Leaf node with type 'Constant'.
         """
-        return ExprTree("ConstExpression")
+        return ExprTree("Constant")
 
     def __neg__(self):
         """Negate the constant (keeps it as a constant).
 
         Returns:
-            ConstExpression: Negated constant.
+            Constant: Negated constant.
         """
-        return ConstExpression(-self.value)
+        return Constant(-self.value)
