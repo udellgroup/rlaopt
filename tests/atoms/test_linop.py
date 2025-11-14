@@ -27,14 +27,14 @@ def matrix_var():
 
 @pytest.fixture
 def simple_linop():
-    """Create simple affine transformation data."""
+    """Create simple linop transformation data."""
     return lo.IdentityOperator(5)
 
 
 @pytest.fixture
 def nontrivial_linop():
-    """Create non-trivial affine transformation data."""
-    return lo.DiagonalOperator((1 + torch.arange(5))**-1)**4
+    """Create non-trivial linop transformation data."""
+    return lo.DiagonalOperator((1. + torch.arange(5))**-4)
 
 
 class TestLinop:
@@ -46,15 +46,15 @@ class TestLinop:
 
     def test_init_with_variable(self, vector_var, simple_linop):
         """Test initialization with Variable input."""
-        affine = Linop(simple_linop, vector_var)
-        assert affine.op is not None
+        linop = Linop(simple_linop, vector_var)
+        assert linop.op is not None
 
     def test_init_with_expression_input(self, vector_var, simple_linop):
         """Test initialization with Expression input."""
         # Create an expression from a variable
         expr = vector_var + 1.0
-        affine = Linop(simple_linop, expr)
-        assert affine.op is not None
+        linop = Linop(simple_linop, expr)
+        assert linop.op is not None
 
     # ----------------------
     # Forward evaluation tests
@@ -67,14 +67,14 @@ class TestLinop:
         expected = torch.ones(5)
         assert torch.allclose(result, expected)
 
-    def test_forward_computes_affine_transformation(
+    def test_forward_computes_linop_transformation(
         self, vector_var, nontrivial_linop
     ):
         """Test forward() correctly computes A @ x + b."""
         linop = Linop(nontrivial_linop, vector_var)
-        result = affine.forward()
+        result = linop.forward()
 
-        expected = ((1 + torch.arange(5))**-1)**4
+        expected = ((1. + torch.arange(5))**-1)**4
         assert torch.allclose(result, expected)
 
     def test_forward_with_expression_input(self, vector_var):
@@ -86,7 +86,7 @@ class TestLinop:
 
         # vector_var.value = ones(5), so expr = ones(5) + 2 = 3*ones(5)
         # Result: 2*I @ 3*ones(5) = 6*ones(5)
-        result = affine.forward()
+        result = linop.forward()
         expected = torch.ones(5) * 6
         assert torch.allclose(result, expected)
 
@@ -94,11 +94,11 @@ class TestLinop:
         """Test forward() works with matrix inputs."""
         # Flatten transformation: sum rows
         A = lo.aslinearoperator(torch.ones(3, 4))  # Each row sums the 4 columns
-        affine = Linop(A, matrix_var)
+        linop = Linop(A, matrix_var)
 
         # matrix_var is 4x3 of ones, A is 3x4, so A @ X gives 3x3
         # Each element = sum of row of A @ column of X = 4 * 1 = 4
-        result = affine.forward()
+        result = linop.forward()
         assert result.shape == (3, 3)
 
     # ----------------------
@@ -127,7 +127,7 @@ class TestLinop:
             linop.prox(torch.ones(5), 1.0)
 
     def test_subsample(self, vector_var, simple_linop):
-        """Test subsample() raises NotImplementedError."""
+        """Test subsample() works."""
         linop = Linop(simple_linop, vector_var).subsample(torch.tensor([1, 3]))
         out = linop.forward()
         assert out.shape == (2,)

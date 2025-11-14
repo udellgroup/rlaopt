@@ -58,3 +58,6 @@ select = [
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"
+
+[tool.uv.sources]
+torch-linops = { git = "ssh://git@github.com/cvxgrp/torch_linops" }

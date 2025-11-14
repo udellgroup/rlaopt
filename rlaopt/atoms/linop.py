@@ -13,7 +13,7 @@ import linops as lo
 class Linop(AtomExpression):
     """Linear operator atom: A @ x.
 
-    Represents an affine mapping of a variable or output of an expression.
+    Represents a linear mapping of a variable or output of an expression.
 
     Args:
         x: Variable or Expression to transform.
@@ -26,15 +26,15 @@ class Linop(AtomExpression):
         >>> x = Variable((5,), name='x')
         >>> A = torch.randn(3, 5)
         >>> b = torch.randn(3)
-        >>> affine = Affine(x, A, b)
-        >>> result = affine.forward()  # Computes A @ x + b
+        >>> linop = Linop(x, A, b)
+        >>> result = linop.forward()  # Computes A @ x + b
     """
 
     def __init__(self, A: lo.LinearOperator, x: Variable | Expression):
-        """Initialize the affine transformation atom.
+        """Initialize the linop transformation atom.
 
         Args:
-            x: Variable or Affine Expression to transform.
+            x: Variable or Expression to transform.
             A: Transformation operator.
 
         Raises:
@@ -46,15 +46,15 @@ class Linop(AtomExpression):
         self.op = A
 
     def is_smooth(self) -> bool:
-        """Check if the affine transformation is smooth.
+        """Check if the linear transformation is smooth.
 
         Returns:
-            bool: Always True, as affine functions are smooth everywhere.
+            bool: Always True, as linear functions are smooth everywhere.
         """
         return True
 
     def forward(self) -> torch.Tensor:
-        """Evaluate the affine transformation at the current variable value.
+        """Evaluate the linear transformation at the current variable value.
 
         Returns:
             torch.Tensor: Result of A @ x + b.
@@ -63,10 +63,10 @@ class Linop(AtomExpression):
         return self.op @ input_
 
     def is_proxable(self) -> bool:
-        """Check if the affine transformation has a computable proximal operator.
+        """Check if the linear transformation has a computable proximal operator.
 
         Returns:
-            bool: Always False, as affine functions are not proxable.
+            bool: Always False, as linear functions are not proxable.
         """
         return False
 
@@ -86,20 +86,17 @@ class Linop(AtomExpression):
         raise NotImplementedError("Affine is not proxable.")
 
     def is_subsamplable(self) -> bool:
-        """Check if the affine transformation supports subsampling.
+        """Check if the linear transformation supports subsampling.
 
         Returns:
-            bool: Always False, we do not support subsampling currently.
+            bool: Always True.
         """
         return True
 
     def subsample(self, indices: torch.Tensor) -> Self:
-        """Return a subsampled version of the affine transformation.
+        """Return a subsampled version of the linear transformation.
 
         Returns:
-            Affine: Not applicable
-
-        Raises:
-            NotImplementedError: Affine transformations are not proxable.
+            Linop: subsampled linop
         """
         return Linop( self.op[indices], self.get_input())
