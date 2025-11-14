@@ -258,7 +258,7 @@ class AtomExpression(Expression, ABC):
         return self._exprs_names
 
     @property
-    def ids_to_exprs(self) -> dict[int, Expression]:  # Changed return type annotation
+    def ids_to_exprs(self) -> dict[int, Expression]:
         """Returns a mapping of registered expression IDs to their Expression objects."""
         return self._ids_to_exprs
 
