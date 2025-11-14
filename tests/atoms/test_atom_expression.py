@@ -61,12 +61,12 @@ class TestRegisterInputAndGetInput:
     def test_register_input_with_variable_allows_variable(self, simple_variable):
         """Test register_input accepts Variable when variable_only=False."""
         atom = MockAtom(simple_variable, variable_only=False)
-        assert atom.get_input() is simple_variable
+        assert atom[1] is simple_variable
 
     def test_register_input_with_expression_when_allowed(self, add_expression):
         """Test register_input accepts Expression when variable_only=False."""
         atom = MockAtom(add_expression, variable_only=False)
-        assert atom.get_input() is add_expression
+        assert atom[1] is add_expression
 
     def test_register_input_rejects_non_expression(self):
         """Test register_input rejects non-Expression inputs."""
@@ -81,7 +81,7 @@ class TestRegisterInputAndGetInput:
     def test_register_input_accepts_variable_when_variable_only(self, simple_variable):
         """Test register_input accepts Variable when variable_only=True."""
         atom = MockAtom(simple_variable, variable_only=True)
-        assert atom.get_input() is simple_variable
+        assert atom[1] is simple_variable
 
 
 class TestRegisterAtomBuffer:
