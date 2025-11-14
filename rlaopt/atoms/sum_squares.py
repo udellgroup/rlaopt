@@ -25,24 +25,20 @@ class SumSquares(AtomExpression):
 
     def is_smooth(self) -> bool:
         """Returns True depending on the smoothness of the expression."""
-        input_ = self.get_input()
-        if isinstance(input_, Expression):
-            return input_.is_smooth()
-        else:
-            return True
+        return self[1].is_smooth()
 
     def forward(self) -> torch.Tensor:
         """Forward pass to compute the sum of squares."""
-        value = self.get_input().forward()
+        value = self[1].forward()
         return torch.sum(value**2)
 
     def is_proxable(self) -> bool:
         """Returns True if the input is a Variable or Affine with Variable root."""
-        input_ = self.get_input()
+        input_ = self[1]
         if isinstance(input_, Variable):
             return True
         elif isinstance(input_, Affine):
-            if isinstance(input_.get_input(), Variable):
+            if isinstance(input_[1], Variable):
                 return True
         return False
 
@@ -56,7 +52,7 @@ class SumSquares(AtomExpression):
         Returns:
             Result of the proximal operator
         """
-        input_ = self.get_input()
+        input_ = self[1]
 
         if isinstance(input_, Variable):
             return 1 / (1 + 2 * prox_scaling) * location
@@ -66,7 +62,7 @@ class SumSquares(AtomExpression):
             # input is Affine with a Variable root.
 
             if isinstance(input_, Affine):
-                if isinstance(input_.get_input(), Variable):
+                if isinstance(input_[1], Variable):
                     return _sum_squares_affine_prox(input_, location, prox_scaling)
 
                 else:

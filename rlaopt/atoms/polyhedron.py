@@ -126,7 +126,7 @@ class Polyhedron(AtomExpression):
         Returns:
             torch.Tensor: 0.0 if constraints are satisfied, infinity otherwise.
         """
-        value = self.get_input().forward()
+        value = self[1].forward()
         return self._eval(value)
 
     def is_smooth(self) -> bool:

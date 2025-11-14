@@ -74,7 +74,7 @@ class NucNorm(AtomExpression):
         Returns:
             torch.Tensor: The scaled sum of singular values.
         """
-        value = self.get_input().forward()
+        value = self[1].forward()
         S = torch.linalg.svdvals(value)
         return self.scaling * torch.sum(S)
 
@@ -129,7 +129,7 @@ class NucNorm(AtomExpression):
     def _scale(self, scaling: float) -> Self:
         """Scale the nuclear norm atom."""
         new_scaling = self.scaling * scaling
-        return NucNorm(self.get_input(), scaling=new_scaling)
+        return NucNorm(self[1], scaling=new_scaling)
 
 
 class _prox_nuc_norm(torch.autograd.Function):

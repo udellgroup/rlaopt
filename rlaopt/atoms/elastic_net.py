@@ -91,7 +91,7 @@ class ElasticNet(AtomExpression):
             torch.Tensor: The elastic net penalty value:
                 l1_scaling * ||x||₁ + (l2_scaling / 2) * ||x||₂²
         """
-        value = self.get_input().forward()
+        value = self[1].forward()
 
         l1_norm = torch.sum(torch.abs(value))
         l2_norm = torch.sum(value**2)
@@ -133,4 +133,4 @@ class ElasticNet(AtomExpression):
         """Scale the elastic net regularization atom."""
         new_l1 = self.l1_scaling * scaling
         new_l2 = self.l2_scaling * scaling
-        return ElasticNet(self.get_input(), l1_scaling=new_l1, l2_scaling=new_l2)
+        return ElasticNet(self[1], l1_scaling=new_l1, l2_scaling=new_l2)

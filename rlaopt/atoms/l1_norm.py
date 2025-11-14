@@ -37,7 +37,7 @@ class L1Norm(AtomExpression):
 
     def forward(self) -> torch.Tensor:
         """Evaluates the scaled L1-norm."""
-        value = self.get_input().forward()
+        value = self[1].forward()
         return self.scaling * torch.sum(torch.abs(value))
 
     def is_proxable(self) -> bool:
@@ -73,4 +73,4 @@ class L1Norm(AtomExpression):
     def _scale(self, scaling: float) -> Self:
         """Scale the L1-norm atom."""
         new_scaling = self.scaling * scaling
-        return L1Norm(self.get_input(), scaling=new_scaling)
+        return L1Norm(self[1], scaling=new_scaling)

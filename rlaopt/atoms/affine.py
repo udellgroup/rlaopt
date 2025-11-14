@@ -52,7 +52,7 @@ class Affine(AtomExpression):
         Returns:
             bool: True if the input expression is smooth, False otherwise.
         """
-        return self.get_input().is_smooth()
+        return self[1].is_smooth()
 
     def forward(self) -> torch.Tensor:
         """Evaluate the affine transformation at the current variable value.
@@ -60,7 +60,7 @@ class Affine(AtomExpression):
         Returns:
             torch.Tensor: Result of A @ x + b.
         """
-        input_ = self.get_input().forward()
+        input_ = self[1].forward()
         return self.A @ input_ + self.b
 
     def is_proxable(self) -> bool:
