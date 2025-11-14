@@ -3,6 +3,7 @@
 import torch
 
 from rlaopt.expression.expression import Expression
+from rlaopt.expression.tree import ExprTree
 
 
 class ConstExpression(Expression):
@@ -71,6 +72,14 @@ class ConstExpression(Expression):
             torch.Tensor: The constant value.
         """
         return self.value
+
+    def tree(self) -> ExprTree:
+        """Return tree representation for ConstExpression (leaf node).
+
+        Returns:
+            ExprTree: Leaf node with type 'ConstExpression'.
+        """
+        return ExprTree("ConstExpression")
 
     def __neg__(self):
         """Negate the constant (keeps it as a constant).

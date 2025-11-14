@@ -5,7 +5,7 @@ from dataclasses import dataclass
 
 import torch
 
-from rlaopt.expression import AddExpression, Expression
+from rlaopt.expression import Expression
 from rlaopt.ext_tensordict import TensorDict
 from rlaopt.linalg import LinSys
 from rlaopt.operator_split import OperatorSplit
@@ -31,13 +31,11 @@ class OptimSolver(ABC):
     """
 
     @abstractmethod
-    def __init__(
-        self, obj: Expression | AddExpression | OperatorSplit, config: SolverConfig
-    ):
+    def __init__(self, obj: Expression | OperatorSplit, config: SolverConfig):
         """Initialize the solver with an objective function.
 
         Args:
-            obj (Expression | AddExpression | OperatorSplit): The objective function
+            obj (Expression | OperatorSplit): The objective function
                 to optimize.
             config (SolverConfig): Configuration for the solver.
         """

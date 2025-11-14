@@ -1,45 +1,35 @@
-"""Module for mathematical operations on expressions."""
+"""Module for addition and product operations on expressions."""
 
 from typing import Callable
 
 import torch
 
 from rlaopt.expression import expr_types
-from rlaopt.expression._nary_op_expression import _NAryOperatorExpression
+from rlaopt.expression._nary_op_expression import _NAryOpExpression
 from rlaopt.expression.constant import ConstExpression
+from rlaopt.expression.expression import Expression
 from rlaopt.ext_tensordict import TensorDict
 
 
-class AddExpression(_NAryOperatorExpression):
+class AddExpression(_NAryOpExpression):
     """Sum of multiple expressions.
 
     Represents the sum of two or more expressions.
 
     Args:
-        left_or_exprs: First expression or list of expressions.
-        right: Second expression (optional, can be None).
-
-    Attributes:
-        _num_non_smooth_exprs: Count of non-smooth terms (for proxability).
-        _prox: Proximal operator function (if proxable).
-
-    Examples:
-        >>> x = Variable((5,))
-        >>> y = Variable((5,))
-        >>> z = x + y + 10
-        >>> isinstance(z, AddExpression)
-        True
+        *exprs: Expressions to sum together.
     """
 
-    def __init__(self, left_or_exprs, right=None):
+    def __init__(self, *exprs):
         """Initialize sum expression.
 
+        Note: Flattening and optimization are handled by _create_add in utils.py.
+        This constructor assumes it receives already-optimized expressions.
+
         Args:
-            left_or_exprs: First expression.
-            right: Second expression (can be None for operator splitting).
+            *exprs: Variable number of expressions to sum.
         """
-        super().__init__(left_or_exprs, right)
-        self._num_non_smooth_exprs = self._count_non_smooth_terms()
+        super().__init__(*exprs)
         self._prox = self._build_prox()
 
         # Build op method for adding expressions
@@ -64,52 +54,26 @@ class AddExpression(_NAryOperatorExpression):
 
         A sum is proxable if:
         1. All non-smooth terms are proxable, AND
-        2. Non-smooth terms operate on disjoint parameter sets.
+        2. Non-smooth terms operate on disjoint sets of variables.
 
         Returns:
             bool: True if the sum is proxable.
         """
-        non_smooth_exprs = [e for e in self.exprs if not e.is_smooth()]
+        non_smooth_exprs = self._get_non_smooth_exprs()
 
         # All non-smooth terms must be proxable
         if any(not expr.is_proxable() for expr in non_smooth_exprs):
             return False
 
-        # Check for parameter overlap
-        seen_params = set()
+        # Check for variable overlap
+        seen_variables = set()
         for expr in non_smooth_exprs:
-            expr_params = set(expr.parameters())
-            if seen_params & expr_params:  # intersection
+            expr_var_names = set(expr.get_variable_names())
+            if seen_variables & expr_var_names:  # intersection
                 return False
-            seen_params.update(expr_params)
+            seen_variables.update(expr_var_names)
 
         return True
-
-    def operator_split(self):
-        """Split sum into smooth and non-smooth parts.
-
-        Separates the sum into two expressions: one containing all smooth terms
-        and one containing all non-smooth terms. Useful for proximal algorithms.
-
-        Returns:
-            tuple: (smooth_expr, non_smooth_expr) where either can be None.
-
-        Examples:
-            >>> from rlaopt.atoms import L1Norm, SumSquares
-            >>> x = Variable((5,))
-            >>> expr = SumSquares(x) + L1Norm(x)
-            >>> smooth, non_smooth = expr.operator_split()
-            >>> smooth.is_smooth()
-            True
-            >>> non_smooth.is_smooth()
-            False
-        """
-        smooth = [e for e in self.exprs if e.is_smooth()]
-        non_smooth = [e for e in self.exprs if not e.is_smooth()]
-        smooth_expr = AddExpression(*smooth) if smooth else None
-        non_smooth_expr = AddExpression(*non_smooth) if non_smooth else None
-
-        return smooth_expr, non_smooth_expr
 
     def prox(self, location, prox_scaling):
         """Compute proximal operator of the sum.
@@ -126,6 +90,35 @@ class AddExpression(_NAryOperatorExpression):
         """
         return self._prox(location, prox_scaling)
 
+    def _get_smooth_exprs(self) -> list[Expression]:
+        return [e for e in self.exprs if e.is_smooth()]
+
+    def _get_non_smooth_exprs(self) -> list[Expression]:
+        return [e for e in self.exprs if not e.is_smooth()]
+
+    def get_smooth_part(self) -> Expression | None:
+        """Get the smooth part of the sum expression.
+
+        Returns:
+            Expression or None: Smooth part of the sum, or None if no smooth terms.
+        """
+        smooth_exprs = self._get_smooth_exprs()
+        if not smooth_exprs:
+            return None
+        return AddExpression(*smooth_exprs)
+
+    def get_non_smooth_part(self) -> Expression | None:
+        """Get the non-smooth part of the sum expression.
+
+        Returns:
+            Expression or None: Non-smooth part of the sum, or None if
+                no non-smooth terms.
+        """
+        non_smooth_exprs = self._get_non_smooth_exprs()
+        if not non_smooth_exprs:
+            return None
+        return AddExpression(*non_smooth_exprs)
+
     @property
     def num_non_smooth_exprs(self):
         """Get count of non-smooth terms.
@@ -133,7 +126,7 @@ class AddExpression(_NAryOperatorExpression):
         Returns:
             int: Number of non-smooth expressions in the sum.
         """
-        return self._num_non_smooth_exprs
+        return len(self._get_non_smooth_exprs())
 
     def _build_op(self) -> Callable[[list[torch.Tensor]], torch.Tensor]:
         """Build the addition op method for AddExpression."""
@@ -164,7 +157,7 @@ class AddExpression(_NAryOperatorExpression):
 
             return prox
 
-        elif self._num_non_smooth_exprs == 1:
+        elif self.num_non_smooth_exprs == 1:
             proxes = self._get_proxes()
             return proxes[0]
 
@@ -181,14 +174,6 @@ class AddExpression(_NAryOperatorExpression):
 
             return prox
 
-    def _count_non_smooth_terms(self):
-        """Count non-smooth expressions in the sum.
-
-        Returns:
-            int: Number of non-smooth terms.
-        """
-        return sum(1 for expr in self.exprs if not expr.is_smooth())
-
     def _get_proxes(self) -> list[Callable[[torch.Tensor, float], torch.Tensor]]:
         """Get proximal operators of non-smooth expressions.
 
@@ -201,8 +186,16 @@ class AddExpression(_NAryOperatorExpression):
                 proxes.append(expr.prox)
         return proxes
 
+    def is_commutative_operation(self) -> bool:
+        """Addition is commutative.
 
-class ProductExpression(_NAryOperatorExpression):
+        Returns:
+            bool: Always True.
+        """
+        return True
+
+
+class ProductExpression(_NAryOpExpression):
     """Product of multiple expressions.
 
     Represents either elementwise multiplication (*) or matrix multiplication (@)
@@ -215,14 +208,6 @@ class ProductExpression(_NAryOperatorExpression):
 
     Attributes:
         matmul: Whether to use matrix multiplication.
-
-    Examples:
-        >>> x = Variable((5,))
-        >>> y = Variable((5,))
-        >>> z = x * y  # Elementwise
-        >>> A = Variable((3, 4))
-        >>> b = Variable((4,))
-        >>> c = A @ b  # Matrix multiplication
     """
 
     def __init__(self, *exprs, matmul: bool = False):
@@ -241,7 +226,7 @@ class ProductExpression(_NAryOperatorExpression):
         # Valid input
         self._validate()
 
-        # Build propduct op
+        # Build product op
         self._op = self._build_op()
 
     def _validate(self):
@@ -253,10 +238,10 @@ class ProductExpression(_NAryOperatorExpression):
         Raises:
             TypeError: If validation fails.
         """
-        param_exprs = [e for e in self.exprs if list(e.parameters())]
+        var_exprs = [e for e in self.exprs if e.get_variable_names()]
 
-        if len(param_exprs) > 1:
-            if not all(self._is_var_or_const_tree(e) for e in param_exprs):
+        if len(var_exprs) > 1:
+            if not all(self._is_var_or_const_tree(e) for e in var_exprs):
                 raise TypeError(
                     "Cannot multiply two arbitrary parameterized Expressions. "
                     "Only Variables and Constants can be multiplied together."
@@ -293,14 +278,6 @@ class ProductExpression(_NAryOperatorExpression):
         """
         return self._op(values)
 
-    def is_smooth(self):
-        """Products are always smooth.
-
-        Returns:
-            bool: Always True.
-        """
-        return True
-
     def is_proxable(self):
         """Products are not proxable.
 
@@ -320,6 +297,14 @@ class ProductExpression(_NAryOperatorExpression):
             NotImplementedError: Always.
         """
         raise NotImplementedError("ProductExpression is not proxable")
+
+    def is_commutative_operation(self) -> bool:
+        """Multiplication is commutative except for matrix multiplication.
+
+        Returns:
+            bool: True if elementwise, False if matrix multiplication.
+        """
+        return not self.matmul
 
     def _build_op(self) -> Callable[[list[torch.Tensor]], torch.Tensor]:
         if self.matmul:

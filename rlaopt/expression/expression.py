@@ -15,6 +15,8 @@ from collections import defaultdict
 import torch
 
 from rlaopt.expression import expr_types
+from rlaopt.expression.tree import ExprTree
+from rlaopt.expression.utils import _create_add, _create_product
 from rlaopt.ext_tensordict import TensorDict
 
 
@@ -96,6 +98,22 @@ class Expression(torch.nn.Module, ABC):
             >>> result = x.forward()
             >>> torch.equal(result, torch.ones(5))
             True
+        """
+        pass
+
+    @abstractmethod
+    def tree(self) -> ExprTree:
+        """Return a tree representation of the expression structure.
+
+        Returns an ExprTree object showing how expressions are composed.
+        Useful for testing that expression optimizations (constant folding,
+        flattening, etc.) are working correctly.
+
+        Each subclass implements this method to expose its own structure without
+        leaking implementation details to the base class.
+
+        Returns:
+            ExprTree: Tree structure with node type and children.
         """
         pass
 
@@ -225,9 +243,9 @@ class Expression(torch.nn.Module, ABC):
             other: Expression, float, or int to add.
 
         Returns:
-            AddExpression: Sum of self and other.
+            Expression: Sum of self and other (optimized).
         """
-        return expr_types.add_expr()(self, other)
+        return _create_add(self, other)
 
     def __radd__(self, other):
         """Add a scalar and an expression (reverse operation).
@@ -236,9 +254,9 @@ class Expression(torch.nn.Module, ABC):
             other: Float or int to add.
 
         Returns:
-            AddExpression: Sum of other and self.
+            Expression: Sum of other and self (optimized).
         """
-        return expr_types.add_expr()(other, self)
+        return _create_add(other, self)
 
     def __sub__(self, other):
         """Subtract an expression or scalar from this expression.
@@ -247,9 +265,9 @@ class Expression(torch.nn.Module, ABC):
             other: Expression, float, or int to subtract.
 
         Returns:
-            AddExpression: Difference of self and other.
+            Expression: Difference of self and other (optimized).
         """
-        return expr_types.add_expr()(self, -other)
+        return _create_add(self, -other)
 
     def __rsub__(self, other):
         """Subtract this expression from a scalar (reverse operation).
@@ -258,9 +276,9 @@ class Expression(torch.nn.Module, ABC):
             other: Float or int to subtract from.
 
         Returns:
-            AddExpression: Difference of other and self.
+            Expression: Difference of other and self (optimized).
         """
-        return expr_types.add_expr()(other, -self)
+        return _create_add(other, -self)
 
     def __neg__(self):
         """Negate this expression.
@@ -268,7 +286,7 @@ class Expression(torch.nn.Module, ABC):
         Returns:
             ProductExpression: Negation of self.
         """
-        return expr_types.prod_expr()(expr_types.constant()(-1.0), self)
+        return _create_product(-1.0, self, matmul=False)
 
     def __mul__(self, other):
         """Multiply this expression by another (elementwise).
@@ -277,9 +295,10 @@ class Expression(torch.nn.Module, ABC):
             other: Expression, float, or int to multiply.
 
         Returns:
-            ProductExpression: Elementwise product of self and other.
+            ProductExpression or AddExpression: Elementwise product of self and other.
+                If multiplying a scalar by a sum, automatically distributes.
         """
-        return expr_types.prod_expr()(self, other, matmul=False)
+        return _create_product(self, other, matmul=False)
 
     def __rmul__(self, other):
         """Multiply a scalar by this expression (reverse operation).
@@ -288,9 +307,10 @@ class Expression(torch.nn.Module, ABC):
             other: Float or int to multiply.
 
         Returns:
-            ProductExpression: Elementwise product of other and self.
+            ProductExpression or AddExpression: Elementwise product of other and self.
+                If multiplying a scalar by a sum, automatically distributes.
         """
-        return expr_types.prod_expr()(other, self, matmul=False)
+        return _create_product(other, self, matmul=False)
 
     def __truediv__(self, other):
         """Divide this expression by a scalar.
@@ -299,13 +319,11 @@ class Expression(torch.nn.Module, ABC):
             other: Float or int to divide by.
 
         Returns:
-            ProductExpression: Result of division.
-            NotImplemented: If other is not a scalar.
+            Expression: Result of division (optimized).
+                If dividing a sum by a scalar, automatically distributes.
         """
         if isinstance(other, (int, float)):
-            return expr_types.prod_expr()(
-                self, expr_types.constant()(1.0 / other), matmul=False
-            )
+            return _create_product(self, 1.0 / other, matmul=False)
         return NotImplemented
 
     def __matmul__(self, other):
@@ -317,7 +335,7 @@ class Expression(torch.nn.Module, ABC):
         Returns:
             ProductExpression: Matrix product of self and other.
         """
-        return expr_types.prod_expr()(self, other, matmul=True)
+        return _create_product(self, other, matmul=True)
 
     def __rmatmul__(self, other):
         """Matrix multiply a value by this expression (reverse operation).
@@ -328,7 +346,7 @@ class Expression(torch.nn.Module, ABC):
         Returns:
             ProductExpression: Matrix product of other and self.
         """
-        return expr_types.prod_expr()(other, self, matmul=True)
+        return _create_product(other, self, matmul=True)
 
     def __pow__(self, exponent):
         """Raise this expression to a power (elementwise).
@@ -339,4 +357,6 @@ class Expression(torch.nn.Module, ABC):
         Returns:
             UnaryOpExpression: Result of exponentiation.
         """
-        return expr_types.unary_op_expr()(self, lambda t: torch.pow(t, exponent))
+        return expr_types.unary_op_expr()(
+            self, lambda t: torch.pow(t, exponent), name=f"power_{exponent}"
+        )

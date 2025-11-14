@@ -4,13 +4,13 @@ import pytest
 import torch
 
 from rlaopt.atoms.elastic_net import ElasticNet
-from rlaopt.expression import Variable
+from rlaopt.expression import ExprTree, Variable
 
 
 @pytest.fixture
 def simple_variable():
     """Creates a simple 1D variable for testing."""
-    return Variable(torch.tensor([1.0, -2.0, 3.0]))
+    return Variable(torch.tensor([1.0, -2.0, 3.0]), name="x")
 
 
 @pytest.fixture
@@ -125,3 +125,16 @@ class TestElasticNetProperties:
         atom = ElasticNet(simple_variable)
         with pytest.raises(NotImplementedError, match="does not support subsampling"):
             atom.subsample(torch.tensor([0, 1]))
+
+
+class TestElasticNetScaling:
+    """Tests for ElasticNet scalar multiplication."""
+
+    def test_scalar_multiplication_optimization(self, simple_variable):
+        """Test that scalar multiplication optimizes to scaled ElasticNet."""
+        atom = ElasticNet(simple_variable, l1_scaling=1.0, l2_scaling=1.0)
+        scaled = 2.0 * atom
+
+        assert isinstance(scaled, ElasticNet)
+        assert scaled.tree() == ExprTree("ElasticNet", ExprTree("Variable(x)"))
+        assert torch.allclose(scaled.forward(), torch.tensor(26.0))

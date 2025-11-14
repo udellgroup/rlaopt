@@ -5,6 +5,7 @@ import torch
 
 from rlaopt.atoms import Box, L1Norm, NonNegative, SumSquares
 from rlaopt.expression import Variable
+from rlaopt.operator_split import OperatorSplit
 from rlaopt.solvers.prox_grad import ProxGrad, ProxGradConfig, ProxGradStoppingCriteria
 
 TOLERANCES = {torch.float32: 1e-4, torch.float64: 1e-10}
@@ -152,6 +153,48 @@ class TestProxGrad:
     #         return A, obj
 
     #     _test_optimization_problem(precision, tol, acceleration, ls, setup_problem)
+
+    def test_expression_vs_operator_split(self, reset_torch_state, precision):
+        """Test that ProxGrad gives same results with Expression vs OperatorSplit."""
+        torch.set_default_dtype(precision)
+
+        # Generate problem
+        A, b, x, _ = generate_lasso_data(n=512, p=64, s=16, precision=precision)
+        mu = 0.1 * torch.linalg.norm(A.T @ b, ord=torch.inf)
+        obj = SumSquares(A @ x - b) + L1Norm(x, scaling=mu)
+        eta = compute_lipschitz_stepsize(A)
+        config = ProxGradConfig(eta=eta, use_acceleration=False, use_linesearch=False)
+
+        # Run with Expression
+        x.value = torch.zeros_like(x.value)
+        opt_expr = ProxGrad(obj, config)
+        params_expr = obj.variable_values
+        state_expr = opt_expr.init_state(params_expr)
+        for _ in range(10):
+            params_expr, state_expr = opt_expr.step(params_expr, state_expr)
+
+        # Run with explicit OperatorSplit
+        x.value = torch.zeros_like(x.value)
+        op_split = OperatorSplit.from_expression(obj)
+        opt_split = ProxGrad(op_split, config)
+        params_split = op_split.variable_values
+        state_split = opt_split.init_state(params_split)
+        for _ in range(10):
+            params_split, state_split = opt_split.step(params_split, state_split)
+
+        # Results should be identical
+        assert params_expr.keys() == params_split.keys()
+        for key in params_expr.keys():
+            assert torch.allclose(
+                params_expr[key], params_split[key], atol=1e-10, rtol=1e-10
+            ), f"Mismatch for key {key}"
+
+    @pytest.mark.parametrize("invalid_obj", ["invalid_obj", 42, None, []])
+    def test_invalid_obj_type_raises_typeerror(self, invalid_obj):
+        """Test that passing invalid obj type raises TypeError."""
+        error_msg = "obj must be an Expression or OperatorSplit"
+        with pytest.raises(TypeError, match=error_msg):
+            ProxGrad(invalid_obj, ProxGradConfig())
 
 
 # ============================================================================

@@ -1,8 +1,7 @@
 """Implementation of the L1-norm atom."""
 
-from __future__ import annotations
-
 import torch
+from typing_extensions import Self
 
 from rlaopt.atoms.atom_expression import AtomExpression
 from rlaopt.expression import Variable
@@ -67,6 +66,11 @@ class L1Norm(AtomExpression):
         """Returns False because L1-norm is not subsamplable."""
         return False
 
-    def subsample(self, indices) -> L1Norm:
+    def subsample(self, indices) -> Self:
         """Raises NotImplementedError because L1-norm cannot be subsampled."""
         raise NotImplementedError("L1-norm cannot be subsampled.")
+
+    def _scale(self, scaling: float) -> Self:
+        """Scale the L1-norm atom."""
+        new_scaling = self.scaling * scaling
+        return L1Norm(self.get_input(), scaling=new_scaling)

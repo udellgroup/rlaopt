@@ -4,6 +4,7 @@ import torch
 
 from rlaopt.expression._unary_op_expression import _UnaryOpExpression
 from rlaopt.expression.expression import Expression
+from rlaopt.expression.tree import ExprTree
 from rlaopt.settings import VAR_PREFIX
 from rlaopt.utils.counter import get_id
 
@@ -229,6 +230,14 @@ class Variable(Expression):
         """
         return self.value
 
+    def tree(self) -> ExprTree:
+        """Return tree representation for Variable (leaf node).
+
+        Returns:
+            ExprTree: Leaf node with type 'Variable'.
+        """
+        return ExprTree(f"Variable({self._name})")
+
     def sum(self, dim=None):
         """Create a sum operation over this variable.
 
@@ -246,7 +255,8 @@ class Variable(Expression):
             >>> x.sum(dim=0).forward().shape
             torch.Size([4])
         """
-        return _UnaryOpExpression(self, lambda t: torch.sum(t, dim=dim))
+        name = f"sum_{dim}" if dim is not None else "sum"
+        return _UnaryOpExpression(self, lambda t: torch.sum(t, dim=dim), name=name)
 
     def transpose(self):
         """Create a transpose operation (for 2D variables).
@@ -270,7 +280,7 @@ class Variable(Expression):
         """
         if self.value.ndim == 1:
             return self
-        return _UnaryOpExpression(self, lambda t: t.transpose(-2, -1))
+        return _UnaryOpExpression(self, lambda t: t.transpose(-2, -1), name="transpose")
 
     @property
     def T(self):

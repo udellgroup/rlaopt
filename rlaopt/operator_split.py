@@ -12,6 +12,8 @@ as proximal gradient descent and its variants.
 from typing import Callable
 
 import torch
+from tensordict import merge_tensordicts
+from typing_extensions import Self
 
 from rlaopt.expression import AddExpression, Expression
 from rlaopt.ext_tensordict import TensorDict
@@ -57,6 +59,19 @@ class OperatorSplit:
     def r(self) -> Expression | None:
         """Returns the proximal component of the composite function."""
         return self._r
+
+    @property
+    def variable_values(self) -> TensorDict:
+        """Returns the variable values associated with the composite function."""
+        if self._r:
+            # Return variable values from f and r, avoiding duplication
+            f_var_vals = self._f.variable_values
+            r_var_vals = self._r.variable_values
+
+            # Exclude keys from r that are already in f, then merge
+            r_only_vals = r_var_vals.exclude(*self._f.get_variable_names())
+            return merge_tensordicts(f_var_vals, r_only_vals)
+        return self._f.variable_values
 
     def evaluate(self, variable_values: TensorDict) -> torch.Tensor:
         """Evaluate the composite objective function `f + r` at the given variables.
@@ -129,6 +144,30 @@ class OperatorSplit:
         """
         return self._prox(variable_values, eta)
 
+    @classmethod
+    def from_expression(cls, composite_expr: Expression) -> Self:
+        """Create an OperatorSplit instance from an expression.
+
+        Args:
+            composite_expr (Expression): An expression representing
+                a composite objective function.
+
+        Raises:
+            ValueError: If the expression cannot be split into smooth
+                and proximal parts.
+
+        Returns:
+            Self: An instance of OperatorSplit.
+        """
+        if isinstance(composite_expr, AddExpression):
+            smooth_expr = composite_expr.get_smooth_part()
+            prox_expr = composite_expr.get_non_smooth_part()
+            return cls(smooth_expr, prox_expr)
+        elif composite_expr.is_smooth():
+            return cls(composite_expr, None)
+        else:
+            raise ValueError("Cannot create OperatorSplit from expression.")
+
 
 def _validate_input(smooth_expr: Expression, prox_expr: Expression | None):
     if not smooth_expr.is_smooth():
@@ -143,7 +182,7 @@ def _build_prox(
 ) -> Callable[[TensorDict, float], TensorDict]:
     if prox_expr:
         if isinstance(prox_expr, AddExpression):
-            num_non_smooth_exprs = prox_expr._num_non_smooth_exprs
+            num_non_smooth_exprs = prox_expr.num_non_smooth_exprs
         else:
             num_non_smooth_exprs = 1
 

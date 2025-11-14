@@ -1,6 +1,9 @@
+"""Tests for Variable class."""
+
 import pytest
 import torch
 
+from rlaopt.expression import ExprTree
 from rlaopt.expression._unary_op_expression import _UnaryOpExpression
 from rlaopt.expression.variable import Variable
 
@@ -102,6 +105,10 @@ class TestVariable:
         assert vector_var.is_smooth() is True
         assert vector_var.is_proxable() is False
 
+    def test_tree(self, vector_var):
+        """Test tree() returns correct structure."""
+        assert vector_var.tree() == ExprTree("Variable(vector)")
+
     # ----------------------
     # Forward evaluation tests
     # ----------------------
@@ -136,10 +143,12 @@ class TestVariable:
         all_sum = matrix_var.sum()
         assert isinstance(all_sum, _UnaryOpExpression)
         assert torch.allclose(all_sum.forward(), torch.tensor(12.0))
+        assert all_sum.tree() == ExprTree("sum", ExprTree("Variable(matrix)"))
 
         dim_sum = matrix_var.sum(dim=0)
         assert dim_sum.forward().shape == torch.Size([4])
         assert torch.allclose(dim_sum.forward(), torch.ones(4) * 3)
+        assert dim_sum.tree() == ExprTree("sum_0", ExprTree("Variable(matrix)"))
 
     def test_transpose_operations(self, vector_var, matrix_var):
         """Test transpose() on 1D and 2D variables, and .T property."""
@@ -151,6 +160,7 @@ class TestVariable:
         transposed = matrix_var.transpose()
         assert isinstance(transposed, _UnaryOpExpression)
         assert transposed.forward().shape == torch.Size([4, 3])
+        assert transposed.tree() == ExprTree("transpose", ExprTree("Variable(matrix)"))
 
         # .T property works
         assert torch.equal(matrix_var.T.forward(), matrix_var.transpose().forward())

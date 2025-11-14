@@ -1,7 +1,13 @@
 import pytest
 import torch
 
-from rlaopt.expression import AddExpression, ConstExpression, Expression, Variable
+from rlaopt.expression import (
+    AddExpression,
+    ConstExpression,
+    Expression,
+    ExprTree,
+    Variable,
+)
 from rlaopt.expression.op_expressions import ProductExpression
 
 
@@ -104,7 +110,7 @@ class TestProductExpression:
     def test_multiply_expression_trees_of_vars_and_consts_allowed(
         self, vector_var, another_vector_var
     ):
-        """Test multiplying expression trees built from Variables and Constants is allowed."""
+        """Test multiplying expressions built from Variables and Constants is allowed."""
         sum_expr = AddExpression(vector_var, another_vector_var)
         const = ConstExpression(2.0)
         prod = ProductExpression(sum_expr, const, matmul=False)
@@ -128,6 +134,9 @@ class TestProductExpression:
 
             def forward(self):
                 return self.var.forward() ** 2
+
+            def tree(self):
+                raise NotImplementedError()
 
         complex1 = ComplexExpression(x)
         complex2 = ComplexExpression(x)
@@ -186,3 +195,31 @@ class TestProductExpression:
         mat_prod = ProductExpression(vector_var, matmul=True)
         assert elem_prod.matmul is False
         assert mat_prod.matmul is True
+
+    # ----------------------
+    # Tree representation tests
+    # ----------------------
+
+    def test_tree_structure_elementwise(self, vector_var, another_vector_var):
+        """Test tree() for elementwise multiplication (matmul=False) is commutative."""
+        prod = ProductExpression(vector_var, another_vector_var, matmul=False)
+
+        expected = ExprTree(
+            "ProductExpression",
+            vector_var.tree(),
+            another_vector_var.tree(),
+            is_commutative=True,
+        )
+        assert prod.tree() == expected
+
+    def test_tree_structure_matmul(self, matrix_var, vector_for_matmul):
+        """Test tree() for matrix multiplication (matmul=True) is NOT commutative."""
+        prod = ProductExpression(matrix_var, vector_for_matmul, matmul=True)
+
+        expected = ExprTree(
+            "ProductExpression",
+            matrix_var.tree(),
+            vector_for_matmul.tree(),
+            is_commutative=False,
+        )
+        assert prod.tree() == expected
