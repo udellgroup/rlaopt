@@ -144,7 +144,7 @@ class TestTree:
             ExprTree(
                 "AddExpression",
                 ExprTree("Variable(x)"),
-                ExprTree("ConstExpression"),
+                ExprTree("Constant"),
                 is_commutative=True,
             ),
         )

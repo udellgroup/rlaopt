@@ -208,9 +208,7 @@ class TestExpression:
 
         result = a + b + c
 
-        _assert_expression_equals(
-            result, ExprTree("ConstExpression"), torch.tensor(6.0)
-        )
+        _assert_expression_equals(result, ExprTree("Constant"), torch.tensor(6.0))
 
     def test_addition_flattening(self):
         """Test that (a + b) + c flattens to AddExpression(a, b, c)."""
@@ -225,7 +223,7 @@ class TestExpression:
             result,
             ExprTree(
                 "AddExpression",
-                ExprTree("ConstExpression"),
+                ExprTree("Constant"),
                 ExprTree("Variable(x)"),
                 is_commutative=True,
             ),
@@ -251,7 +249,7 @@ class TestExpression:
             result,
             ExprTree(
                 "AddExpression",
-                ExprTree("ConstExpression"),
+                ExprTree("Constant"),
                 ExprTree("Variable(x)"),
                 is_commutative=True,
             ),
@@ -268,10 +266,10 @@ class TestExpression:
             result,
             ExprTree(
                 "AddExpression",
-                ExprTree("ConstExpression"),
+                ExprTree("Constant"),
                 ExprTree(
                     "ProductExpression",
-                    ExprTree("ConstExpression"),
+                    ExprTree("Constant"),
                     ExprTree("Variable(x)"),
                     is_commutative=True,
                 ),
@@ -299,7 +297,7 @@ class TestExpression:
 
         _assert_expression_equals(
             result,
-            ExprTree("ConstExpression"),
+            ExprTree("Constant"),
             torch.tensor([[11.0, 12.0], [13.0, 14.0]]),
         )
 
@@ -312,7 +310,7 @@ class TestExpression:
 
         _assert_expression_equals(
             result,
-            ExprTree("ConstExpression"),
+            ExprTree("Constant"),
             torch.tensor([[11.0, 22.0], [13.0, 24.0]]),
         )
 
@@ -323,9 +321,7 @@ class TestExpression:
 
         result = a - b
 
-        _assert_expression_equals(
-            result, ExprTree("ConstExpression"), torch.tensor(7.0)
-        )
+        _assert_expression_equals(result, ExprTree("Constant"), torch.tensor(7.0))
 
     def test_negation(self):
         """Test that -expr creates ProductExpression(-1, expr)."""
@@ -337,7 +333,7 @@ class TestExpression:
             result,
             ExprTree(
                 "ProductExpression",
-                ExprTree("ConstExpression"),
+                ExprTree("Constant"),
                 ExprTree("Variable(x)"),
                 is_commutative=True,
             ),
@@ -354,7 +350,7 @@ class TestExpression:
             result,
             ExprTree(
                 "ProductExpression",
-                ExprTree("ConstExpression"),
+                ExprTree("Constant"),
                 ExprTree("Variable(x)"),
                 is_commutative=True,
             ),
@@ -386,9 +382,7 @@ class TestExpression:
 
         result = 2 * (a + b)
 
-        _assert_expression_equals(
-            result, ExprTree("ConstExpression"), torch.tensor(16.0)
-        )
+        _assert_expression_equals(result, ExprTree("Constant"), torch.tensor(16.0))
 
     def test_division_as_multiplication(self):
         """Test that expr / 2 becomes expr * 0.5."""
@@ -400,7 +394,7 @@ class TestExpression:
             result,
             ExprTree(
                 "ProductExpression",
-                ExprTree("ConstExpression"),
+                ExprTree("Constant"),
                 ExprTree("Variable(x)"),
                 is_commutative=True,
             ),
@@ -440,13 +434,13 @@ class TestExpression:
                 "AddExpression",
                 ExprTree(
                     "ProductExpression",
-                    ExprTree("ConstExpression"),
+                    ExprTree("Constant"),
                     ExprTree("Variable(x)"),
                     is_commutative=True,
                 ),
                 ExprTree(
                     "ProductExpression",
-                    ExprTree("ConstExpression"),
+                    ExprTree("Constant"),
                     ExprTree("Variable(y)"),
                     is_commutative=True,
                 ),
@@ -505,7 +499,7 @@ class TestExpression:
             result,
             ExprTree(
                 "ProductExpression",
-                ExprTree("ConstExpression"),
+                ExprTree("Constant"),
                 ExprTree(
                     "ProductExpression",
                     ExprTree("Variable(a)"),
@@ -527,8 +521,8 @@ class TestExpression:
             result,
             ExprTree(
                 "ProductExpression",
-                ExprTree("ConstExpression"),
-                ExprTree("ConstExpression"),
+                ExprTree("Constant"),
+                ExprTree("Constant"),
             ),
             torch.tensor([[19.0, 22.0], [43.0, 50.0]]),
         )
@@ -545,7 +539,7 @@ class TestExpression:
             result,
             ExprTree(
                 "ProductExpression",
-                ExprTree("ConstExpression"),
+                ExprTree("Constant"),
                 ExprTree(
                     "AddExpression",
                     ExprTree("Variable(x)"),
@@ -606,7 +600,7 @@ class TestExpression:
             result,
             ExprTree(
                 "ProductExpression",
-                ExprTree("ConstExpression"),
+                ExprTree("Constant"),
                 ExprTree("SumSquares", ExprTree("Variable(x)")),
                 is_commutative=True,
             ),
@@ -646,19 +640,19 @@ class TestExpression:
                 "AddExpression",
                 ExprTree(
                     "ProductExpression",
-                    ExprTree("ConstExpression"),
+                    ExprTree("Constant"),
                     ExprTree("Variable(x)"),
                     is_commutative=True,
                 ),
                 ExprTree(
                     "ProductExpression",
-                    ExprTree("ConstExpression"),
+                    ExprTree("Constant"),
                     ExprTree("Variable(y)"),
                     is_commutative=True,
                 ),
                 ExprTree(
                     "ProductExpression",
-                    ExprTree("ConstExpression"),
+                    ExprTree("Constant"),
                     ExprTree("Variable(z)"),
                     is_commutative=True,
                 ),
@@ -680,13 +674,13 @@ class TestExpression:
                 "AddExpression",
                 ExprTree(
                     "ProductExpression",
-                    ExprTree("ConstExpression"),
+                    ExprTree("Constant"),
                     ExprTree("Variable(x)"),
                     is_commutative=True,
                 ),
                 ExprTree(
                     "ProductExpression",
-                    ExprTree("ConstExpression"),
+                    ExprTree("Constant"),
                     ExprTree("Variable(y)"),
                     is_commutative=True,
                 ),
@@ -710,20 +704,20 @@ class TestExpression:
                 "AddExpression",
                 ExprTree(
                     "ProductExpression",
-                    ExprTree("ConstExpression"),
+                    ExprTree("Constant"),
                     ExprTree(
                         "ProductExpression",
-                        ExprTree("ConstExpression"),
+                        ExprTree("Constant"),
                         ExprTree("Variable(x)"),
                     ),
                     is_commutative=True,
                 ),
                 ExprTree(
                     "ProductExpression",
-                    ExprTree("ConstExpression"),
+                    ExprTree("Constant"),
                     ExprTree(
                         "ProductExpression",
-                        ExprTree("ConstExpression"),
+                        ExprTree("Constant"),
                         ExprTree("Variable(y)"),
                     ),
                     is_commutative=True,
@@ -747,21 +741,21 @@ class TestExpression:
                 "AddExpression",
                 ExprTree(
                     "ProductExpression",
-                    ExprTree("ConstExpression"),
+                    ExprTree("Constant"),
                     ExprTree(
                         "ProductExpression",
-                        ExprTree("ConstExpression"),
+                        ExprTree("Constant"),
                         ExprTree("Variable(x)"),
                     ),
                     is_commutative=True,
                 ),
                 ExprTree(
                     "ProductExpression",
-                    ExprTree("ConstExpression"),
+                    ExprTree("Constant"),
                     ExprTree("Variable(y)"),
                     is_commutative=True,
                 ),
-                ExprTree("ConstExpression"),
+                ExprTree("Constant"),
                 is_commutative=True,
             ),
             torch.tensor([[41.0]]),
@@ -782,7 +776,7 @@ class TestExpression:
                 ExprTree("L1Norm", ExprTree("Variable(x)")),
                 ExprTree(
                     "ProductExpression",
-                    ExprTree("ConstExpression"),
+                    ExprTree("Constant"),
                     ExprTree("Variable(y)"),
                     is_commutative=True,
                 ),
@@ -805,14 +799,14 @@ class TestExpression:
                 "AddExpression",
                 ExprTree(
                     "ProductExpression",
-                    ExprTree("ConstExpression"),
+                    ExprTree("Constant"),
                     ExprTree("Variable(x)"),
                     is_commutative=True,
                 ),
-                ExprTree("ConstExpression"),
+                ExprTree("Constant"),
                 ExprTree(
                     "ProductExpression",
-                    ExprTree("ConstExpression"),
+                    ExprTree("Constant"),
                     ExprTree("Variable(y)"),
                 ),
                 is_commutative=True,
@@ -833,17 +827,17 @@ class TestExpression:
                 "AddExpression",
                 ExprTree(
                     "ProductExpression",
-                    ExprTree("ConstExpression"),
+                    ExprTree("Constant"),
                     ExprTree("Variable(x)"),
                     is_commutative=True,
                 ),
                 ExprTree(
                     "ProductExpression",
-                    ExprTree("ConstExpression"),
+                    ExprTree("Constant"),
                     ExprTree("Variable(y)"),
                     is_commutative=True,
                 ),
-                ExprTree("ConstExpression"),
+                ExprTree("Constant"),
                 is_commutative=True,
             ),
             torch.tensor(180.0),

@@ -37,10 +37,10 @@ def prod_expr():
 
 
 def constant():
-    """Return ConstExpression class to avoid circular imports."""
+    """Return Constant class to avoid circular imports."""
     from rlaopt.expression import constant
 
-    return constant.ConstExpression
+    return constant.Constant
 
 
 def variable():

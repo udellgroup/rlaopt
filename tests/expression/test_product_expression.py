@@ -1,9 +1,11 @@
+"""Tests for ProductExpression class."""
+
 import pytest
 import torch
 
 from rlaopt.expression import (
     AddExpression,
-    ConstExpression,
+    Constant,
     Expression,
     ExprTree,
     Variable,
@@ -98,7 +100,7 @@ class TestProductExpression:
 
     def test_multiply_variable_and_constant_allowed(self, vector_var):
         """Test multiplying Variable and Constant is allowed."""
-        const = ConstExpression(5.0)
+        const = Constant(5.0)
         prod = ProductExpression(vector_var, const, matmul=False)
         assert prod.n_exprs == 2
 
@@ -110,9 +112,9 @@ class TestProductExpression:
     def test_multiply_expression_trees_of_vars_and_consts_allowed(
         self, vector_var, another_vector_var
     ):
-        """Test multiplying expressions built from Variables and Constants is allowed."""
+        """Test multiplying expressions built from Variables and Constants is allowed."""  # noqa: E501
         sum_expr = AddExpression(vector_var, another_vector_var)
-        const = ConstExpression(2.0)
+        const = Constant(2.0)
         prod = ProductExpression(sum_expr, const, matmul=False)
         assert prod.n_exprs == 2
 
