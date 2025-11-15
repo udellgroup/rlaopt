@@ -40,7 +40,7 @@ class Affine(AtomExpression):
         Raises:
             TypeError: If x is not a Variable or Expression.
         """
-        super().__init__(x, A=A, b=b)
+        super().__init__(exprs={"x": x}, buffers={"A": A, "b": b})
 
     def is_smooth(self) -> bool:
         """Check if the affine transformation is smooth.
@@ -48,7 +48,7 @@ class Affine(AtomExpression):
         Returns:
             bool: True if the input expression is smooth, False otherwise.
         """
-        return self.x1.is_smooth()
+        return self.get_input("x").is_smooth()
 
     def forward(self) -> torch.Tensor:
         """Evaluate the affine transformation at the current variable value.
@@ -56,8 +56,8 @@ class Affine(AtomExpression):
         Returns:
             torch.Tensor: Result of A @ x + b.
         """
-        value = self.x1.forward()
-        return self.A @ value + self.b
+        value = self.get_input("x").forward()
+        return self.get_buffer("A") @ value + self.get_buffer("b")
 
     def is_proxable(self) -> bool:
         """Check if the affine transformation has a computable proximal operator.

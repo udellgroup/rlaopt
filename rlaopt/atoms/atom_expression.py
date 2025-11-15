@@ -33,8 +33,8 @@ class AtomExpression(Expression, ABC):
     def __init__(
         self,
         exprs: dict[str, Expression],
-        buffers: dict[str, torch.Tensor],
-        variable_only: dict[str, bool],
+        buffers: dict[str, torch.Tensor | float | None],
+        variable_only: dict[str, bool] | None = None,
     ):
         """Initialize the atom.
 
@@ -43,6 +43,7 @@ class AtomExpression(Expression, ABC):
         super().__init__()
 
         # Automatically register all input expressions
+        variable_only = variable_only or {}
         for name, expr in exprs.items():
             self._register_input(name, expr, variable_only.get(name, False))
 
@@ -101,6 +102,22 @@ class AtomExpression(Expression, ABC):
             >>> mini_batch_loss = loss.subsample(subset_indices)
         """
         pass
+
+    def get_input(self, name: str) -> Expression:
+        """Retrieve a registered input expression by name.
+
+        Args:
+            name: Name of the input expression to retrieve.
+
+        Returns:
+            Expression: The registered input expression.
+
+        Raises:
+            KeyError: If no input with the given name exists.
+        """
+        if not hasattr(self, name):
+            raise KeyError(f"No input expression named '{name}' found.")
+        return getattr(self, name)
 
     def _register_atom_buffer(self, name: str, buffer):
         """Register a buffer (non-trainable constant) with the atom.

@@ -33,9 +33,7 @@ class NucNorm(AtomExpression):
         >>> loss = nuc_norm.forward()
     """
 
-    def __init__(
-        self, x: Variable, scaling: float | torch.Tensor | torch.nn.Parameter = 1.0
-    ):
+    def __init__(self, x: Variable, scaling: float | torch.Tensor = 1.0):
         """Initialize the nuclear norm atom.
 
         Args:
@@ -46,13 +44,14 @@ class NucNorm(AtomExpression):
             TypeError: If x is not a Variable.
             ValueError: If x is not a 2D matrix.
         """
-        if x.value.data.dim() != 2:
+        if x.value.dim() != 2:
             raise ValueError(
-                f"Variable value must be 2D Tensor, "
-                f"but got {x.value.data.dim()}D Tensor."
+                f"Variable value must be 2D Tensor, but got {x.value.dim()}D Tensor."
             )
 
-        super().__init__(x, variable_only=True, scaling=scaling)
+        super().__init__(
+            exprs={"x": x}, buffers={"scaling": scaling}, variable_only={"x": True}
+        )
 
     def is_smooth(self) -> bool:
         """Check if the nuclear norm is smooth.
@@ -68,9 +67,9 @@ class NucNorm(AtomExpression):
         Returns:
             torch.Tensor: The scaled sum of singular values.
         """
-        value = self.x1.forward()
+        value = self.get_input("x").forward()
         S = torch.linalg.svdvals(value)
-        return self.scaling * torch.sum(S)
+        return self.get_buffer("scaling") * torch.sum(S)
 
     def is_proxable(self) -> bool:
         """Check if the nuclear norm has a computable proximal operator.
@@ -92,7 +91,7 @@ class NucNorm(AtomExpression):
         Returns:
             torch.Tensor: Result of the proximal operator (soft-thresholded matrix).
         """
-        scale = prox_scaling * self.scaling
+        scale = prox_scaling * self.get_buffer("scaling")
         if location.shape[0] >= location.shape[1]:
             return _prox_nuc_norm.apply(location, scale)
         else:
@@ -122,8 +121,8 @@ class NucNorm(AtomExpression):
 
     def _scale(self, scaling: float) -> Self:
         """Scale the nuclear norm atom."""
-        new_scaling = self.scaling * scaling
-        return NucNorm(self.x1, scaling=new_scaling)
+        new_scaling = self.get_buffer("scaling") * scaling
+        return NucNorm(self.get_input("x"), scaling=new_scaling)
 
 
 class _prox_nuc_norm(torch.autograd.Function):

@@ -1,11 +1,10 @@
 """Polyhedron constraint atom for optimization."""
 
-from __future__ import annotations
-
 from functools import partial
 from typing import Callable
 
 import torch
+from typing_extensions import Self
 
 from rlaopt.atoms.atom_expression import AtomExpression
 from rlaopt.expression import Variable
@@ -35,31 +34,6 @@ class Polyhedron(AtomExpression):
         ValueError: If A is provided but b is None.
         ValueError: If constraint dimensions are inconsistent.
         ValueError: If no constraints are provided (trivial polyhedron).
-
-    Examples:
-        >>> # Box constraints: -1 <= x <= 1
-        >>> x = Variable((5,), name='x')
-        >>> box = Polyhedron(
-        ...     x,
-        ...     lower=lower=torch.zeros(2),
-        ...     upper=torch.ones(2)
-        ... )
-
-        >>> # Equality constraint: A @ x = b
-        >>> A = torch.randn(3, 5)
-        >>> b = torch.randn(3)
-        >>> poly = Polyhedra(x, A=A, b=b)
-
-        >>> # Mixed constraints
-        >>> C = torch.randn(2, 5)
-        >>> poly = Polyhedron(
-        ...     x,
-        ...     A=A,
-        ...     b=b,
-        ...     C=C,
-        ...     lower=torch.tensor([-1,-2,0,4,5]),
-        ...     upper=torch.tensor([0,1,5,6,10])
-        ... )
     """
 
     def __init__(
@@ -107,9 +81,19 @@ class Polyhedron(AtomExpression):
         elif (lower is not None) and (upper is None):
             upper = torch.tensor(torch.inf, device=lower.device, dtype=lower.dtype)
 
-        super().__init__(x, variable_only=True, A=A, b=b, C=C, lower=lower, upper=upper)
+        super().__init__(
+            exprs={"x": x},
+            buffers={"A": A, "b": b, "C": C, "lower": lower, "upper": upper},
+            variable_only={"x": True},
+        )
 
-        self._eval = _build_eval(self.A, self.C, self.b, self.lower, self.upper)
+        self._eval = _build_eval(
+            self.get_buffer("A"),
+            self.get_buffer("C"),
+            self.get_buffer("b"),
+            self.get_buffer("lower"),
+            self.get_buffer("upper"),
+        )
 
     def forward(self) -> torch.Tensor:
         """Evaluate the polyhedral constraint at the current variable value.
@@ -117,7 +101,7 @@ class Polyhedron(AtomExpression):
         Returns:
             torch.Tensor: 0.0 if constraints are satisfied, infinity otherwise.
         """
-        value = self.x1.forward()
+        value = self.get_input("x").forward()
         return self._eval(value)
 
     def is_smooth(self) -> bool:
@@ -148,7 +132,7 @@ class Polyhedron(AtomExpression):
         """Prox operator for Polyhedron."""
         return NotImplementedError("Polyhedron is not proxable")
 
-    def subsample(self, indices: torch.Tensor) -> Polyhedron:
+    def subsample(self, indices: torch.Tensor) -> Self:
         """Subsample the polyhedral constraint (not supported).
 
         Args:

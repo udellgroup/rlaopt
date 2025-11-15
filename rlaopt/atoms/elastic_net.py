@@ -34,7 +34,12 @@ class ElasticNet(AtomExpression):
         >>> elastic_ridge = ElasticNet(x, l1_scaling=0.1, l2_scaling=1.0)
     """
 
-    def __init__(self, x: Variable, l1_scaling: float = 1.0, l2_scaling: float = 1.0):
+    def __init__(
+        self,
+        x: Variable,
+        l1_scaling: float | torch.Tensor = 1.0,
+        l2_scaling: float | torch.Tensor = 1.0,
+    ):
         """Initialize the elastic net atom.
 
         Args:
@@ -46,7 +51,9 @@ class ElasticNet(AtomExpression):
             TypeError: If x is not a Variable.
         """
         super().__init__(
-            x, variable_only=True, l1_scaling=l1_scaling, l2_scaling=l2_scaling
+            exprs={"x": x},
+            buffers={"l1_scaling": l1_scaling, "l2_scaling": l2_scaling},
+            variable_only={"x": True},
         )
 
     def is_smooth(self) -> bool:
@@ -86,12 +93,15 @@ class ElasticNet(AtomExpression):
             torch.Tensor: The elastic net penalty value:
                 l1_scaling * ||x||₁ + (l2_scaling / 2) * ||x||₂²
         """
-        value = self.x1.forward()
+        value = self.get_input("x").forward()
 
         l1_norm = torch.sum(torch.abs(value))
         l2_norm = torch.sum(value**2)
 
-        return self.l1_scaling * l1_norm + (self.l2_scaling / 2) * l2_norm
+        return (
+            self.get_buffer("l1_scaling") * l1_norm
+            + (self.get_buffer("l2_scaling") / 2) * l2_norm
+        )
 
     def is_proxable(self) -> bool:
         """Check if the elastic net has a computable proximal operator.
@@ -117,8 +127,8 @@ class ElasticNet(AtomExpression):
                 Formula: soft_threshold(location, λ₁ * ρ) / (1 + ρ * λ₂)
                 where λ₁ = l1_scaling, λ₂ = l2_scaling, ρ = prox_scaling.
         """
-        l2_term = 1 + prox_scaling * self.l2_scaling
-        threshold = self.l1_scaling * prox_scaling
+        l2_term = 1 + prox_scaling * self.get_buffer("l2_scaling")
+        threshold = self.get_buffer("l1_scaling") * prox_scaling
         return (
             torch.nn.functional.relu(location - threshold)
             - torch.nn.functional.relu(-location - threshold)
@@ -126,6 +136,6 @@ class ElasticNet(AtomExpression):
 
     def _scale(self, scaling: float) -> Self:
         """Scale the elastic net regularization atom."""
-        new_l1 = self.l1_scaling * scaling
-        new_l2 = self.l2_scaling * scaling
-        return ElasticNet(self.x1, l1_scaling=new_l1, l2_scaling=new_l2)
+        new_l1 = self.get_buffer("l1_scaling") * scaling
+        new_l2 = self.get_buffer("l2_scaling") * scaling
+        return ElasticNet(self.get_input("x"), l1_scaling=new_l1, l2_scaling=new_l2)
