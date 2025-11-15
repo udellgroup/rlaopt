@@ -3,33 +3,26 @@
 import torch
 from typing_extensions import Self
 
-from rlaopt.atoms.atom_expression import AtomExpression
+from rlaopt.atoms.atom import Atom
 from rlaopt.expression import Variable
 
 
-class L1Norm(AtomExpression):
+class L1Norm(Atom):
     """L1-norm atom."""
 
-    def __init__(
-        self, x: Variable, scaling: float | torch.Tensor | torch.nn.Parameter = 1.0
-    ):
+    def __init__(self, x: Variable, scaling: float | torch.Tensor = 1.0):
         """Initializes the L1-norm atom with optional scaling.
 
         Args:
             x: Variable to apply the L1-norm to.
-               Must be an instance of Variable.
             scaling: Scaling factor for the L1-norm (default: 1.0).
-                     Can be a float, or torch.Tensor, or torch.nn.Parameter.
-                     Scaling factor must be a torch.nn.Parameter if you wish to
-                     differentiate with respect to the scaling factor.
+
+        Raises:
+        TypeError: If x is not a Variable.
         """
-        super().__init__()
-
-        # Register the variable as a parameter
-        self.register_input(x, variable_only=True)
-
-        # Register the scaling factor as a buffer
-        self.register_atom_buffer("scaling", scaling)
+        super().__init__(
+            exprs={"x": x}, buffers={"scaling": scaling}, variable_names=["x"]
+        )
 
     def is_smooth(self) -> bool:
         """Returns False because L1-norm is not smooth."""
@@ -37,8 +30,8 @@ class L1Norm(AtomExpression):
 
     def forward(self) -> torch.Tensor:
         """Evaluates the scaled L1-norm."""
-        value = self.get_input().forward()
-        return self.scaling * torch.sum(torch.abs(value))
+        value = self.get_input("x").forward()
+        return self.get_buffer("scaling") * torch.sum(torch.abs(value))
 
     def is_proxable(self) -> bool:
         """Returns True because L1-norm is proxable."""
@@ -57,7 +50,7 @@ class L1Norm(AtomExpression):
         Returns:
             Result of soft-thresholding operation
         """
-        threshold = self.scaling * prox_scaling
+        threshold = self.get_buffer("scaling") * prox_scaling
         return torch.nn.functional.relu(
             location - threshold
         ) - torch.nn.functional.relu(-location - threshold)
@@ -72,5 +65,5 @@ class L1Norm(AtomExpression):
 
     def _scale(self, scaling: float) -> Self:
         """Scale the L1-norm atom."""
-        new_scaling = self.scaling * scaling
-        return L1Norm(self.get_input(), scaling=new_scaling)
+        new_scaling = self.get_buffer("scaling") * scaling
+        return L1Norm(self.get_input("x"), scaling=new_scaling)

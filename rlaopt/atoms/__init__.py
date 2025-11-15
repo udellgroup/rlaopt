@@ -1,7 +1,7 @@
 """__init__.py file for atoms module."""
 
 from rlaopt.atoms.affine import Affine as Affine
-from rlaopt.atoms.atom_expression import AtomExpression as AtomExpression
+from rlaopt.atoms.atom import Atom as Atom
 from rlaopt.atoms.box import Box as Box
 from rlaopt.atoms.elastic_net import ElasticNet as ElasticNet
 from rlaopt.atoms.halfspace import Halfspace as Halfspace

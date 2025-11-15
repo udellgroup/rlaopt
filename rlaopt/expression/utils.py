@@ -80,7 +80,7 @@ def _create_product(left, right, matmul: bool):
 
     Returns:
         ProductExpression, AddExpression (if distributed), Constant
-        (if all constants fold), or AtomExpression (if scaled atom).
+        (if all constants fold), or Atom (if scaled atom).
     """
     # Convert inputs to expressions if needed
     left = _to_expr(left)
@@ -124,9 +124,9 @@ def _create_product(left, right, matmul: bool):
                 other = other_factors[0]
 
                 # Handle atom scaling: const * atom
-                from rlaopt.atoms.atom_expression import AtomExpression
+                from rlaopt.atoms.atom import Atom
 
-                if isinstance(other, AtomExpression):
+                if isinstance(other, Atom):
                     scalar = folded_const.value.item()
                     scaled = other._scale(scalar)
                     if scaled is not NotImplemented:

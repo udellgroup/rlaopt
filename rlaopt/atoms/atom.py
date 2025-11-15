@@ -9,7 +9,7 @@ from rlaopt.expression import Expression, Variable
 from rlaopt.expression.tree import ExprTree
 
 
-class AtomExpression(Expression, ABC):
+class Atom(Expression, ABC):
     """Abstract base class for optimization atoms.
 
     An atom represents a mathematical function that can be used in optimization
@@ -28,28 +28,29 @@ class AtomExpression(Expression, ABC):
         - prox() - prox operator of the atom
         - is_subsamplable() - whether the atom supports data subsampling
         - subsample() - create a subsampled version of the atom
-
-    Examples:
-        >>> class L1Norm(AtomExpression):
-        ...     def __init__(self, x: Variable, scaling: float = 1.0):
-        ...         super().__init__()
-        ...         self.register_variable(x)
-        ...         self.register_atom_buffer("scaling", scaling)
-        ...
-        ...     def forward(self) -> torch.Tensor:
-        ...         value = self.get_variable(self.var_name)
-        ...         return self.scaling * torch.sum(torch.abs(value))
     """
 
-    def __init__(self):
+    def __init__(
+        self,
+        exprs: dict[str, Expression],
+        buffers: dict[str, torch.Tensor | float | None],
+        variable_names: list[str] | None = None,
+    ):
         """Initialize the atom.
 
         Subclasses should call this constructor to ensure proper initialization.
-        Subclasses should also register any variables, expressions, or buffers
-        they use with the appropriate registration methods.
         """
         super().__init__()
-        self._expr_name = None
+
+        # Automatically register all input expressions
+        variable_names = variable_names or []
+        variable_only = {var_name: True for var_name in variable_names}
+        for name, expr in exprs.items():
+            self._register_input(name, expr, variable_only.get(name, False))
+
+        # Automatically register all buffers
+        for name, buffer in buffers.items():
+            self._register_atom_buffer(name, buffer)
 
     @abstractmethod
     def is_subsamplable(self) -> bool:
@@ -103,11 +104,23 @@ class AtomExpression(Expression, ABC):
         """
         pass
 
-    def get_input(self) -> Expression:
-        """Returns input expression used to construct the Atom."""
-        return getattr(self, self._expr_name)
+    def get_input(self, name: str) -> Expression:
+        """Retrieve a registered input expression by name.
 
-    def register_atom_buffer(self, name: str, buffer):
+        Args:
+            name: Name of the input expression to retrieve.
+
+        Returns:
+            Expression: The registered input expression.
+
+        Raises:
+            KeyError: If no input with the given name exists.
+        """
+        if not hasattr(self, name):
+            raise KeyError(f"No input expression named '{name}' found.")
+        return getattr(self, name)
+
+    def _register_atom_buffer(self, name: str, buffer):
         """Register a buffer (non-trainable constant) with the atom.
 
         Buffers store constants, hyperparameters, or fixed data that should be
@@ -118,12 +131,6 @@ class AtomExpression(Expression, ABC):
             name: Name for the buffer.
             buffer: Value to register (float, Parameter, or Tensor).
 
-        Examples:
-            >>> class ScaledNorm(AtomExpression):
-            ...     def __init__(self, x: Variable, scaling: float):
-            ...         super().__init__()
-            ...         self.register_variable(x)
-            ...         self.register_atom_buffer("scaling", scaling)
         """
         if isinstance(buffer, float):
             self.register_buffer(name, torch.tensor(float(buffer)))
@@ -136,28 +143,15 @@ class AtomExpression(Expression, ABC):
                 f"Expected float, Tensor, or None, but got {type(buffer).__name__}"
             )
 
-    def register_input(self, x: Expression, variable_only: bool = False):
-        """Register an input (Expression) with the atom.
-
-        This is a convenience method that automatically determines whether the
-        input is a Expression and registers appropriately.
-
-        Args:
-            x: Input to register (Expression).
-            variable_only: If True, only allow Variable inputs (default: False).
-
-        Raises:
-            TypeError: If x is not a Variable when variable_only is True.
-            TypeError: If x is not an Expression.
-        """
+    def _register_input(self, name: str, x: Expression, variable_only: bool):
+        """Register an input (Expression) with the atom."""
         if variable_only and not isinstance(x, Variable):
             raise TypeError(f"Expected Variable, but got {type(x).__name__} instead.")
 
         if not isinstance(x, Expression):
             raise TypeError(f"Expected Expression, but got {type(x).__name__}")
 
-        self._expr_name = x._get_name()
-        self.add_module(self._expr_name, x)
+        self.add_module(name, x)
 
     def _scale(self, scaling: float) -> Self:
         """Scale the atom by a scalar constant.
@@ -175,15 +169,19 @@ class AtomExpression(Expression, ABC):
         return NotImplemented
 
     def tree(self) -> ExprTree:
-        """Return tree representation for AtomExpression.
+        """Return tree representation for Atom.
 
-        If the atom has an input expression, includes it in the tree.
+        If the atom has input expressions, includes them in the tree.
         Otherwise, returns just the atom class name as a leaf node.
 
         Returns:
             ExprTree: Tree with atom class name and optional input child.
         """
-        if self._expr_name is not None:
-            input_expr = self.get_input()
-            return ExprTree(self.__class__.__name__, input_expr.tree())
-        return ExprTree(self.__class__.__name__)
+        input_expr_trees = [
+            expr.tree()
+            for _, expr in self.named_children()
+            if isinstance(expr, Expression)
+        ]
+        if len(input_expr_trees) == 0:
+            return ExprTree(self.__class__.__name__)
+        return ExprTree(self.__class__.__name__, *input_expr_trees)
