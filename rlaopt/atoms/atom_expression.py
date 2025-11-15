@@ -7,7 +7,6 @@ from typing_extensions import Self
 
 from rlaopt.expression import Expression, Variable
 from rlaopt.expression.tree import ExprTree
-from rlaopt.utils.counter import Counter
 
 
 class AtomExpression(Expression, ABC):
@@ -29,37 +28,23 @@ class AtomExpression(Expression, ABC):
         - prox() - prox operator of the atom
         - is_subsamplable() - whether the atom supports data subsampling
         - subsample() - create a subsampled version of the atom
-
-    Examples:
-        >>> class L1Norm(AtomExpression):
-        ...     def __init__(self, x: Variable, scaling: float = 1.0):
-        ...         super().__init__(x, variables_only=True, scaling=scaling)
-        ...
-        ...     def forward(self) -> torch.Tensor:
-        ...         value = self.x1.forward()
-        ...         return self.scaling * torch.sum(torch.abs(value))
     """
 
     def __init__(
         self,
-        *exprs: tuple[Expression],
-        variable_only: bool = False,
-        **buffers: dict[str, torch.Tensor],
+        exprs: dict[str, Expression],
+        buffers: dict[str, torch.Tensor],
+        variable_only: dict[str, bool],
     ):
         """Initialize the atom.
 
         Subclasses should call this constructor to ensure proper initialization.
-        Subclasses should also register any variables, expressions, or buffers
-        they use with the appropriate registration methods.
         """
         super().__init__()
-        self._variable_only = variable_only
-        self._var_names = set()  # Track registered variable names
-        self._expr_counter = Counter()
 
         # Automatically register all input expressions
-        for expr in exprs:
-            self._register_input(expr)
+        for name, expr in exprs.items():
+            self._register_input(name, expr, variable_only.get(name, False))
 
         # Automatically register all buffers
         for name, buffer in buffers.items():
@@ -140,27 +125,15 @@ class AtomExpression(Expression, ABC):
                 f"Expected float, Tensor, or None, but got {type(buffer).__name__}"
             )
 
-    def _register_input(self, x: Expression):
+    def _register_input(self, name: str, x: Expression, variable_only: bool):
         """Register an input (Expression) with the atom."""
-        if self.variable_only and not isinstance(x, Variable):
+        if variable_only and not isinstance(x, Variable):
             raise TypeError(f"Expected Variable, but got {type(x).__name__} instead.")
 
         if not isinstance(x, Expression):
             raise TypeError(f"Expected Expression, but got {type(x).__name__}")
 
-        # Check for duplicate variable names
-        if isinstance(x, Variable):
-            if x.name in self._var_names:
-                raise ValueError(f"Variable '{x.name}' is already registered.")
-            self._var_names.add(x.name)
-
-        # Get input ID and update counter
-        expr_id = self.expr_count
-        self._expr_counter.count += 1
-
-        # Register with simple x_i naming
-        expr_name = f"x{expr_id}"
-        self.add_module(expr_name, x)
+        self.add_module(name, x)
 
     def _scale(self, scaling: float) -> Self:
         """Scale the atom by a scalar constant.
@@ -186,21 +159,11 @@ class AtomExpression(Expression, ABC):
         Returns:
             ExprTree: Tree with atom class name and optional input child.
         """
-        if self.expr_count > 0:
-            # Get expression trees for all the input expressions used to
-            # construct the atom.
-            input_expr_trees = [
-                getattr(self, f"x{i}").tree() for i in range(1, self.expr_count)
-            ]
-            return ExprTree(self.__class__.__name__, *input_expr_trees)
-        return ExprTree(self.__class__.__name__)
-
-    @property
-    def expr_count(self) -> int:
-        """Returns the number of registered expressions with the atom."""
-        return self._expr_counter.count
-
-    @property
-    def variable_only(self) -> bool:
-        """Returns whether atom supports only variable registration."""
-        return self._variable_only
+        input_expr_trees = [
+            expr.tree()
+            for _, expr in self.named_children()
+            if isinstance(expr, Expression)
+        ]
+        if len(input_expr_trees) == 0:
+            return ExprTree(self.__class__.__name__)
+        return ExprTree(self.__class__.__name__, *input_expr_trees)
