@@ -12,7 +12,14 @@ class MockAtom(AtomExpression):
 
     def __init__(self, x, variable_only=False, buffer_value=None):
         """Initialize mock atom with configurable variable_only and optional buffer."""
-        super().__init__(x, variable_only=variable_only, buffer=buffer_value)
+        if variable_only:
+            super().__init__(
+                exprs={"x": x},
+                buffers={"buffer_value": buffer_value},
+                variable_names=["x"],
+            )
+        else:
+            super().__init__(exprs={"x": x}, buffers={"buffer_value": buffer_value})
 
     def is_smooth(self):
         """Always smooth for testing purposes."""
@@ -57,12 +64,12 @@ class TestRegisterInputAndGetInput:
     def test_register_input_with_variable_allows_variable(self, simple_variable):
         """Test register_input accepts Variable when variable_only=False."""
         atom = MockAtom(simple_variable, variable_only=False)
-        assert atom.x1 is simple_variable
+        assert atom.get_input("x") is simple_variable
 
     def test_register_input_with_expression_when_allowed(self, add_expression):
         """Test register_input accepts Expression when variable_only=False."""
         atom = MockAtom(add_expression, variable_only=False)
-        assert atom.x1 is add_expression
+        assert atom.get_input("x") is add_expression
 
     def test_register_input_rejects_non_expression(self):
         """Test register_input rejects non-Expression inputs."""
@@ -77,7 +84,7 @@ class TestRegisterInputAndGetInput:
     def test_register_input_accepts_variable_when_variable_only(self, simple_variable):
         """Test register_input accepts Variable when variable_only=True."""
         atom = MockAtom(simple_variable, variable_only=True)
-        assert atom.x1 is simple_variable
+        assert atom.get_input("x") is simple_variable
 
 
 class TestRegisterAtomBuffer:
@@ -86,20 +93,20 @@ class TestRegisterAtomBuffer:
     def test_register_buffer_with_float(self, simple_variable):
         """Test register_atom_buffer converts float to tensor."""
         atom = MockAtom(simple_variable, buffer_value=2.5)
-        assert isinstance(atom.buffer, torch.Tensor)
-        assert torch.isclose(atom.buffer, torch.tensor(2.5))
+        assert isinstance(atom.get_buffer("buffer_value"), torch.Tensor)
+        assert torch.isclose(atom.get_buffer("buffer_value"), torch.tensor(2.5))
 
     def test_register_buffer_with_tensor(self, simple_variable):
         """Test register_atom_buffer accepts tensor."""
         buffer_tensor = torch.tensor([1.0, 2.0, 3.0])
         atom = MockAtom(simple_variable, buffer_value=buffer_tensor)
-        assert isinstance(atom.buffer, torch.Tensor)
-        assert torch.equal(atom.buffer, buffer_tensor)
+        assert isinstance(atom.get_buffer("buffer_value"), torch.Tensor)
+        assert torch.equal(atom.get_buffer("buffer_value"), buffer_tensor)
 
     def test_register_buffer_with_none(self, simple_variable):
         """Test register_atom_buffer accepts None."""
         atom = MockAtom(simple_variable, buffer_value=None)
-        assert atom.buffer is None
+        assert atom.get_buffer("buffer_value") is None
 
     @pytest.mark.parametrize(
         "invalid_buffer",
