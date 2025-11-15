@@ -10,26 +10,17 @@ from rlaopt.expression import Variable
 class L1Norm(AtomExpression):
     """L1-norm atom."""
 
-    def __init__(
-        self, x: Variable, scaling: float | torch.Tensor | torch.nn.Parameter = 1.0
-    ):
+    def __init__(self, x: Variable, scaling: float):
         """Initializes the L1-norm atom with optional scaling.
 
         Args:
             x: Variable to apply the L1-norm to.
-               Must be an instance of Variable.
             scaling: Scaling factor for the L1-norm (default: 1.0).
-                     Can be a float, or torch.Tensor, or torch.nn.Parameter.
-                     Scaling factor must be a torch.nn.Parameter if you wish to
-                     differentiate with respect to the scaling factor.
+
+        Raises:
+        TypeError: If x is not a Variable.
         """
-        super().__init__()
-
-        # Register the variable as a parameter
-        self.register_input(x, variable_only=True)
-
-        # Register the scaling factor as a buffer
-        self.register_atom_buffer("scaling", scaling)
+        super().__init__(x, variable_only=True, scaling=scaling)
 
     def is_smooth(self) -> bool:
         """Returns False because L1-norm is not smooth."""
@@ -37,7 +28,7 @@ class L1Norm(AtomExpression):
 
     def forward(self) -> torch.Tensor:
         """Evaluates the scaled L1-norm."""
-        value = self[1].forward()
+        value = self.x1.forward()
         return self.scaling * torch.sum(torch.abs(value))
 
     def is_proxable(self) -> bool:
@@ -73,4 +64,4 @@ class L1Norm(AtomExpression):
     def _scale(self, scaling: float) -> Self:
         """Scale the L1-norm atom."""
         new_scaling = self.scaling * scaling
-        return L1Norm(self[1], scaling=new_scaling)
+        return L1Norm(self.x1, scaling=new_scaling)

@@ -46,19 +46,13 @@ class NucNorm(AtomExpression):
             TypeError: If x is not a Variable.
             ValueError: If x is not a 2D matrix.
         """
-        super().__init__()
-
-        # Register the Variable
-        self.register_input(x, variable_only=True)
-
         if x.value.data.dim() != 2:
             raise ValueError(
                 f"Variable value must be 2D Tensor, "
                 f"but got {x.value.data.dim()}D Tensor."
             )
 
-        # Register the scaling factor
-        self.register_atom_buffer("scaling", scaling)
+        super().__init__(x, variable_only=True, scaling=scaling)
 
     def is_smooth(self) -> bool:
         """Check if the nuclear norm is smooth.
@@ -74,7 +68,7 @@ class NucNorm(AtomExpression):
         Returns:
             torch.Tensor: The scaled sum of singular values.
         """
-        value = self[1].forward()
+        value = self.x1.forward()
         S = torch.linalg.svdvals(value)
         return self.scaling * torch.sum(S)
 
@@ -129,7 +123,7 @@ class NucNorm(AtomExpression):
     def _scale(self, scaling: float) -> Self:
         """Scale the nuclear norm atom."""
         new_scaling = self.scaling * scaling
-        return NucNorm(self[1], scaling=new_scaling)
+        return NucNorm(self.x1, scaling=new_scaling)
 
 
 class _prox_nuc_norm(torch.autograd.Function):

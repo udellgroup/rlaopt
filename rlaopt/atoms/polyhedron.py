@@ -86,7 +86,6 @@ class Polyhedron(AtomExpression):
             ValueError: If constraint dimensions are inconsistent.
             ValueError: If no constraints are provided.
         """
-        super().__init__()
         if (A is not None) and (b is None):
             raise ValueError("b cannot be None when A is not None")
         elif (A is None) and (b is not None):
@@ -108,15 +107,7 @@ class Polyhedron(AtomExpression):
         elif (lower is not None) and (upper is None):
             upper = torch.tensor(torch.inf, device=lower.device, dtype=lower.dtype)
 
-        # Register the variable
-        self.register_input(x, variable_only=True)
-
-        # Register constraint data as buffers
-        self.register_atom_buffer("A", A)
-        self.register_atom_buffer("b", b)
-        self.register_atom_buffer("C", C)
-        self.register_atom_buffer("lower", lower)
-        self.register_atom_buffer("upper", upper)
+        super().__init__(x, variable_only=True, A=A, b=b, C=C, lower=lower, upper=upper)
 
         self._eval = _build_eval(self.A, self.C, self.b, self.lower, self.upper)
 
@@ -126,7 +117,7 @@ class Polyhedron(AtomExpression):
         Returns:
             torch.Tensor: 0.0 if constraints are satisfied, infinity otherwise.
         """
-        value = self[1].forward()
+        value = self.x1.forward()
         return self._eval(value)
 
     def is_smooth(self) -> bool:
@@ -358,8 +349,8 @@ def _eval_halfspace(
     x: torch.Tensor, c: torch.Tensor, lower: torch.Tensor, upper: torch.Tensor
 ) -> torch.Tensor:
     """Evaluate halfspace inequality constraint: lower <= c^T x <= upper."""
-    ctx = torch.dot(c, x)
-    satisfied = (lower <= ctx) and (ctx <= upper)
+    cTx = torch.dot(c, x)
+    satisfied = (lower <= cTx) and (cTx <= upper)
     return _indicator(satisfied.item(), x.device, x.dtype)
 
 

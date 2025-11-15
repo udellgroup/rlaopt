@@ -45,14 +45,9 @@ class ElasticNet(AtomExpression):
         Raises:
             TypeError: If x is not a Variable.
         """
-        super().__init__()
-
-        # Register the input variable as a parameter
-        self.register_input(x, variable_only=True)
-
-        # Register the L1 and L2 scaling factors as buffers
-        self.register_atom_buffer("l1_scaling", l1_scaling)
-        self.register_atom_buffer("l2_scaling", l2_scaling)
+        super().__init__(
+            x, variable_only=True, l1_scaling=l1_scaling, l2_scaling=l2_scaling
+        )
 
     def is_smooth(self) -> bool:
         """Check if the elastic net is smooth.
@@ -91,7 +86,7 @@ class ElasticNet(AtomExpression):
             torch.Tensor: The elastic net penalty value:
                 l1_scaling * ||x||₁ + (l2_scaling / 2) * ||x||₂²
         """
-        value = self[1].forward()
+        value = self.x1.forward()
 
         l1_norm = torch.sum(torch.abs(value))
         l2_norm = torch.sum(value**2)
@@ -133,4 +128,4 @@ class ElasticNet(AtomExpression):
         """Scale the elastic net regularization atom."""
         new_l1 = self.l1_scaling * scaling
         new_l2 = self.l2_scaling * scaling
-        return ElasticNet(self[1], l1_scaling=new_l1, l2_scaling=new_l2)
+        return ElasticNet(self.x1, l1_scaling=new_l1, l2_scaling=new_l2)

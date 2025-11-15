@@ -33,16 +33,19 @@ class AtomExpression(Expression, ABC):
     Examples:
         >>> class L1Norm(AtomExpression):
         ...     def __init__(self, x: Variable, scaling: float = 1.0):
-        ...         super().__init__()
-        ...         self.register_input(x)
-        ...         self.register_atom_buffer("scaling", scaling)
+        ...         super().__init__(x, variables_only=True, scaling=scaling)
         ...
         ...     def forward(self) -> torch.Tensor:
-        ...         value = self[1]
+        ...         value = self.x1.forward()
         ...         return self.scaling * torch.sum(torch.abs(value))
     """
 
-    def __init__(self):
+    def __init__(
+        self,
+        *exprs: tuple[Expression],
+        variable_only: bool = False,
+        **buffers: dict[str, torch.Tensor],
+    ):
         """Initialize the atom.
 
         Subclasses should call this constructor to ensure proper initialization.
@@ -50,9 +53,17 @@ class AtomExpression(Expression, ABC):
         they use with the appropriate registration methods.
         """
         super().__init__()
-        self._exprs_names = {}
-        self._ids_to_exprs = {}
+        self._variable_only = variable_only
+        self._var_names = set()  # Track registered variable names
         self._expr_counter = Counter()
+
+        # Automatically register all input expressions
+        for expr in exprs:
+            self._register_input(expr)
+
+        # Automatically register all buffers
+        for name, buffer in buffers.items():
+            self._register_atom_buffer(name, buffer)
 
     @abstractmethod
     def is_subsamplable(self) -> bool:
@@ -106,23 +117,7 @@ class AtomExpression(Expression, ABC):
         """
         pass
 
-    def get_input(self, input_registration_id: int) -> Expression:
-        """Fetches registered input expression from its ID.
-
-        Given an input registration ID, retrieves the corresponding
-        registered Expression associated with the atom.
-        The input registration ID corresponds to the order in which
-        inputs were registered using the `register_input` method.
-        I.e., the first registered input has ID 1, the second has ID 2, etc.
-        """
-        if input_registration_id not in self.ids_to_exprs:
-            raise KeyError(
-                f"No input registered with ID {input_registration_id}. "
-                f"Valid IDs are: {sorted(self.ids_to_exprs.keys())}"
-            )
-        return self._ids_to_exprs[input_registration_id]
-
-    def register_atom_buffer(self, name: str, buffer):
+    def _register_atom_buffer(self, name: str, buffer):
         """Register a buffer (non-trainable constant) with the atom.
 
         Buffers store constants, hyperparameters, or fixed data that should be
@@ -133,12 +128,6 @@ class AtomExpression(Expression, ABC):
             name: Name for the buffer.
             buffer: Value to register (float, Parameter, or Tensor).
 
-        Examples:
-            >>> class ScaledNorm(AtomExpression):
-            ...     def __init__(self, x: Variable, scaling: float):
-            ...         super().__init__()
-            ...         self.register_variable(x)
-            ...         self.register_atom_buffer("scaling", scaling)
         """
         if isinstance(buffer, float):
             self.register_buffer(name, torch.tensor(float(buffer)))
@@ -151,59 +140,27 @@ class AtomExpression(Expression, ABC):
                 f"Expected float, Tensor, or None, but got {type(buffer).__name__}"
             )
 
-    def register_input(self, x: Expression, variable_only: bool = False):
-        """Register an input (Expression) with the atom.
-
-        This is a convenience method that automatically determines whether the
-        input is a Expression and registers appropriately.
-
-        Args:
-            x: Input to register (Expression).
-            variable_only: If True, only allow Variable inputs (default: False).
-
-        Raises:
-            TypeError: If x is not a Variable when variable_only is True.
-            TypeError: If x is not an Expression.
-        """
-        if variable_only and not isinstance(x, Variable):
+    def _register_input(self, x: Expression):
+        """Register an input (Expression) with the atom."""
+        if self.variable_only and not isinstance(x, Variable):
             raise TypeError(f"Expected Variable, but got {type(x).__name__} instead.")
 
         if not isinstance(x, Expression):
             raise TypeError(f"Expected Expression, but got {type(x).__name__}")
 
-        # We don't allow registration of variable
-        # with the same name as an existing variable.
+        # Check for duplicate variable names
         if isinstance(x, Variable):
-            expr_name = x.name
-            if expr_name in self._exprs_names:
-                raise ValueError(f"Variable '{expr_name}' is already registered.")
-            unique_name = expr_name
-            # Variables get count of 1
-            self._exprs_names[expr_name] = 1
-        else:
-            # Use class name as base_expr_name
-            base_expr_name = x._get_name()
-            # Get count of how many times class of type
-            # base_expr_name has been registered
-            count = self._exprs_names.get(base_expr_name, 0)
-
-            if count == 0:
-                # First occurrence - use base name
-                unique_name = base_expr_name
-            else:
-                # Collision - append count to get
-                # a unique name for the expression
-                unique_name = f"{base_expr_name}_{count}"
-
-            # Update count
-            self._exprs_names[base_expr_name] = count + 1
+            if x.name in self._var_names:
+                raise ValueError(f"Variable '{x.name}' is already registered.")
+            self._var_names.add(x.name)
 
         # Get input ID and update counter
         expr_id = self.expr_count
         self._expr_counter.count += 1
-        # Register input expression
-        self._ids_to_exprs[expr_id] = x
-        self.add_module(unique_name, x)
+
+        # Register with simple x_i naming
+        expr_name = f"x{expr_id}"
+        self.add_module(expr_name, x)
 
     def _scale(self, scaling: float) -> Self:
         """Scale the atom by a scalar constant.
@@ -229,11 +186,11 @@ class AtomExpression(Expression, ABC):
         Returns:
             ExprTree: Tree with atom class name and optional input child.
         """
-        if self.ids_to_exprs:
+        if self.expr_count > 0:
             # Get expression trees for all the input expressions used to
             # construct the atom.
             input_expr_trees = [
-                self.ids_to_exprs[expr_id].tree() for expr_id in self.ids_to_exprs
+                getattr(self, f"x{i}").tree() for i in range(1, self.expr_count)
             ]
             return ExprTree(self.__class__.__name__, *input_expr_trees)
         return ExprTree(self.__class__.__name__)
@@ -244,24 +201,6 @@ class AtomExpression(Expression, ABC):
         return self._expr_counter.count
 
     @property
-    def expr_names(self) -> dict[str, int]:
-        """Returns a dictionary mapping expression names to their occurrence counts.
-
-        For Variables, maps the variable name to 1. For other Expressions, maps
-        the base class name (e.g., 'SumSquares') to the count of how many times
-        that type has been registered. This count is used to generate unique names
-        for duplicate expression types (e.g., 'SumSquares_1', 'SumSquares_2').
-
-        Returns:
-            dict[str, int]: Dictionary mapping expression names to counts.
-        """
-        return self._exprs_names
-
-    @property
-    def ids_to_exprs(self) -> dict[int, Expression]:
-        """Returns a mapping of registered expression IDs to their Expression objects."""
-        return self._ids_to_exprs
-
-    def __getitem__(self, idx: int) -> Expression:
-        """Magic method for fetching expression from its idx ID."""
-        return self.get_input(idx)
+    def variable_only(self) -> bool:
+        """Returns whether atom supports only variable registration."""
+        return self._variable_only
