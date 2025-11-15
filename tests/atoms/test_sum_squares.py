@@ -48,12 +48,12 @@ class TestSumSquares:
     def test_init_with_variable(self, vector_var):
         """Test initialization with Variable input."""
         ss = SumSquares(vector_var)
-        assert isinstance(ss[1], Variable)
+        assert isinstance(ss.x1, Variable)
 
     def test_init_with_expression(self, simple_affine):
         """Test initialization with Expression input."""
         ss = SumSquares(simple_affine)
-        assert isinstance(ss[1], Expression)
+        assert isinstance(ss.x1, Expression)
 
     # ----------------------
     # Forward evaluation tests
