@@ -34,7 +34,7 @@ class AtomExpression(Expression, ABC):
         self,
         exprs: dict[str, Expression],
         buffers: dict[str, torch.Tensor | float | None],
-        variable_only: dict[str, bool] | None = None,
+        variable_names: list[str] | None = None,
     ):
         """Initialize the atom.
 
@@ -43,7 +43,8 @@ class AtomExpression(Expression, ABC):
         super().__init__()
 
         # Automatically register all input expressions
-        variable_only = variable_only or {}
+        variable_names = variable_names or []
+        variable_only = {var_name: True for var_name in variable_names}
         for name, expr in exprs.items():
             self._register_input(name, expr, variable_only.get(name, False))
 

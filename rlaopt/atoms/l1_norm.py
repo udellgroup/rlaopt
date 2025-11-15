@@ -21,7 +21,7 @@ class L1Norm(AtomExpression):
         TypeError: If x is not a Variable.
         """
         super().__init__(
-            exprs={"x": x}, buffers={"scaling": scaling}, variable_only={"x": True}
+            exprs={"x": x}, buffers={"scaling": scaling}, variable_names=["x"]
         )
 
     def is_smooth(self) -> bool:

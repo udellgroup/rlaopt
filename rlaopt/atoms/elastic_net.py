@@ -53,7 +53,7 @@ class ElasticNet(AtomExpression):
         super().__init__(
             exprs={"x": x},
             buffers={"l1_scaling": l1_scaling, "l2_scaling": l2_scaling},
-            variable_only={"x": True},
+            variable_names=["x"],
         )
 
     def is_smooth(self) -> bool:

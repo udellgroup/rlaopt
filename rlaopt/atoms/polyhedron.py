@@ -84,7 +84,7 @@ class Polyhedron(AtomExpression):
         super().__init__(
             exprs={"x": x},
             buffers={"A": A, "b": b, "C": C, "lower": lower, "upper": upper},
-            variable_only={"x": True},
+            variable_names=["x"],
         )
 
         self._eval = _build_eval(

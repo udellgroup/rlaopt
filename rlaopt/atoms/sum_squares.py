@@ -17,7 +17,7 @@ class SumSquares(AtomExpression):
         Args:
             x: Variable or Expression to apply the sum of squares to.
         """
-        super().__init__(exprs={"x": x}, buffers={}, variable_only={"x": False})
+        super().__init__(exprs={"x": x}, buffers={})
 
     def is_smooth(self) -> bool:
         """Returns True depending on the smoothness of the expression."""

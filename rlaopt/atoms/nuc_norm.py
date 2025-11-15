@@ -50,7 +50,7 @@ class NucNorm(AtomExpression):
             )
 
         super().__init__(
-            exprs={"x": x}, buffers={"scaling": scaling}, variable_only={"x": True}
+            exprs={"x": x}, buffers={"scaling": scaling}, variable_names=["x"]
         )
 
     def is_smooth(self) -> bool:
