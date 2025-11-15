@@ -3,13 +3,7 @@
 import pytest
 import torch
 
-from rlaopt.ext_tensordict import (
-    TensorDict,
-    has_compatible_lengths,
-    has_compatible_ordered_names,
-    has_compatible_ordered_shapes,
-    relabel_from_template,
-)
+from rlaopt.ext_tensordict import TensorDict
 
 
 @pytest.fixture
@@ -71,8 +65,8 @@ class TestTensorDictMethods:
         assert vec.shape == (5,)
         assert torch.allclose(vec, torch.tensor([1.0, 2.0, 3.0, 4.0, 5.0]))
 
-    def test_to_vector_empty(self):
-        """Test to_vector on empty TensorDict."""
+    def test_to_flat_tensor_empty(self):
+        """Test to_flat_tensor on empty TensorDict."""
         empty_td = TensorDict({}, batch_size=[])
         vec = empty_td.to_flat_tensor()
         assert vec.shape == (0,)
@@ -93,95 +87,6 @@ class TestTensorDictMethods:
 
         for key in simple_td.keys():
             assert torch.allclose(simple_td[key], reconstructed[key])
-
-    def test_convert_target(self, simple_td):
-        """Test relabeling with different keys."""
-        target = TensorDict(
-            {
-                "x": torch.tensor([100.0, 200.0, 300.0]),
-                "y": torch.tensor([400.0, 500.0]),
-            },
-            batch_size=[],
-        )
-
-        result = simple_td.convert_target(target)
-
-        # Should have keys from simple_td, values from target
-        assert list(result.keys()) == ["a", "b"]
-        assert torch.allclose(result["a"], torch.tensor([100.0, 200.0, 300.0]))
-        assert torch.allclose(result["b"], torch.tensor([400.0, 500.0]))
-
-
-class TestCompatibilityFunctions:
-    """Test TensorDict compatibility checking functions."""
-
-    def test_has_compatible_lengths_true(self, simple_td, simple_td_2):
-        """Test compatible lengths detection."""
-        assert has_compatible_lengths(simple_td, simple_td_2)
-
-    def test_has_compatible_lengths_false(self, simple_td):
-        """Test incompatible lengths detection."""
-        other_td = TensorDict(
-            {
-                "a": torch.tensor([1.0]),
-                "b": torch.tensor([2.0]),
-                "c": torch.tensor([3.0]),
-            },
-            batch_size=[],
-        )
-        assert not has_compatible_lengths(simple_td, other_td)
-
-    def test_has_compatible_ordered_names_true(self, simple_td, simple_td_2):
-        """Test compatible names detection."""
-        assert has_compatible_ordered_names(simple_td, simple_td_2)
-
-    def test_has_compatible_ordered_names_false(self, simple_td):
-        """Test incompatible names detection."""
-        other_td = TensorDict(
-            {"x": torch.tensor([1.0, 2.0, 3.0]), "y": torch.tensor([4.0, 5.0])},
-            batch_size=[],
-        )
-        assert not has_compatible_ordered_names(simple_td, other_td)
-
-    def test_has_compatible_ordered_shapes_true(self, simple_td, simple_td_2):
-        """Test compatible shapes detection."""
-        assert has_compatible_ordered_shapes(simple_td, simple_td_2)
-
-    def test_has_compatible_ordered_shapes_false(self, simple_td):
-        """Test incompatible shapes detection."""
-        other_td = TensorDict(
-            {
-                "a": torch.tensor([1.0, 2.0]),  # Different shape
-                "b": torch.tensor([4.0, 5.0]),
-            },
-            batch_size=[],
-        )
-        assert not has_compatible_ordered_shapes(simple_td, other_td)
-
-    def test_relabel_from_template(self, simple_td):
-        """Test relabeling from template."""
-        template = TensorDict(
-            {"new_a": torch.zeros(3), "new_b": torch.zeros(2)}, batch_size=[]
-        )
-
-        result = relabel_from_template(simple_td, template)
-
-        assert list(result.keys()) == ["new_a", "new_b"]
-        assert torch.allclose(result["new_a"], torch.tensor([1.0, 2.0, 3.0]))
-        assert torch.allclose(result["new_b"], torch.tensor([4.0, 5.0]))
-
-    def test_relabel_from_template_incompatible_raises(self, simple_td):
-        """Test that relabeling with incompatible shapes raises error."""
-        template = TensorDict(
-            {
-                "x": torch.zeros(5),  # Wrong shape
-                "y": torch.zeros(2),
-            },
-            batch_size=[],
-        )
-
-        with pytest.raises(ValueError, match="Incompatible ordered shapes"):
-            relabel_from_template(simple_td, template)
 
 
 class TestPyTreeIntegration:
