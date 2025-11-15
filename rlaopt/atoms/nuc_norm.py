@@ -5,11 +5,11 @@ from typing import Any
 import torch
 from typing_extensions import Self
 
-from rlaopt.atoms.atom_expression import AtomExpression
+from rlaopt.atoms.atom import Atom
 from rlaopt.expression import Variable
 
 
-class NucNorm(AtomExpression):
+class NucNorm(Atom):
     """Nuclear norm (sum of singular values) of a matrix variable.
 
     The nuclear norm is defined as the sum of the singular values of a matrix.

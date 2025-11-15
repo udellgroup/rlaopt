@@ -9,7 +9,7 @@ from rlaopt.expression import Expression, Variable
 from rlaopt.expression.tree import ExprTree
 
 
-class AtomExpression(Expression, ABC):
+class Atom(Expression, ABC):
     """Abstract base class for optimization atoms.
 
     An atom represents a mathematical function that can be used in optimization
@@ -169,7 +169,7 @@ class AtomExpression(Expression, ABC):
         return NotImplemented
 
     def tree(self) -> ExprTree:
-        """Return tree representation for AtomExpression.
+        """Return tree representation for Atom.
 
         If the atom has input expressions, includes them in the tree.
         Otherwise, returns just the atom class name as a leaf node.

@@ -3,11 +3,11 @@
 import torch
 from typing_extensions import Self
 
-from rlaopt.atoms.atom_expression import AtomExpression
+from rlaopt.atoms.atom import Atom
 from rlaopt.expression import Variable
 
 
-class ElasticNet(AtomExpression):
+class ElasticNet(Atom):
     """Elastic net regularization combining L1 and L2 penalties.
 
     The elastic net penalty is defined as:

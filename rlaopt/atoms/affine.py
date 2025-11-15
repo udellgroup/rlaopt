@@ -4,11 +4,11 @@ from __future__ import annotations
 
 import torch
 
-from rlaopt.atoms.atom_expression import AtomExpression
+from rlaopt.atoms.atom import Atom
 from rlaopt.expression import Expression, Variable
 
 
-class Affine(AtomExpression):
+class Affine(Atom):
     """Affine transformation atom: A @ x + b.
 
     Represents an affine mapping of a variable or output of an expression.

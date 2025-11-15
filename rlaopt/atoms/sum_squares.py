@@ -4,11 +4,11 @@ import torch
 from typing_extensions import Self
 
 from rlaopt.atoms.affine import Affine
-from rlaopt.atoms.atom_expression import AtomExpression
+from rlaopt.atoms.atom import Atom
 from rlaopt.expression import Expression, Variable
 
 
-class SumSquares(AtomExpression):
+class SumSquares(Atom):
     """Sum of squared elements atom."""
 
     def __init__(self, x: Variable | Expression):

@@ -6,11 +6,11 @@ from typing import Callable
 import torch
 from typing_extensions import Self
 
-from rlaopt.atoms.atom_expression import AtomExpression
+from rlaopt.atoms.atom import Atom
 from rlaopt.expression import Variable
 
 
-class Polyhedron(AtomExpression):
+class Polyhedron(Atom):
     """Polyhedral constraint atom for linear equality and inequality constraints.
 
     A polyhedron is defined by:

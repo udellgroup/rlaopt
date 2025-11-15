@@ -1,14 +1,14 @@
-"""Tests for AtomExpression base class."""
+"""Tests for Atom base class."""
 
 import pytest
 import torch
 
-from rlaopt.atoms.atom_expression import AtomExpression
+from rlaopt.atoms.atom import Atom
 from rlaopt.expression import ExprTree, Variable
 
 
-class MockAtom(AtomExpression):
-    """Mock atom for testing AtomExpression base class."""
+class MockAtom(Atom):
+    """Mock atom for testing Atom base class."""
 
     def __init__(self, x, variable_only=False, buffer_value=None):
         """Initialize mock atom with configurable variable_only and optional buffer."""
@@ -59,7 +59,7 @@ def add_expression(simple_variable):
 
 
 class TestRegisterInputAndGetInput:
-    """Tests for AtomExpression.register_input and get_input methods."""
+    """Tests for Atom.register_input and get_input methods."""
 
     def test_register_input_with_variable_allows_variable(self, simple_variable):
         """Test register_input accepts Variable when variable_only=False."""
@@ -88,7 +88,7 @@ class TestRegisterInputAndGetInput:
 
 
 class TestRegisterAtomBuffer:
-    """Tests for AtomExpression.register_atom_buffer method."""
+    """Tests for Atom.register_atom_buffer method."""
 
     def test_register_buffer_with_float(self, simple_variable):
         """Test register_atom_buffer converts float to tensor."""
@@ -127,7 +127,7 @@ class TestRegisterAtomBuffer:
 
 
 class TestTree:
-    """Tests for AtomExpression.tree() method."""
+    """Tests for Atom.tree() method."""
 
     def test_tree_with_variable_input(self, simple_variable):
         """Test tree() returns correct structure for atom with Variable input."""

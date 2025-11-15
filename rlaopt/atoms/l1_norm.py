@@ -3,11 +3,11 @@
 import torch
 from typing_extensions import Self
 
-from rlaopt.atoms.atom_expression import AtomExpression
+from rlaopt.atoms.atom import Atom
 from rlaopt.expression import Variable
 
 
-class L1Norm(AtomExpression):
+class L1Norm(Atom):
     """L1-norm atom."""
 
     def __init__(self, x: Variable, scaling: float | torch.Tensor = 1.0):
