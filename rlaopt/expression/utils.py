@@ -20,7 +20,7 @@ def _create_add(left, right):
         right: Right operand (Expression, float, int, or torch.Tensor).
 
     Returns:
-        Expression: Optimized sum (AddExpression, ConstExpression, or single expr).
+        Expression: Optimized sum (AddExpression, Constant, or single expr).
     """
     # Convert inputs to expressions if needed
     left = _to_expr(left)
@@ -79,7 +79,7 @@ def _create_product(left, right, matmul: bool):
         matmul: If True, use matrix multiplication (no optimizations).
 
     Returns:
-        ProductExpression, AddExpression (if distributed), ConstExpression
+        ProductExpression, AddExpression (if distributed), Constant
         (if all constants fold), or AtomExpression (if scaled atom).
     """
     # Convert inputs to expressions if needed
