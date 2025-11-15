@@ -4,29 +4,29 @@ import pytest
 import torch
 
 from rlaopt.expression import ExprTree
-from rlaopt.expression.constant import ConstExpression
+from rlaopt.expression.constant import Constant
 
 
 @pytest.fixture
 def scalar_const():
     """Create a scalar constant expression."""
-    return ConstExpression(3.14)
+    return Constant(3.14)
 
 
 @pytest.fixture
 def int_const():
     """Create an integer constant expression."""
-    return ConstExpression(5)
+    return Constant(5)
 
 
 @pytest.fixture
 def tensor_const():
     """Create a tensor constant expression."""
-    return ConstExpression(torch.tensor([1.0, 2.0, 3.0]))
+    return Constant(torch.tensor([1.0, 2.0, 3.0]))
 
 
-class TestConstExpression:
-    """Test ConstExpression concrete implementation."""
+class TestConstant:
+    """Test Constant concrete implementation."""
 
     # ----------------------
     # Initialization tests
@@ -74,7 +74,7 @@ class TestConstExpression:
 
     def test_tree(self, scalar_const):
         """Test tree() returns correct structure."""
-        assert scalar_const.tree() == ExprTree("ConstExpression")
+        assert scalar_const.tree() == ExprTree("Constant")
 
     # ----------------------
     # Forward evaluation tests
@@ -100,9 +100,9 @@ class TestConstExpression:
     # ----------------------
 
     def test_neg_returns_const_expression(self, scalar_const):
-        """Test __neg__ returns a ConstExpression."""
+        """Test __neg__ returns a Constant."""
         result = -scalar_const
-        assert isinstance(result, ConstExpression)
+        assert isinstance(result, Constant)
 
     def test_neg_negates_scalar_value(self, scalar_const):
         """Test __neg__ correctly negates scalar constant."""
@@ -131,24 +131,24 @@ class TestConstExpression:
 
     def test_zero_constant(self):
         """Test constant with zero value."""
-        zero_const = ConstExpression(0)
+        zero_const = Constant(0)
         assert torch.equal(zero_const.value, torch.tensor(0))
         assert zero_const.forward().item() == 0
 
     def test_negative_constant(self):
         """Test constant with negative value."""
-        neg_const = ConstExpression(-5.5)
+        neg_const = Constant(-5.5)
         assert torch.allclose(neg_const.value, torch.tensor(-5.5))
 
     def test_multidimensional_tensor_constant(self):
         """Test constant with multidimensional tensor."""
         matrix = torch.tensor([[1, 2], [3, 4]], dtype=torch.float32)
-        matrix_const = ConstExpression(matrix)
+        matrix_const = Constant(matrix)
         assert torch.equal(matrix_const.value, matrix)
         assert matrix_const.forward().shape == (2, 2)
 
     def test_empty_tensor_constant(self):
         """Test constant with empty tensor."""
-        empty_const = ConstExpression(torch.tensor([]))
+        empty_const = Constant(torch.tensor([]))
         assert empty_const.value.numel() == 0
         assert empty_const.forward().shape == (0,)
