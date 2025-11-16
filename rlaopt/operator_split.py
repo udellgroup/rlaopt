@@ -55,8 +55,9 @@ class OperatorSplit:
         """Returns the variable values associated with the composite function."""
         td_f = self._f.variable_values
         tds_r = [r.variable_values for r in self._r]
-        td_r = merge_tensordicts(*tds_r) if tds_r else TensorDict({})
-        return merge_tensordicts(td_f, td_r)
+        if not tds_r:
+            return td_f
+        return merge_tensordicts(td_f, *tds_r)
 
     @property
     def evaluate(self, variable_values: TensorDict) -> torch.Tensor:
@@ -133,6 +134,9 @@ class OperatorSplit:
 def _attempt_split(expr: AddExpression) -> tuple[Expression, list[Atom]]:
     smooth_part = expr.get_smooth_part()
     non_smooth_exprs = expr.get_non_smooth_exprs()
+
+    print(f"Smooth part: {smooth_part}")
+    print(f"Non-smooth parts: {non_smooth_exprs}")
 
     # All non-smooth terms must be proxable atoms
     if any(
