@@ -178,11 +178,6 @@ class Variable(Expression):
 
         Returns:
             str: Brief string representation.
-
-        Examples:
-            >>> x = Variable((5,), name='weights')
-            >>> str(x)
-            "Variable 'weights' with shape torch.Size([5])"
         """
         return f"Variable '{self.name}' with shape {self.value.shape}"
 
