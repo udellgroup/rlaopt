@@ -77,6 +77,19 @@ class Atom(Expression, ABC):
         pass
 
     @abstractmethod
+    def is_proxable(self) -> bool:
+        """Check if the expression has a computable proximal operator.
+
+        The proximal operator is used in proximal gradient methods and ADMM
+        for non-smooth optimization. An expression is proxable if its proximal
+        operator can be computed efficiently in closed form.
+
+        Returns:
+            bool: True if the expression is proxable, False otherwise.
+        """
+        pass
+
+    @abstractmethod
     def prox(self, location: torch.Tensor, prox_scaling: float) -> torch.Tensor:
         """Proximal operator corresponding to the atom."""
         pass

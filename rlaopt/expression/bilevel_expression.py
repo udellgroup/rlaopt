@@ -62,11 +62,3 @@ class BilevelExpression(Expression):
     def is_smooth(self):
         """Bilevel expressions are smooth."""
         return True
-
-    def is_proxable(self):
-        """Bilevel expressions are not proxable."""
-        return False
-
-    def prox(self, location: torch.Tensor, prox_scaling: float) -> torch.Tensor:
-        """Proximal operator not supported for bilevel expressions."""
-        raise NotImplementedError("BilevelExpression is not proxable")

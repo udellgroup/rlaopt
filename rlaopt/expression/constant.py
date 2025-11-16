@@ -57,14 +57,6 @@ class Constant(Expression):
         """
         return True
 
-    def is_proxable(self) -> bool:
-        """Constants are proxable (proximal operator is identity).
-
-        Returns:
-            bool: Always True.
-        """
-        return True
-
     def forward(self) -> torch.Tensor:
         """Evaluate the constant (returns itself).
 

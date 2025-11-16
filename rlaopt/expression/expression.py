@@ -50,35 +50,6 @@ class Expression(torch.nn.Module, ABC):
 
         Returns:
             bool: True if the expression is smooth, False otherwise.
-
-        Examples:
-            >>> x = Variable((5,))
-            >>> x.is_smooth()
-            True
-            >>> from rlaopt.atoms import L1Norm
-            >>> l1 = L1Norm(x)
-            >>> l1.is_smooth()
-            False
-        """
-        pass
-
-    @abstractmethod
-    def is_proxable(self) -> bool:
-        """Check if the expression has a computable proximal operator.
-
-        The proximal operator is used in proximal gradient methods and ADMM
-        for non-smooth optimization. An expression is proxable if its proximal
-        operator can be computed efficiently in closed form.
-
-        Returns:
-            bool: True if the expression is proxable, False otherwise.
-
-        Examples:
-            >>> from rlaopt.atoms import L1Norm
-            >>> x = Variable((5,))
-            >>> l1 = L1Norm(x)
-            >>> l1.is_proxable()
-            True
         """
         pass
 
@@ -91,13 +62,6 @@ class Expression(torch.nn.Module, ABC):
 
         Returns:
             torch.Tensor: The evaluated result.
-
-        Examples:
-            >>> x = Variable((5,))
-            >>> x.value.data = torch.ones(5)
-            >>> result = x.forward()
-            >>> torch.equal(result, torch.ones(5))
-            True
         """
         pass
 

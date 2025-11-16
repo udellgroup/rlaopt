@@ -28,10 +28,6 @@ class Variable(Expression):
         dtype: Data type for the variable tensor.
         device: Device to place the variable on.
 
-    Attributes:
-        _id: Unique identifier for this variable.
-        _name: Name of the variable (used as parameter name).
-
     Examples:
         >>> # Create from size
         >>> x = Variable((5,), name='weights')
@@ -46,11 +42,6 @@ class Variable(Expression):
         >>> # Create from existing tensor
         >>> data = torch.randn(10)
         >>> y = Variable(data, name='initialized')
-
-        >>> # State dict uses meaningful names
-        >>> expr = x + y
-        >>> list(expr.state_dict().keys())
-        ['exprs.0.weights', 'exprs.1.initialized']
     """
 
     def __init__(
@@ -170,11 +161,6 @@ class Variable(Expression):
 
         Returns:
             str: Detailed string representation including all attributes.
-
-        Examples:
-            >>> x = Variable(5, name='weights')
-            >>> repr(x)
-            "Variable(name='weights', id='...', shape=(5,), dtype=torch.float32, ...)"
         """
         info_components = [
             f"Variable(name='{self.name}'",
@@ -208,25 +194,11 @@ class Variable(Expression):
         """
         return True
 
-    def is_proxable(self):
-        """Variables don't have meaningful proximal operators.
-
-        Returns:
-            bool: Always False.
-        """
-        return False
-
     def forward(self) -> torch.Tensor:
         """Evaluate the variable (returns its current value).
 
         Returns:
             torch.Tensor: The parameter tensor.
-
-        Examples:
-            >>> x = Variable((5,), name='x')
-            >>> x.value.data = torch.ones(5) * 3
-            >>> x.forward()
-            tensor([3., 3., 3., 3., 3.], requires_grad=True)
         """
         return self.value
 
