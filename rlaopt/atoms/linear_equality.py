@@ -4,6 +4,7 @@ import torch
 
 from rlaopt.atoms.polyhedron import Polyhedron
 from rlaopt.expression import Variable
+from rlaopt.ext_tensordict import TensorDict
 
 
 class LinearEquality(Polyhedron):
@@ -53,7 +54,7 @@ class LinearEquality(Polyhedron):
             b: Right-hand side vector of the equality constraints.
         """
         super().__init__(x, A=A, b=b, C=None, lower=None, upper=None)
-        self._R = _factor_and_check_feasibility(self.A)
+        self._R = _factor_and_check_feasibility(self.get_buffer("A"))
 
     def is_proxable(self) -> bool:
         """Check if the constraint has a computable proximal operator.
@@ -64,45 +65,36 @@ class LinearEquality(Polyhedron):
         """
         return True
 
-    def prox(self, location: torch.Tensor, prox_scaling: float) -> torch.Tensor:
+    def _prox(
+        self, relevant_variable_values: TensorDict, prox_scaling: float
+    ) -> TensorDict:
         """Compute the proximal operator of the affine constraint.
 
         Projects the given location onto the affine subspace {x : A @ x = b}
         by solving the constrained least-squares problem.
-
-        Args:
-            location: Point at which to evaluate the proximal operator.
-            prox_scaling: Scaling factor (unused for equality constraints).
-
-        Returns:
-            torch.Tensor: Projection of location onto the affine subspace.
         """
-        # NOTE(Zach): We may want to add a check where we just return the location
-        # if the residual is sufficiently small.
-        r = self.A @ location - self.b
+        A = self.get_buffer("A")
+        b = self.get_buffer("b")
+
+        r = A @ relevant_variable_values.to_flat_tensor() - b
         temp = torch.linalg.solve_triangular(
-            self.R,
+            self._R,
             torch.linalg.solve_triangular(
-                self.R.T, r.reshape(r.shape[0], 1), upper=False
+                self._R.T, r.reshape(r.shape[0], 1), upper=False
             ),
             upper=True,
         )
-        return location - self.A.T @ temp.reshape(
-            temp.shape[0],
-        )
 
-    @property
-    def R(self) -> torch.Tensor:
-        """Returns cached R factor from QR factorization of A.T.
+        def projection(location: torch.Tensor) -> torch.Tensor:
+            return location - A.T @ temp.reshape(
+                temp.shape[0],
+            )
 
-        This alloow for efficient computation the projection to the constraint set.
-
-        """
-        return self._R
+        return relevant_variable_values.apply(projection)
 
 
 # NOTE(Zach): This helper may be moved or refactored later on.
-def _factor_and_check_feasibility(A: torch.Tensor) -> torch.Tensor | None:
+def _factor_and_check_feasibility(A: torch.Tensor) -> torch.Tensor:
     _, R = torch.linalg.qr(A.T, mode="r")
 
     diag_R = torch.diagonal(R)

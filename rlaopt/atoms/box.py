@@ -4,6 +4,7 @@ import torch
 
 from rlaopt.atoms.polyhedron import Polyhedron
 from rlaopt.expression import Variable
+from rlaopt.ext_tensordict import TensorDict
 
 
 class Box(Polyhedron):
@@ -40,15 +41,15 @@ class Box(Polyhedron):
     def __init__(
         self,
         x: Variable,
-        lower: torch.Tensor | float | None = None,
-        upper: torch.Tensor | float | None = None,
+        lower: torch.Tensor | int | float | None = None,
+        upper: torch.Tensor | int | float | None = None,
     ):
         """Initialize the box constraint atom.
 
         Args:
             x: Variable to constrain.
-            lower (torch.Tensor | float): Lower bound vector (optional).
-            upper: (torch.Tensor | float): Upper bound vector (optional).
+            lower (torch.Tensor | int | float): Lower bound vector (optional).
+            upper: (torch.Tensor | int | float): Upper bound vector (optional).
         """
         super().__init__(x, A=None, b=None, C=None, lower=lower, upper=upper)
 
@@ -61,19 +62,15 @@ class Box(Polyhedron):
         """
         return True
 
-    def prox(self, location: torch.Tensor, prox_scaling: float) -> torch.Tensor:
+    def _prox(
+        self, relevant_variable_values: TensorDict, prox_scaling: float
+    ) -> TensorDict:
         """Compute the proximal operator of the box constraint.
 
         The proximal operator projects onto the box by clamping each element
         to lie within [lower, upper]. The prox_scaling parameter is unused
         because the projection is independent of scaling.
-
-        Args:
-            location: Point at which to evaluate the proximal operator.
-            prox_scaling: Scaling factor (unused for box constraints).
-
-        Returns:
-            torch.Tensor: Projected point with each element clamped to
-                [lower, upper].
         """
-        return torch.clamp(location, self.lower, self.upper)
+        lower = self.get_buffer("lower")
+        upper = self.get_buffer("upper")
+        return relevant_variable_values.apply(lambda x: torch.clamp(x, lower, upper))

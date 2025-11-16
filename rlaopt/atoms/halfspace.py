@@ -4,6 +4,7 @@ import torch
 
 from rlaopt.atoms.polyhedron import Polyhedron
 from rlaopt.expression import Variable
+from rlaopt.ext_tensordict import TensorDict
 
 
 class Halfspace(Polyhedron):
@@ -57,26 +58,25 @@ class Halfspace(Polyhedron):
         """
         return True
 
-    def prox(self, location: torch.Tensor, prox_scaling: float) -> torch.Tensor:
+    def _prox(
+        self, relevant_variable_values: TensorDict, prox_scaling: float
+    ) -> TensorDict:
         """Compute the proximal operator of the halfspace constraint.
 
         The proximal operator projects onto the halfspace by moving the point
         perpendicular to the boundary until it satisfies c^T x <= upper.
-
-        Args:
-            location: Point at which to evaluate the proximal operator.
-            prox_scaling: Scaling factor.
-
-        Returns:
-            torch.Tensor: Projected point satisfying the halfspace constraint.
-                If the point already satisfies the constraint, it is returned
-                unchanged.
         """
-        r = torch.dot(self.C, location) - self.upper
-        # location is feasible
-        if r <= 0:
-            return location
-        # location is infeasible
-        else:
-            c_norm = torch.linalg.norm(self.C, 2)
-            return location - torch.nn.functional.relu(r) * self.C / c_norm**2
+        c = self.get_buffer("C")
+        upper = self.get_buffer("upper")
+
+        def project_onto_halfspace(x: torch.Tensor) -> torch.Tensor:
+            r = torch.dot(c, x) - upper
+            # x is feasible
+            if r <= 0:
+                return x
+            # x is infeasible
+            else:
+                c_norm = torch.linalg.norm(c, 2)
+                return x - torch.nn.functional.relu(r) * c / c_norm**2
+
+        return relevant_variable_values.apply(project_onto_halfspace)

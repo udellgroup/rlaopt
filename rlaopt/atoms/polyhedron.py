@@ -8,6 +8,7 @@ from typing_extensions import Self
 
 from rlaopt.atoms.atom import Atom
 from rlaopt.expression import Variable
+from rlaopt.ext_tensordict import TensorDict
 
 
 class Polyhedron(Atom):
@@ -42,8 +43,8 @@ class Polyhedron(Atom):
         A: torch.Tensor | None = None,
         b: torch.Tensor | None = None,
         C: torch.Tensor | None = None,
-        lower: torch.Tensor | None = None,
-        upper: torch.Tensor | None = None,
+        lower: torch.Tensor | int | float | None = None,
+        upper: torch.Tensor | int | float | None = None,
     ):
         """Initialize the polyhedral constraint atom.
 
@@ -128,9 +129,11 @@ class Polyhedron(Atom):
         """
         return False
 
-    def prox(self, location, prox_scaling):
-        """Prox operator for Polyhedron."""
-        return NotImplementedError("Polyhedron is not proxable")
+    def _prox(
+        self, relevant_variable_values: TensorDict, prox_scaling: float
+    ) -> TensorDict:
+        """Polyhedral constraint does not have a prox operator in general."""
+        raise NotImplementedError("Polyhedron is not proxable")
 
     def subsample(self, indices: torch.Tensor) -> Self:
         """Subsample the polyhedral constraint (not supported).

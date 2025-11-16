@@ -1,11 +1,11 @@
 """Affine expression atom for optimization."""
 
-from __future__ import annotations
-
 import torch
+from typing_extensions import Self
 
 from rlaopt.atoms.atom import Atom
 from rlaopt.expression import Expression, Variable
+from rlaopt.ext_tensordict import TensorDict
 
 
 class Affine(Atom):
@@ -67,20 +67,11 @@ class Affine(Atom):
         """
         return False
 
-    def prox(self, location: torch.Tensor, prox_scaling: float) -> torch.Tensor:
-        """Compute the proximal operator (not supported).
-
-        Args:
-            location: Point at which to evaluate the proximal operator (unused).
-            prox_scaling: Scaling factor for the proximal operator (unused).
-
-        Returns:
-            torch.Tensor: Not applicable.
-
-        Raises:
-            NotImplementedError: Affine transformations are not proxable.
-        """
-        raise NotImplementedError("Affine is not proxable.")
+    def _prox(
+        self, relevant_variable_values: TensorDict, prox_scaling: float
+    ) -> TensorDict:
+        """Proximal operator is not defined for affine transformations."""
+        raise NotImplementedError("Affine atom is not proxable.")
 
     def is_subsamplable(self) -> bool:
         """Check if the affine transformation supports subsampling.
@@ -90,7 +81,7 @@ class Affine(Atom):
         """
         return False
 
-    def subsample(self, indices: torch.Tensor) -> Affine:
+    def subsample(self, indices: torch.Tensor) -> Self:
         """Return a subsampled version of the affine transformation.
 
         Returns:

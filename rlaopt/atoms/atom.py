@@ -5,8 +5,8 @@ from abc import ABC, abstractmethod
 import torch
 from typing_extensions import Self
 
-from rlaopt.expression import Expression, Variable
-from rlaopt.expression.tree import ExprTree
+from rlaopt.expression import Expression, ExprTree, Variable
+from rlaopt.ext_tensordict import TensorDict
 
 
 class Atom(Expression, ABC):
@@ -89,9 +89,32 @@ class Atom(Expression, ABC):
         """
         pass
 
+    def prox(self, variable_values: TensorDict, prox_scaling: float) -> TensorDict:
+        """Proximal operator corresponding to the atom.
+
+        Args:
+            variable_values: TensorDict containing the location at which to evaluate
+                the proximal operator.
+            prox_scaling: Scaling parameter for the proximal operator.
+
+        Returns:
+            TensorDict: Result of applying the proximal operator at the given
+                variable_values. Note that the returned TensorDict may contain only a
+                subset of the variables in variable_values, depending on which variables
+                are relevant to the atom.
+
+        Raises:
+            NotImplementedError: If the atom is not proxable.
+        """
+        relevant_vars = self.select_relevant_variables(variable_values)
+        prox_result = self._prox(relevant_vars, prox_scaling)
+        return prox_result
+
     @abstractmethod
-    def prox(self, location: torch.Tensor, prox_scaling: float) -> torch.Tensor:
-        """Proximal operator corresponding to the atom."""
+    def _prox(
+        self, relevant_variable_values: TensorDict, prox_scaling: float
+    ) -> TensorDict:
+        """Proximal operator implementation for the atom."""
         pass
 
     @abstractmethod

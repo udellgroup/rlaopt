@@ -5,6 +5,7 @@ from typing_extensions import Self
 
 from rlaopt.atoms.atom import Atom
 from rlaopt.expression import Variable
+from rlaopt.ext_tensordict import TensorDict
 
 
 class L1Norm(Atom):
@@ -37,23 +38,21 @@ class L1Norm(Atom):
         """Returns True because L1-norm is proxable."""
         return True
 
-    def prox(self, location, prox_scaling) -> torch.Tensor:
-        """Proximal operator for the scaled L1-norm.
+    def _prox(
+        self, relevant_variable_values: TensorDict, prox_scaling: float
+    ) -> TensorDict:
+        """Compute the proximal operator of the scaled L1-norm.
 
         For the function f(x) = scaling * ||x||_1, the proximal operator is:
         prox_f(v) = sign(v) * max(|v| - scaling * prox_scaling, 0)
-
-        Args:
-            location: Point at which to evaluate the proximal operator
-            prox_scaling: Scaling factor for the proximal operator
-
-        Returns:
-            Result of soft-thresholding operation
         """
-        threshold = self.get_buffer("scaling") * prox_scaling
-        return torch.nn.functional.relu(
-            location - threshold
-        ) - torch.nn.functional.relu(-location - threshold)
+        scaling = self.get_buffer("scaling")
+        threshold = scaling * prox_scaling
+
+        def soft_threshold(x: torch.Tensor) -> torch.Tensor:
+            return torch.sign(x) * torch.nn.functional.relu(torch.abs(x) - threshold)
+
+        return relevant_variable_values.apply(soft_threshold)
 
     def is_subsamplable(self) -> bool:
         """Returns False because L1-norm is not subsamplable."""
