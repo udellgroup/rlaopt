@@ -31,13 +31,13 @@ class LinearEquality(Polyhedron):
         >>> x = Variable((2,), name='x')
         >>> A = torch.tensor([[1.0, 1.0]])
         >>> b = torch.tensor([1.0])
-        >>> constraint = LinEqConstraint(x, A, b)
+        >>> constraint = LinearEquality(x, A, b)
 
         >>> # Multiple equality constraints
         >>> x = Variable((5,), name='x')
         >>> A = torch.randn(3, 5)
         >>> b = torch.randn(3)
-        >>> constraint = LinEqConstraint(x, A, b)
+        >>> constraint = LinearEquality(x, A, b)
 
         >>> # Use proximal operator for projection onto affine subspace
         >>> unconstrained_point = torch.randn(5)

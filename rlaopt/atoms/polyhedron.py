@@ -1,7 +1,9 @@
 """Polyhedron constraint atom for optimization."""
 
 from functools import partial
+from math import isclose
 from typing import Callable
+from warnings import warn
 
 import torch
 from typing_extensions import Self
@@ -148,6 +150,15 @@ class Polyhedron(Atom):
             NotImplementedError: Polyhedron constraints cannot be subsampled.
         """
         raise NotImplementedError("Polyhedron is not subsamplable")
+
+    def _scale(self, scaling: float) -> Self:
+        """Scale the polyhedral constraint."""
+        if isclose(scaling, 0.0):
+            warn(
+                f"Scaling a {self.__class__.__name__} constraint by zero has no effect.",  # noqa: E501
+                UserWarning,
+            )
+        return self  # Scaling does not change the constraint set
 
 
 def _validate(A, C, b, lower, upper):
