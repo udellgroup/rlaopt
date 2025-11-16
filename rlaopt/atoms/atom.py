@@ -25,7 +25,7 @@ class Atom(Expression, ABC):
         - is_smooth() - whether the function is differentiable everywhere
         - is_proxable() - whether the proximal operator is computable
         - forward() - evaluation of the atom
-        - prox() - prox operator of the atom
+        - _prox() - prox operator of the atom
         - is_subsamplable() - whether the atom supports data subsampling
         - subsample() - create a subsampled version of the atom
     """
