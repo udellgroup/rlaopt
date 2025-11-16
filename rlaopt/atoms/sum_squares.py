@@ -39,41 +39,6 @@ class SumSquares(Atom):
                 return True
         return False
 
-    # def prox(self, location, prox_scaling) -> torch.Tensor:
-    #     """Proximal operator for the sum of squares.
-
-    #     Args:
-    #         location: Point at which to evaluate the proximal operator
-    #         prox_scaling: Scaling factor for the proximal operator
-
-    #     Returns:
-    #         Result of the proximal operator
-    #     """
-    #     input_ = self.get_input("x")
-
-    #     if isinstance(input_, Variable):
-    #         return 1 / (1 + 2 * prox_scaling) * location
-
-    #     elif isinstance(input_, Expression):
-    #         # For expressions, SumSquares is only proxable when
-    #         # input is Affine with a Variable root.
-
-    #         if isinstance(input_, Affine):
-    #             if isinstance(input_.get_input("x"), Variable):
-    #                 return _sum_squares_affine_prox(input_, location, prox_scaling)
-
-    #             else:
-    #                 raise NotImplementedError(
-    #                     "Proximal operator for composition of SumSquares and Affine "
-    #                     "where Affine has non-Variable root is not supported."
-    #                 )
-
-    #         # SumSquares of general Expression is not proxable
-    #         raise NotImplementedError(
-    #             "Proximal operator for SumSquares and general Expression "
-    #             "is not supported."
-    #         )
-
     def _prox(
         self, relevant_variable_values: TensorDict, prox_scaling: float
     ) -> TensorDict:
