@@ -135,9 +135,6 @@ def _attempt_split(expr: AddExpression) -> tuple[Expression, list[Atom]]:
     smooth_part = expr.get_smooth_part()
     non_smooth_exprs = expr.get_non_smooth_exprs()
 
-    print(f"Smooth part: {smooth_part}")
-    print(f"Non-smooth parts: {non_smooth_exprs}")
-
     # All non-smooth terms must be proxable atoms
     if any(
         not (isinstance(expr, Atom) and expr.is_proxable()) for expr in non_smooth_exprs

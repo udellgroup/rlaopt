@@ -28,9 +28,6 @@ def concrete_expression():
         def is_smooth(self):
             return True
 
-        def is_proxable(self):
-            return False
-
         def forward(self):
             return torch.sum(self.x.value**2) + torch.sum(self.y.value**2)
 

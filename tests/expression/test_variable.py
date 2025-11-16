@@ -100,10 +100,9 @@ class TestVariable:
     # Abstract method implementations
     # ----------------------
 
-    def test_is_smooth_and_is_proxable(self, vector_var):
-        """Test variables are smooth but not proxable."""
+    def test_is_smooth(self, vector_var):
+        """Test variables are smooth."""
         assert vector_var.is_smooth() is True
-        assert vector_var.is_proxable() is False
 
     def test_tree(self, vector_var):
         """Test tree() returns correct structure."""

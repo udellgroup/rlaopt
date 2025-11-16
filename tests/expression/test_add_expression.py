@@ -5,7 +5,6 @@ import torch
 
 from rlaopt.expression import Expression, Variable
 from rlaopt.expression.op_expressions import AddExpression
-from rlaopt.ext_tensordict import TensorDict
 
 
 @pytest.fixture
@@ -107,110 +106,6 @@ class TestAddExpression:
         assert torch.equal(multi_expr.op(values), torch.tensor([12.0, 15.0, 18.0]))
 
     # ----------------------
-    # Smoothness and proxability tests
-    # ----------------------
-
-    def test_proxability_with_different_term_combinations(
-        self, smooth_expr, another_smooth_expr, non_smooth_expr, non_proxable_expr
-    ):
-        """Test proxability rules for different expression combinations."""
-        # All smooth expressions are proxable
-        all_smooth = AddExpression(smooth_expr, another_smooth_expr)
-        assert all_smooth.is_proxable() is True
-        assert all_smooth.num_non_smooth_exprs == 0
-
-        # One non-smooth proxable term is proxable
-        one_non_smooth = AddExpression(smooth_expr, non_smooth_expr)
-        assert one_non_smooth.is_proxable() is True
-        assert one_non_smooth.num_non_smooth_exprs == 1
-
-        # Non-proxable term makes sum non-proxable
-        with_non_proxable = AddExpression(smooth_expr, non_proxable_expr)
-        assert with_non_proxable.is_proxable() is False
-
-    def test_overlapping_parameters_prevents_proxability(self):
-        """Test non-smooth terms with overlapping parameters are not proxable."""
-        x = Variable((5,), name="x")
-
-        class MockNonSmoothWithParam(Expression):
-            def __init__(self, var):
-                super().__init__()
-                self.var = var
-
-            def is_smooth(self):
-                return False
-
-            def is_proxable(self):
-                return True
-
-            def forward(self):
-                return self.var.forward()
-
-            def tree(self):
-                raise NotImplementedError()
-
-        expr1 = MockNonSmoothWithParam(x)
-        expr2 = MockNonSmoothWithParam(x)
-        add_expr = AddExpression(expr1, expr2)
-
-        assert add_expr.is_proxable() is False
-
-    # ----------------------
-    # Proximal operator tests
-    # ----------------------
-
-    def test_prox_behavior_based_on_proxability(
-        self, smooth_expr, non_smooth_expr, non_proxable_expr
-    ):
-        """Test prox() behavior for different proxability scenarios."""
-        # Raises error when not proxable
-        non_prox_sum = AddExpression(smooth_expr, non_proxable_expr)
-        with pytest.raises(NotImplementedError, match="not proxable"):
-            non_prox_sum.prox(torch.ones(5), 1.0)
-
-        # Single non-smooth term delegates correctly
-        single_non_smooth = AddExpression(smooth_expr, non_smooth_expr)
-        location = torch.ones(5) * 10
-        result = single_non_smooth.prox(location, 1.0)
-        assert torch.equal(
-            result, torch.ones(5) * 5
-        )  # MockNonSmooth.prox returns location * 0.5
-
-        # Multiple non-smooth terms use dict interface
-        class MockNonSmoothSeparate(Expression):
-            def __init__(self, name):
-                super().__init__()
-                self.param_name = name
-
-            def is_smooth(self):
-                return False
-
-            def is_proxable(self):
-                return True
-
-            def prox(self, location, prox_scaling):
-                return location * 0.5
-
-            def forward(self):
-                return torch.ones(3)
-
-            def tree(self):
-                raise NotImplementedError()
-
-        expr1 = MockNonSmoothSeparate("expr1")
-        expr2 = MockNonSmoothSeparate("expr2")
-        multi_non_smooth = AddExpression(expr1, expr2)
-
-        location_dict = TensorDict(
-            {"param1": torch.ones(3) * 10, "param2": torch.ones(3) * 20}
-        )
-        result = multi_non_smooth.prox(location_dict, 1.0)
-
-        assert isinstance(result, TensorDict)
-        assert torch.equal(result["param1"], torch.ones(3) * 5)
-        assert torch.equal(result["param2"], torch.ones(3) * 10)
-
-    # ----------------------
     # Smooth/non-smooth partitioning tests
     # ----------------------
 
@@ -226,17 +121,17 @@ class TestAddExpression:
         # Verify it evaluates to the smooth term's value
         assert torch.equal(smooth_part.forward(), smooth_expr.forward())
 
-    def test_get_non_smooth_part_mixed_terms(self, smooth_expr, non_smooth_expr):
-        """Test get_non_smooth_part returns only non-smooth terms."""
+    def test_get_non_smooth_exprs_mixed_terms(self, smooth_expr, non_smooth_expr):
+        """Test get_non_smooth_exprs returns only non-smooth terms as a list."""
         mixed = AddExpression(smooth_expr, non_smooth_expr)
 
-        non_smooth_part = mixed.get_non_smooth_part()
+        non_smooth_exprs = mixed.get_non_smooth_exprs()
 
-        assert non_smooth_part is not None
-        assert non_smooth_part.is_smooth() is False
-        assert non_smooth_part.n_exprs == 1
+        assert isinstance(non_smooth_exprs, list)
+        assert len(non_smooth_exprs) == 1
+        assert non_smooth_exprs[0].is_smooth() is False
         # Verify it evaluates to the non-smooth term's value
-        assert torch.equal(non_smooth_part.forward(), non_smooth_expr.forward())
+        assert torch.equal(non_smooth_exprs[0].forward(), non_smooth_expr.forward())
 
     def test_get_smooth_part_all_smooth(self, smooth_expr, another_smooth_expr):
         """Test get_smooth_part with all smooth terms returns all terms."""
@@ -250,49 +145,54 @@ class TestAddExpression:
         # Should equal the original sum
         assert torch.equal(smooth_part.forward(), all_smooth.forward())
 
-    def test_get_non_smooth_part_all_smooth(self, smooth_expr, another_smooth_expr):
-        """Test get_non_smooth_part returns None when all terms are smooth."""
+    def test_get_non_smooth_exprs_all_smooth(self, smooth_expr, another_smooth_expr):
+        """Test get_non_smooth_exprs returns empty list when all terms are smooth."""
         all_smooth = AddExpression(smooth_expr, another_smooth_expr)
 
-        non_smooth_part = all_smooth.get_non_smooth_part()
+        non_smooth_exprs = all_smooth.get_non_smooth_exprs()
 
-        assert non_smooth_part is None
+        assert isinstance(non_smooth_exprs, list)
+        assert len(non_smooth_exprs) == 0
 
     def test_get_smooth_part_all_non_smooth(self, non_smooth_expr, non_proxable_expr):
-        """Test get_smooth_part returns None when all terms are non-smooth."""
+        """Test get_smooth_part returns Constant(0.0) when all terms are non-smooth."""
+        from rlaopt.expression.constant import Constant
+
         all_non_smooth = AddExpression(non_smooth_expr, non_proxable_expr)
 
         smooth_part = all_non_smooth.get_smooth_part()
 
-        assert smooth_part is None
+        assert smooth_part is not None
+        assert isinstance(smooth_part, Constant)
+        assert smooth_part.is_smooth() is True
+        assert torch.equal(smooth_part.forward(), torch.tensor(0.0))
 
-    def test_get_non_smooth_part_all_non_smooth(
+    def test_get_non_smooth_exprs_all_non_smooth(
         self, non_smooth_expr, non_proxable_expr
     ):
-        """Test get_non_smooth_part with all non-smooth returns all terms."""
+        """Test get_non_smooth_exprs with all non-smooth returns all terms."""
         all_non_smooth = AddExpression(non_smooth_expr, non_proxable_expr)
 
-        non_smooth_part = all_non_smooth.get_non_smooth_part()
+        non_smooth_exprs = all_non_smooth.get_non_smooth_exprs()
 
-        assert non_smooth_part is not None
-        assert non_smooth_part.n_exprs == 2
-        assert non_smooth_part.is_smooth() is False
-        # Should equal the original sum
-        assert torch.equal(non_smooth_part.forward(), all_non_smooth.forward())
+        assert isinstance(non_smooth_exprs, list)
+        assert len(non_smooth_exprs) == 2
+        for expr in non_smooth_exprs:
+            assert expr.is_smooth() is False
 
     def test_partition_completeness(self, smooth_expr, non_smooth_expr):
         """Test that smooth + non-smooth parts equal the original sum."""
         mixed = AddExpression(smooth_expr, non_smooth_expr)
 
         smooth_part = mixed.get_smooth_part()
-        non_smooth_part = mixed.get_non_smooth_part()
+        non_smooth_exprs = mixed.get_non_smooth_exprs()
 
         # Both parts should exist
         assert smooth_part is not None
-        assert non_smooth_part is not None
+        assert len(non_smooth_exprs) == 1
 
         # Sum of parts should equal original
-        combined = smooth_part.forward() + non_smooth_part.forward()
+        combined = smooth_part.forward() + non_smooth_exprs[0].forward()
         assert torch.equal(combined, mixed.forward())
 
     def test_multiple_smooth_and_non_smooth_terms(
@@ -304,7 +204,7 @@ class TestAddExpression:
         )
 
         smooth_part = mixed.get_smooth_part()
-        non_smooth_part = mixed.get_non_smooth_part()
+        non_smooth_exprs = mixed.get_non_smooth_exprs()
 
         # Should have 2 smooth terms
         assert smooth_part is not None
@@ -312,12 +212,13 @@ class TestAddExpression:
         assert smooth_part.is_smooth() is True
 
         # Should have 2 non-smooth terms
-        assert non_smooth_part is not None
-        assert non_smooth_part.n_exprs == 2
-        assert non_smooth_part.is_smooth() is False
+        assert len(non_smooth_exprs) == 2
+        for expr in non_smooth_exprs:
+            assert expr.is_smooth() is False
 
         # Verify sum
-        combined = smooth_part.forward() + non_smooth_part.forward()
+        non_smooth_sum = sum(expr.forward() for expr in non_smooth_exprs)
+        combined = smooth_part.forward() + non_smooth_sum
         assert torch.equal(combined, mixed.forward())
 
     # ----------------------
