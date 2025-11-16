@@ -21,7 +21,7 @@ def another_smooth_expr():
 
 @pytest.fixture
 def non_smooth_expr():
-    """Create a non-smooth proxable expression mock."""
+    """Create a non-smooth expression mock."""
 
     class MockNonSmooth(Expression):
         def __init__(self):
@@ -29,12 +29,6 @@ def non_smooth_expr():
 
         def is_smooth(self):
             return False
-
-        def is_proxable(self):
-            return True
-
-        def prox(self, location, prox_scaling):
-            return location * 0.5
 
         def forward(self):
             return torch.ones(5) * 3
@@ -46,17 +40,14 @@ def non_smooth_expr():
 
 
 @pytest.fixture
-def non_proxable_expr():
-    """Create a non-smooth non-proxable expression mock."""
+def another_non_smooth_expr():
+    """Create another non-smooth expression mock."""
 
-    class MockNonProxable(Expression):
+    class MockNonSmooth2(Expression):
         def __init__(self):
             super().__init__()
 
         def is_smooth(self):
-            return False
-
-        def is_proxable(self):
             return False
 
         def forward(self):
@@ -65,7 +56,7 @@ def non_proxable_expr():
         def tree(self):
             raise NotImplementedError()
 
-    return MockNonProxable()
+    return MockNonSmooth2()
 
 
 class TestAddExpression:
@@ -154,11 +145,13 @@ class TestAddExpression:
         assert isinstance(non_smooth_exprs, list)
         assert len(non_smooth_exprs) == 0
 
-    def test_get_smooth_part_all_non_smooth(self, non_smooth_expr, non_proxable_expr):
+    def test_get_smooth_part_all_non_smooth(
+        self, non_smooth_expr, another_non_smooth_expr
+    ):
         """Test get_smooth_part returns Constant(0.0) when all terms are non-smooth."""
         from rlaopt.expression.constant import Constant
 
-        all_non_smooth = AddExpression(non_smooth_expr, non_proxable_expr)
+        all_non_smooth = AddExpression(non_smooth_expr, another_non_smooth_expr)
 
         smooth_part = all_non_smooth.get_smooth_part()
 
@@ -168,10 +161,10 @@ class TestAddExpression:
         assert torch.equal(smooth_part.forward(), torch.tensor(0.0))
 
     def test_get_non_smooth_exprs_all_non_smooth(
-        self, non_smooth_expr, non_proxable_expr
+        self, non_smooth_expr, another_non_smooth_expr
     ):
         """Test get_non_smooth_exprs with all non-smooth returns all terms."""
-        all_non_smooth = AddExpression(non_smooth_expr, non_proxable_expr)
+        all_non_smooth = AddExpression(non_smooth_expr, another_non_smooth_expr)
 
         non_smooth_exprs = all_non_smooth.get_non_smooth_exprs()
 
@@ -196,11 +189,11 @@ class TestAddExpression:
         assert torch.equal(combined, mixed.forward())
 
     def test_multiple_smooth_and_non_smooth_terms(
-        self, smooth_expr, another_smooth_expr, non_smooth_expr, non_proxable_expr
+        self, smooth_expr, another_smooth_expr, non_smooth_expr, another_non_smooth_expr
     ):
         """Test partitioning with multiple terms of each type."""
         mixed = AddExpression(
-            smooth_expr, non_smooth_expr, another_smooth_expr, non_proxable_expr
+            smooth_expr, non_smooth_expr, another_smooth_expr, another_non_smooth_expr
         )
 
         smooth_part = mixed.get_smooth_part()
