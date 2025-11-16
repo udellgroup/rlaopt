@@ -19,7 +19,7 @@ class AddExpression(_NAryOpExpression):
         *exprs: Expressions to sum together.
     """
 
-    def __init__(self, *exprs):
+    def __init__(self, *exprs: Expression):
         """Initialize sum expression.
 
         Note: Flattening and optimization are handled by _create_add in utils.py.
@@ -47,69 +47,24 @@ class AddExpression(_NAryOpExpression):
         """
         return self._op(values)
 
-    # def is_proxable(self):
-    #     """Check if sum is proxable.
+    def get_non_smooth_exprs(self) -> list[Expression]:
+        """Get the non-smooth part of the sum expression as a list of expressions.
 
-    #     A sum is proxable if:
-    #     1. All non-smooth terms are proxable, AND
-    #     2. Non-smooth terms operate on disjoint sets of variables.
-
-    #     Returns:
-    #         bool: True if the sum is proxable.
-    #     """
-    #     non_smooth_exprs = self._get_non_smooth_exprs()
-
-    #     # All non-smooth terms must be proxable
-    #     if any(not expr.is_proxable() for expr in non_smooth_exprs):
-    #         return False
-
-    #     # Check for variable overlap
-    #     seen_variables = set()
-    #     for expr in non_smooth_exprs:
-    #         expr_var_names = set(expr.get_variable_names())
-    #         if seen_variables & expr_var_names:  # intersection
-    #             return False
-    #         seen_variables.update(expr_var_names)
-
-    #     return True
-
-    def _get_smooth_exprs(self) -> list[Expression]:
-        return [e for e in self.exprs if e.is_smooth()]
-
-    def _get_non_smooth_exprs(self) -> list[Expression]:
+        Returns:
+            list[Expression]: Non-smooth part of the sum.
+        """
         return [e for e in self.exprs if not e.is_smooth()]
 
-    def get_smooth_part(self) -> Expression | None:
+    def get_smooth_part(self) -> Expression:
         """Get the smooth part of the sum expression.
 
         Returns:
-            Expression or None: Smooth part of the sum, or None if no smooth terms.
+            Expression: Smooth part of the sum.
         """
-        smooth_exprs = self._get_smooth_exprs()
+        smooth_exprs = [e for e in self.exprs if e.is_smooth()]
         if not smooth_exprs:
-            return None
+            return Constant(0.0)
         return AddExpression(*smooth_exprs)
-
-    def get_non_smooth_part(self) -> Expression | None:
-        """Get the non-smooth part of the sum expression.
-
-        Returns:
-            Expression or None: Non-smooth part of the sum, or None if
-                no non-smooth terms.
-        """
-        non_smooth_exprs = self._get_non_smooth_exprs()
-        if not non_smooth_exprs:
-            return None
-        return AddExpression(*non_smooth_exprs)
-
-    @property
-    def num_non_smooth_exprs(self):
-        """Get count of non-smooth terms.
-
-        Returns:
-            int: Number of non-smooth expressions in the sum.
-        """
-        return len(self._get_non_smooth_exprs())
 
     def _build_op(self) -> Callable[[list[torch.Tensor]], torch.Tensor]:
         """Build the addition op method for AddExpression."""
@@ -151,7 +106,7 @@ class ProductExpression(_NAryOpExpression):
         matmul: Whether to use matrix multiplication.
     """
 
-    def __init__(self, *exprs, matmul: bool = False):
+    def __init__(self, *exprs: Expression, matmul: bool = False):
         """Initialize product expression.
 
         Args:

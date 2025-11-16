@@ -9,12 +9,10 @@ non-smooth component. This is useful in first-order optimization algorithms such
 as proximal gradient descent and its variants.
 """
 
-from typing import Callable
-
 import torch
 from tensordict import merge_tensordicts
-from typing_extensions import Self
 
+from rlaopt.atoms import Atom
 from rlaopt.expression import AddExpression, Expression
 from rlaopt.ext_tensordict import TensorDict
 
@@ -28,27 +26,19 @@ class OperatorSplit:
     and the proximal operator of `r`.
 
     Args:
-        smooth_expr (Expression): A differentiable (smooth) expression object.
-        prox_expr (Expression, optional): A proxable (possibly non-smooth) expression
-            object. If None, only the smooth term is used.
+        expr (Expression): An expression object representing the composite function.
 
     Raises:
-        ValueError: If `smooth_expr` is not smooth.
-        ValueError: If `prox_expr` is provided and is not proxable.
-        ValueError: If the parameter structures of `smooth_expr` and `prox_expr`
-            are incompatible.
-
-    Attributes:
-        f (Expression): The smooth component of the composite function.
-        r (Expression): The proximal (possibly non-smooth) component.
+        ValueError: If the expression cannot be split into smooth and proxable parts.
     """
 
-    def __init__(self, smooth_expr: Expression, prox_expr: Expression | None = None):
+    def __init__(self, expr: Expression):
         """Initializes the OperatorSplit object."""
-        _validate_input(smooth_expr, prox_expr)
-        self._f = smooth_expr
-        self._r = prox_expr
-        self._prox = _build_prox(self._r)
+        # Start by casting to AddExpression for easier splitting
+        if not isinstance(expr, AddExpression):
+            expr = AddExpression(expr)
+
+        self._f, self._r = _attempt_split(expr)
 
     @property
     def f(self) -> Expression:
@@ -56,23 +46,19 @@ class OperatorSplit:
         return self._f
 
     @property
-    def r(self) -> Expression | None:
+    def r(self) -> list[Atom]:
         """Returns the proximal component of the composite function."""
         return self._r
 
     @property
     def variable_values(self) -> TensorDict:
         """Returns the variable values associated with the composite function."""
-        if self._r:
-            # Return variable values from f and r, avoiding duplication
-            f_var_vals = self._f.variable_values
-            r_var_vals = self._r.variable_values
+        td_f = self._f.variable_values
+        tds_r = [r.variable_values for r in self._r]
+        td_r = merge_tensordicts(*tds_r) if tds_r else TensorDict({})
+        return merge_tensordicts(td_f, td_r)
 
-            # Exclude keys from r that are already in f, then merge
-            r_only_vals = r_var_vals.exclude(*self._f.get_variable_names())
-            return merge_tensordicts(f_var_vals, r_only_vals)
-        return self._f.variable_values
-
+    @property
     def evaluate(self, variable_values: TensorDict) -> torch.Tensor:
         """Evaluate the composite objective function `f + r` at the given variables.
 
@@ -83,15 +69,11 @@ class OperatorSplit:
             torch.Tensor: The scalar value of the objective function
                 at `variable_values`.
         """
-        f_eval = self._f.evaluate(variable_values)
+        val_f = self._f.evaluate(variable_values)
+        val_r = sum(r.evaluate(variable_values) for r in self._r)
+        return val_f + val_r
 
-        if self._r:
-            r_eval = self._r.evaluate(variable_values)
-            return f_eval + r_eval
-
-        return f_eval
-
-    def f_func(self, variable_values: TensorDict) -> torch.Tensor:
+    def func_f(self, variable_values: TensorDict) -> torch.Tensor:
         """Evaluate the smooth part of the objective function at the given variables.
 
         Args:
@@ -112,7 +94,7 @@ class OperatorSplit:
             TensorDict: A dictionary of gradients with the same structure
                 as `variable_values`.
         """
-        return torch.func.grad(self.f_func)(variable_values)
+        return torch.func.grad(self.func_f)(variable_values)
 
     def hvp_f(self, variable_values: TensorDict, v: torch.Tensor) -> torch.Tensor:
         """Compute the Hessian-vector product of the smooth part of the objective.
@@ -142,61 +124,32 @@ class OperatorSplit:
         Returns:
             TensorDict: Updated variables after applying the proximal operator.
         """
-        return self._prox(variable_values, eta)
-
-    @classmethod
-    def from_expression(cls, composite_expr: Expression) -> Self:
-        """Create an OperatorSplit instance from an expression.
-
-        Args:
-            composite_expr (Expression): An expression representing
-                a composite objective function.
-
-        Raises:
-            ValueError: If the expression cannot be split into smooth
-                and proximal parts.
-
-        Returns:
-            Self: An instance of OperatorSplit.
-        """
-        if isinstance(composite_expr, AddExpression):
-            smooth_expr = composite_expr.get_smooth_part()
-            prox_expr = composite_expr.get_non_smooth_part()
-            return cls(smooth_expr, prox_expr)
-        elif composite_expr.is_smooth():
-            return cls(composite_expr, None)
-        else:
-            raise ValueError("Cannot create OperatorSplit from expression.")
+        for r in self._r:
+            variable_values_update = r.prox(variable_values, eta)
+            variable_values.update(variable_values_update)
+        return variable_values
 
 
-def _validate_input(smooth_expr: Expression, prox_expr: Expression | None):
-    if not smooth_expr.is_smooth():
-        raise ValueError("Smooth expression is not smooth.")
+def _attempt_split(expr: AddExpression) -> tuple[Expression, list[Atom]]:
+    smooth_part = expr.get_smooth_part()
+    non_smooth_exprs = expr.get_non_smooth_exprs()
 
-    if prox_expr and not prox_expr.is_proxable():
-        raise ValueError("Proximal expression is not proxable.")
+    # All non-smooth terms must be proxable atoms
+    if any(
+        not (isinstance(expr, Atom) and expr.is_proxable()) for expr in non_smooth_exprs
+    ):
+        raise ValueError(
+            "All non-smooth terms must be proxable atoms for OperatorSplit."
+        )
 
+    # Check for variable disjointness (this is essential for proximal gradient)
+    seen_variables = set()
+    for expr in non_smooth_exprs:
+        expr_var_names = set(expr.get_variable_names())
+        if seen_variables & expr_var_names:
+            raise ValueError(
+                "Non-smooth terms must operate on disjoint sets of variables."
+            )
+        seen_variables.update(expr_var_names)
 
-def _build_prox(
-    prox_expr: Expression | None,
-) -> Callable[[TensorDict, float], TensorDict]:
-    if prox_expr:
-        if isinstance(prox_expr, AddExpression):
-            num_non_smooth_exprs = prox_expr.num_non_smooth_exprs
-        else:
-            num_non_smooth_exprs = 1
-
-        if num_non_smooth_exprs > 1:
-
-            def prox(var_vals: TensorDict, eta: float) -> TensorDict:
-                return prox_expr.prox(var_vals, eta)
-        else:
-
-            def prox(var_vals: TensorDict, eta: float) -> TensorDict:
-                return var_vals.apply(lambda p: prox_expr.prox(p, eta))
-    else:
-
-        def prox(var_vals: TensorDict, eta: float) -> TensorDict:
-            return var_vals
-
-    return prox
+    return smooth_part, non_smooth_exprs
