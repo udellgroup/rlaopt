@@ -59,7 +59,6 @@ class OperatorSplit:
             return td_f
         return merge_tensordicts(td_f, *tds_r)
 
-    @property
     def evaluate(self, variable_values: TensorDict) -> torch.Tensor:
         """Evaluate the composite objective function `f + r` at the given variables.
 
