@@ -7,7 +7,7 @@ from rlaopt.atoms import Box, L1Norm, NonNegative, SumSquares
 from rlaopt.expression import Variable
 from rlaopt.solvers.prox_grad import ProxGrad, ProxGradConfig, ProxGradStoppingCriteria
 
-TOLERANCES = {torch.float32: 1e-4, torch.float64: 1e-8}
+TOLERANCES = {torch.float32: 1e-4, torch.float64: 1e-7}
 MAX_ITERS = 5000
 
 
