@@ -156,7 +156,6 @@ class Polyhedron(Atom):
         if isclose(scaling, 0.0):
             warn(
                 f"Scaling a {self.__class__.__name__} constraint by zero has no effect.",  # noqa: E501
-                UserWarning,
             )
         return self  # Scaling does not change the constraint set
 

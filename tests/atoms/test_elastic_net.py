@@ -2,9 +2,11 @@
 
 import pytest
 import torch
+from tensordict import assert_allclose_td
 
 from rlaopt.atoms.elastic_net import ElasticNet
 from rlaopt.expression import ExprTree, Variable
+from rlaopt.ext_tensordict import TensorDict
 
 
 @pytest.fixture
@@ -25,14 +27,14 @@ class TestElasticNetInitialization:
     def test_init_default_scaling(self, simple_variable):
         """Test initialization with default scaling factors."""
         atom = ElasticNet(simple_variable)
-        assert torch.isclose(atom.l1_scaling, torch.tensor(1.0))
-        assert torch.isclose(atom.l2_scaling, torch.tensor(1.0))
+        assert torch.isclose(atom.get_buffer("l1_scaling"), torch.tensor(1.0))
+        assert torch.isclose(atom.get_buffer("l2_scaling"), torch.tensor(1.0))
 
     def test_init_custom_scaling(self, simple_variable):
         """Test initialization with custom scaling factors."""
         atom = ElasticNet(simple_variable, l1_scaling=0.5, l2_scaling=2.0)
-        assert torch.isclose(atom.l1_scaling, torch.tensor(0.5))
-        assert torch.isclose(atom.l2_scaling, torch.tensor(2.0))
+        assert torch.isclose(atom.get_buffer("l1_scaling"), torch.tensor(0.5))
+        assert torch.isclose(atom.get_buffer("l2_scaling"), torch.tensor(2.0))
 
 
 class TestElasticNetForward:
@@ -75,35 +77,37 @@ class TestElasticNetProx:
     def test_prox_basic(self, simple_variable):
         """Test proximal operator with unit scaling."""
         atom = ElasticNet(simple_variable, l1_scaling=1.0, l2_scaling=1.0)
-        location = torch.tensor([3.0, -4.0, 1.0])
+        location = TensorDict({simple_variable.name: torch.tensor([3.0, -4.0, 1.0])})
         result = atom.prox(location, prox_scaling=1.0)
         # threshold = 1.0, l2_term = 1 + 1*1 = 2
         # soft_threshold([3, -4, 1], 1) = [2, -3, 0]
         # result = [2, -3, 0] / 2 = [1, -1.5, 0]
-        expected = torch.tensor([1.0, -1.5, 0.0])
-        assert torch.allclose(result, expected)
+        expected = TensorDict({simple_variable.name: torch.tensor([1.0, -1.5, 0.0])})
+        assert_allclose_td(result, expected)
 
     def test_prox_lasso_like(self, simple_variable):
         """Test proximal operator with L1 emphasis."""
         atom = ElasticNet(simple_variable, l1_scaling=1.0, l2_scaling=0.0)
-        location = torch.tensor([2.0, -3.0, 0.5])
+        location = TensorDict({simple_variable.name: torch.tensor([2.0, -3.0, 0.5])})
         result = atom.prox(location, prox_scaling=1.0)
         # Pure soft-thresholding when l2_scaling=0
-        expected = torch.tensor([1.0, -2.0, 0.0])
-        assert torch.allclose(result, expected)
+        expected = TensorDict({simple_variable.name: torch.tensor([1.0, -2.0, 0.0])})
+        assert_allclose_td(result, expected)
 
     def test_prox_ridge_like(self, simple_variable):
         """Test proximal operator with L2 emphasis."""
         atom = ElasticNet(simple_variable, l1_scaling=0.0, l2_scaling=2.0)
-        location = torch.tensor([4.0, -6.0, 2.0])
+        location = TensorDict({simple_variable.name: torch.tensor([4.0, -6.0, 2.0])})
         result = atom.prox(location, prox_scaling=1.0)
         # No thresholding when l1_scaling=0, just scaling by 1/(1+2*1)=1/3
-        expected = torch.tensor([4.0 / 3, -2.0, 2.0 / 3])
-        assert torch.allclose(result, expected)
+        expected = TensorDict(
+            {simple_variable.name: torch.tensor([4.0 / 3, -2.0, 2.0 / 3])}
+        )
+        assert_allclose_td(result, expected)
 
 
-class TestElasticNetProperties:
-    """Tests for ElasticNet property methods."""
+class TestElasticNetAbstractMethods:
+    """Tests for ElasticNet abstract method implementations."""
 
     def test_is_smooth_returns_false(self, simple_variable):
         """Test that elastic net is not smooth due to L1 component."""

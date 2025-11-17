@@ -2,9 +2,11 @@
 
 import pytest
 import torch
+from tensordict import assert_allclose_td
 
 from rlaopt.atoms.l1_norm import L1Norm
 from rlaopt.expression import ExprTree, Variable
+from rlaopt.ext_tensordict import TensorDict
 
 
 @pytest.fixture
@@ -25,20 +27,20 @@ class TestL1NormInitialization:
     def test_init_with_float_scaling(self, simple_variable):
         """Test initialization with float scaling."""
         atom = L1Norm(simple_variable, scaling=2.0)
-        assert torch.isclose(atom.scaling, torch.tensor(2.0))
+        assert torch.isclose(atom.get_buffer("scaling"), torch.tensor(2.0))
 
     def test_init_with_tensor_scaling(self, simple_variable):
         """Test initialization with tensor scaling."""
         scaling = torch.tensor(3.5)
         atom = L1Norm(simple_variable, scaling=scaling)
-        assert torch.isclose(atom.scaling, torch.tensor(3.5))
+        assert torch.isclose(atom.get_buffer("scaling"), torch.tensor(3.5))
 
     def test_init_with_parameter_scaling(self, simple_variable):
         """Test initialization with nn.Parameter scaling."""
         scaling = torch.nn.Parameter(torch.tensor(1.5))
         atom = L1Norm(simple_variable, scaling=scaling)
-        assert isinstance(atom.scaling, torch.nn.Parameter)
-        assert torch.isclose(atom.scaling, torch.tensor(1.5))
+        assert isinstance(atom.get_buffer("scaling"), torch.nn.Parameter)
+        assert torch.isclose(atom.get_buffer("scaling"), torch.tensor(1.5))
 
 
 class TestL1NormForward:
@@ -72,27 +74,27 @@ class TestL1NormProx:
     def test_prox_soft_threshold_basic(self, simple_variable):
         """Test proximal operator performs soft thresholding."""
         atom = L1Norm(simple_variable, scaling=1.0)
-        location = torch.tensor([2.0, -3.0, 0.5])
+        location = TensorDict({simple_variable.name: torch.tensor([2.0, -3.0, 0.5])})
         result = atom.prox(location, prox_scaling=1.0)
-        expected = torch.tensor([1.0, -2.0, 0.0])
-        assert torch.allclose(result, expected)
+        expected = TensorDict({simple_variable.name: torch.tensor([1.0, -2.0, 0.0])})
+        assert_allclose_td(result, expected)
 
     def test_prox_with_scaling_factor(self, simple_variable):
         """Test proximal operator with non-unit scaling."""
         atom = L1Norm(simple_variable, scaling=2.0)
-        location = torch.tensor([5.0, -5.0, 1.0])
+        location = TensorDict({simple_variable.name: torch.tensor([5.0, -5.0, 1.0])})
         result = atom.prox(location, prox_scaling=1.0)
         # threshold = 2.0 * 1.0 = 2.0
-        expected = torch.tensor([3.0, -3.0, 0.0])
-        assert torch.allclose(result, expected)
+        expected = TensorDict({simple_variable.name: torch.tensor([3.0, -3.0, 0.0])})
+        assert_allclose_td(result, expected)
 
     def test_prox_all_below_threshold(self, simple_variable):
         """Test proximal operator when all values below threshold."""
         atom = L1Norm(simple_variable, scaling=1.0)
-        location = torch.tensor([0.5, -0.3, 0.2])
+        location = TensorDict({simple_variable.name: torch.tensor([0.5, -0.3, 0.2])})
         result = atom.prox(location, prox_scaling=1.0)
-        expected = torch.zeros(3)
-        assert torch.allclose(result, expected)
+        expected = TensorDict({simple_variable.name: torch.zeros(3)})
+        assert_allclose_td(result, expected)
 
 
 class TestL1NormProperties:

@@ -41,34 +41,40 @@ class TestPolyhedron:
     def test_init_with_full_constraints(self, vector_var, full_constraint_data):
         """Test initialization with both equality and inequality constraints."""
         poly = Polyhedron(vector_var, **full_constraint_data)
-        assert poly.A is not None
-        assert poly.b is not None
-        assert poly.C is not None
-        assert poly.lower is not None
-        assert poly.upper is not None
+        assert poly.get_buffer("A") is not None
+        assert poly.get_buffer("b") is not None
+        assert poly.get_buffer("C") is not None
+        assert poly.get_buffer("lower") is not None
+        assert poly.get_buffer("upper") is not None
 
     def test_init_with_inequality_only(self, vector_var, inequality_only_data):
         """Test initialization with only inequality constraints."""
         poly = Polyhedron(vector_var, **inequality_only_data)
-        assert poly.A is None
-        assert poly.b is None
-        assert poly.C is not None
+        assert poly.get_buffer("A") is None
+        assert poly.get_buffer("b") is None
+        assert poly.get_buffer("C") is not None
 
     def test_init_with_scalar_bounds(self, vector_var):
         """Test initialization with scalar lower and upper bounds."""
         poly = Polyhedron(vector_var, C=torch.eye(5), lower=0.0, upper=1.0)
-        assert poly.lower.shape == torch.Size([])
-        assert poly.upper.shape == torch.Size([])
+        assert poly.get_buffer("lower").shape == torch.Size([])
+        assert poly.get_buffer("upper").shape == torch.Size([])
 
     def test_init_auto_fills_missing_bounds(self, vector_var):
         """Test initialization auto-fills infinity for missing bounds."""
         # Only upper provided
         poly_upper = Polyhedron(vector_var, C=torch.eye(5), upper=torch.ones(5))
-        assert torch.isinf(poly_upper.lower) and poly_upper.lower < 0
+        assert (
+            torch.isinf(poly_upper.get_buffer("lower"))
+            and poly_upper.get_buffer("lower") < 0
+        )
 
         # Only lower provided
         poly_lower = Polyhedron(vector_var, C=torch.eye(5), lower=torch.zeros(5))
-        assert torch.isinf(poly_lower.upper) and poly_lower.upper > 0
+        assert (
+            torch.isinf(poly_lower.get_buffer("upper"))
+            and poly_lower.get_buffer("upper") > 0
+        )
 
     def test_init_raises_error_if_A_without_b(self, vector_var):
         """Test initialization raises ValueError if A provided without b."""
@@ -137,14 +143,14 @@ class TestPolyhedron:
     ):
         """Test forward() returns 0 when constraints are satisfied."""
         poly = Polyhedron(vector_var, **inequality_only_data)
-        vector_var.value.data = torch.tensor([0.5, 0.5, 0.5, 0.5, 0.5])
+        vector_var.value = torch.tensor([0.5, 0.5, 0.5, 0.5, 0.5])
         result = poly.forward()
         assert torch.allclose(result, torch.tensor(0.0))
 
     def test_forward_returns_inf_when_violated(self, vector_var, inequality_only_data):
         """Test forward() returns infinity when constraints are violated."""
         poly = Polyhedron(vector_var, **inequality_only_data)
-        vector_var.value.data = torch.tensor(
+        vector_var.value = torch.tensor(
             [2.0, 0.5, 0.5, 0.5, 0.5]
         )  # Violates upper bound
         result = poly.forward()
@@ -155,16 +161,15 @@ class TestPolyhedron:
         poly = Polyhedron(vector_var, **full_constraint_data)
 
         # Satisfying value: A @ x = b and lower <= C @ x <= upper
-        vector_var.value.data = torch.tensor([1.0, 1.0, 1.0, 1.0, 1.0])
+        vector_var.value = torch.tensor([1.0, 1.0, 1.0, 1.0, 1.0])
 
-        # Check if this satisfies: [1,2,3,4,5] @ [1,1,1,1,1] = 15 ✓ and [0,1,0,1,0] @ [1,1,1,1,1] = 2 ✓
         result = poly.forward()
         assert torch.allclose(result, torch.tensor(0.0))
 
     def test_forward_detects_equality_violation(self, vector_var, full_constraint_data):
         """Test forward() detects equality constraint violation."""
         poly = Polyhedron(vector_var, **full_constraint_data)
-        vector_var.value.data = torch.tensor(
+        vector_var.value = torch.tensor(
             [0.0, 0.0, 0.0, 0.0, 0.0]
         )  # Doesn't satisfy A @ x = b
         result = poly.forward()
@@ -202,15 +207,37 @@ class TestPolyhedron:
     def test_constraints_at_boundary(self, vector_var, inequality_only_data):
         """Test constraints satisfied exactly at boundary."""
         poly = Polyhedron(vector_var, **inequality_only_data)
-        vector_var.value.data = torch.ones(5)  # Exactly at upper bound
+        vector_var.value = torch.ones(5)  # Exactly at upper bound
         result = poly.forward()
         assert torch.allclose(result, torch.tensor(0.0))
 
     def test_with_unbounded_constraints(self, vector_var):
         """Test with only lower bounds (upper = infinity)."""
         poly = Polyhedron(vector_var, C=torch.eye(5), lower=torch.zeros(5))
-        vector_var.value.data = torch.tensor(
+        vector_var.value = torch.tensor(
             [100.0, 200.0, 300.0, 400.0, 500.0]
         )  # Very large values
         result = poly.forward()
         assert torch.allclose(result, torch.tensor(0.0))  # Should satisfy lower >= 0
+
+
+class TestPolyhedronScaling:
+    """Test Polyhedron scalar multiplication behavior."""
+
+    def test_scaling_returns_same_atom(self, vector_var, inequality_only_data):
+        """Test that scaling a Polyhedron returns the same atom (identity)."""
+        poly = Polyhedron(vector_var, **inequality_only_data)
+        scaled_poly = 5.0 * poly
+
+        # Should return the exact same instance
+        assert scaled_poly is poly
+
+    def test_scaling_by_zero_warns(self, vector_var, inequality_only_data):
+        """Test that scaling by zero raises a warning."""
+        poly = Polyhedron(vector_var, **inequality_only_data)
+
+        with pytest.warns(UserWarning, match="Scaling a Polyhedron.*by zero"):
+            scaled_poly = 0.0 * poly
+
+        # Should still return the same instance
+        assert scaled_poly is poly

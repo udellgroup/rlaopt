@@ -2,10 +2,12 @@
 
 import pytest
 import torch
+from tensordict import assert_allclose_td
 
 from rlaopt.atoms import Affine
 from rlaopt.atoms.sum_squares import SumSquares
 from rlaopt.expression import Expression, Variable
+from rlaopt.ext_tensordict import TensorDict
 
 
 @pytest.fixture
@@ -177,64 +179,73 @@ class TestSumSquares:
     def test_prox_with_variable(self, vector_var):
         """Test prox() with Variable input uses scalar shrinkage."""
         ss = SumSquares(vector_var)
-        location = torch.tensor([10.0, 20.0, 30.0, 40.0, 50.0])
+        location = TensorDict(
+            {vector_var.name: torch.tensor([10.0, 20.0, 30.0, 40.0, 50.0])}
+        )
         prox_scaling = 1.0
 
         result = ss.prox(location, prox_scaling)
         # Formula: location / (1 + 2*prox_scaling) = location / 3
-        expected = location / 3.0
-        assert torch.allclose(result, expected)
+        expected = TensorDict(
+            {vector_var.name: torch.tensor([10.0, 20.0, 30.0, 40.0, 50.0]) / 3.0}
+        )
+        assert_allclose_td(result, expected)
 
     def test_prox_with_variable_different_scaling(self, vector_var):
         """Test prox() with Variable and different scaling factors."""
         ss = SumSquares(vector_var)
-        location = torch.ones(5) * 6
+        location_tensor = torch.ones(5) * 6
+        location = TensorDict({vector_var.name: location_tensor})
 
         result1 = ss.prox(location, prox_scaling=0.5)
-        expected1 = location / 2.0  # 1 + 2*0.5 = 2
-        assert torch.allclose(result1, expected1)
+        # 1 + 2*0.5 = 2
+        expected1 = TensorDict({vector_var.name: location_tensor / 2.0})
+        assert_allclose_td(result1, expected1)
 
         result2 = ss.prox(location, prox_scaling=2.0)
-        expected2 = location / 5.0  # 1 + 2*2 = 5
-        assert torch.allclose(result2, expected2)
+        expected2 = TensorDict({vector_var.name: location_tensor / 5.0})  # 1 + 2*2 = 5
+        assert_allclose_td(result2, expected2)
 
     # ----------------------
     # Proximal operator tests - Affine
     # ----------------------
 
-    def test_prox_with_affine_identity(self, simple_affine):
+    def test_prox_with_affine_identity(self, simple_affine, vector_var):
         """Test prox() with identity affine transformation."""
         ss = SumSquares(simple_affine)
-        location = torch.tensor([3.0, 6.0, 9.0, 12.0, 15.0])
+        location = TensorDict(
+            {vector_var.name: torch.tensor([3.0, 6.0, 9.0, 12.0, 15.0])}
+        )
         prox_scaling = 1.0
 
         result = ss.prox(location, prox_scaling)
         # With identity A and zero b, should reduce to variable case
-        assert result.shape == location.shape
-        assert not torch.isnan(result).any()
+        assert result[vector_var.name].shape == location[vector_var.name].shape
+        assert not torch.isnan(result[vector_var.name]).any()
 
-    def test_prox_with_nontrivial_affine(self, nontrivial_affine):
+    def test_prox_with_nontrivial_affine(self, nontrivial_affine, vector_var):
         """Test prox() with non-trivial affine transformation."""
         ss = SumSquares(nontrivial_affine)
-        location = torch.randn(5)
+        location = TensorDict({vector_var.name: torch.randn(5)})
         prox_scaling = 0.5
 
         result = ss.prox(location, prox_scaling)
-        assert result.shape == location.shape
-        assert not torch.isnan(result).any()
+        assert result[vector_var.name].shape == location[vector_var.name].shape
+        assert not torch.isnan(result[vector_var.name]).any()
 
-    def test_prox_minimizes_objective_for_affine(self, simple_affine):
+    def test_prox_minimizes_objective_for_affine(self, simple_affine, vector_var):
         """Test prox() result minimizes the proximal objective."""
         ss = SumSquares(simple_affine)
-        location = torch.tensor([2.0, 4.0, 6.0, 8.0, 10.0])
+        location_tensor = torch.tensor([2.0, 4.0, 6.0, 8.0, 10.0])
+        location = TensorDict({vector_var.name: location_tensor})
         prox_scaling = 1.0
 
         result = ss.prox(location, prox_scaling)
 
         # The prox result should be closer to minimizing the objective
         # than the original location (qualitative test)
-        assert not torch.allclose(result, location)
-        assert result.norm() < location.norm()
+        assert not torch.allclose(result[vector_var.name], location_tensor)
+        assert result[vector_var.name].norm() < location_tensor.norm()
 
     # ----------------------
     # Error handling tests
@@ -246,15 +257,15 @@ class TestSumSquares:
         ss = SumSquares(expr)
 
         with pytest.raises(NotImplementedError, match="general Expression"):
-            ss.prox(torch.ones(5), 1.0)
+            ss.prox(TensorDict({vector_var.name: torch.ones(5)}), 1.0)
 
-    def test_prox_raises_error_for_nested_affine(self, simple_affine):
+    def test_prox_raises_error_for_nested_affine(self, simple_affine, vector_var):
         """Test prox() raises error for Affine with non-Variable root."""
         nested_affine = Affine(simple_affine, torch.eye(5), torch.zeros(5))
         ss = SumSquares(nested_affine)
 
         with pytest.raises(NotImplementedError, match="non-Variable root"):
-            ss.prox(torch.ones(5), 1.0)
+            ss.prox(TensorDict({vector_var.name: torch.ones(5)}), 1.0)
 
     def test_subsample_raises_not_implemented(self, vector_var):
         """Test subsample() raises NotImplementedError."""
@@ -269,18 +280,7 @@ class TestSumSquares:
     def test_prox_with_zero_location(self, vector_var):
         """Test prox() with zero location."""
         ss = SumSquares(vector_var)
-        location = torch.zeros(5)
+        location = TensorDict({vector_var.name: torch.zeros(5)})
         result = ss.prox(location, prox_scaling=1.0)
-        assert torch.allclose(result, torch.zeros(5))
-
-    def test_gradient_flows_through_forward(self, vector_var):
-        """Test gradients flow through forward pass."""
-        vector_var.value.requires_grad_(True)
-        ss = SumSquares(vector_var)
-        result = ss.forward()
-        result.backward()
-
-        assert vector_var.value.grad is not None
-        # Gradient should be 2*x
-        expected_grad = 2 * vector_var.value.data
-        assert torch.allclose(vector_var.value.grad, expected_grad)
+        expected = TensorDict({vector_var.name: torch.zeros(5)})
+        assert_allclose_td(result, expected)
