@@ -4,7 +4,6 @@ from functools import partial
 from typing import Callable
 
 import torch
-from typing_extensions import Self
 
 from rlaopt.atoms.atom import Atom
 from rlaopt.expression import Variable
@@ -120,31 +119,9 @@ class Polyhedron(Atom):
         """
         return False
 
-    def is_subsamplable(self) -> bool:
-        """Check if the polyhedral constraint supports subsampling.
-
-        Returns:
-            bool: Always False, as constraints cannot be subsampled.
-        """
-        return False
-
     def prox(self, location, prox_scaling):
         """Prox operator for Polyhedron."""
         return NotImplementedError("Polyhedron is not proxable")
-
-    def subsample(self, indices: torch.Tensor) -> Self:
-        """Subsample the polyhedral constraint (not supported).
-
-        Args:
-            indices: Indices to subsample (unused).
-
-        Returns:
-            Polyhedron: Not applicable.
-
-        Raises:
-            NotImplementedError: Polyhedron constraints cannot be subsampled.
-        """
-        raise NotImplementedError("Polyhedron is not subsamplable")
 
 
 def _validate(A, C, b, lower, upper):
