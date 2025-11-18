@@ -26,8 +26,6 @@ class Atom(Expression, ABC):
         - is_proxable() - whether the proximal operator is computable
         - forward() - evaluation of the atom
         - _prox() - prox operator of the atom
-        - is_subsamplable() - whether the atom supports data subsampling
-        - subsample() - create a subsampled version of the atom
     """
 
     def __init__(
@@ -51,30 +49,6 @@ class Atom(Expression, ABC):
         # Automatically register all buffers
         for name, buffer in buffers.items():
             self._register_atom_buffer(name, buffer)
-
-    @abstractmethod
-    def is_subsamplable(self) -> bool:
-        """Check if the atom supports subsampling.
-
-        Subsampling allows the atom to operate on a subset of data, which is
-        essential for stochastic optimization methods like mini-batch gradient
-        descent.
-
-        Returns:
-            bool: True if the atom supports subsampling, False otherwise.
-
-        Examples:
-            >>> # Loss functions with data typically support subsampling
-            >>> loss = LinearRegression(dataloader, beta)
-            >>> loss.is_subsamplable()
-            True
-
-            >>> # Regularizers typically don't support subsampling
-            >>> reg = L1Norm(beta)
-            >>> reg.is_subsamplable()
-            False
-        """
-        pass
 
     @abstractmethod
     def is_proxable(self) -> bool:
@@ -115,29 +89,8 @@ class Atom(Expression, ABC):
         self, relevant_variable_values: TensorDict, prox_scaling: float
     ) -> TensorDict:
         """Proximal operator implementation for the atom."""
-        pass
-
-    @abstractmethod
-    def subsample(self, indices: torch.Tensor) -> Self:
-        """Create a subsampled version of the atom.
-
-        This method should only be called if the atom is subsamplable.
-        The returned atom operates only on the data indexed by the provided indices.
-
-        Args:
-            indices: Indices of data points to include in the subsample.
-
-        Returns:
-            Self: New atom representing the subsampled version.
-
-        Raises:
-            NotImplementedError: If the atom does not support subsampling.
-
-        Examples:
-            >>> loss = LinearRegression(dataloader, beta)
-            >>> subset_indices = torch.tensor([0, 5, 10, 15])
-            >>> mini_batch_loss = loss.subsample(subset_indices)
-        """
+    def prox(self, location: torch.Tensor, prox_scaling: float) -> torch.Tensor:
+        """Proximal operator corresponding to the atom."""
         pass
 
     def get_input(self, name: str) -> Expression:

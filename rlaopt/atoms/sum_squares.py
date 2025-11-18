@@ -1,7 +1,6 @@
 """Implementation of the sum squared atom."""
 
 import torch
-from typing_extensions import Self
 
 from rlaopt.atoms.affine import Affine
 from rlaopt.atoms.atom import Atom
@@ -71,24 +70,6 @@ class SumSquares(Atom):
                 "Proximal operator for SumSquares and general Expression "
                 "is not supported."
             )
-
-    def is_subsamplable(self) -> bool:
-        """Returns True if the input is an affine expression."""
-        raise NotImplementedError("Should eventually be True for certain cases.")
-
-    def subsample(self) -> Self:
-        """Returns a subsampled version of the SumSquares atom.
-
-        Args:
-            indices: Indices to subsample
-
-        Returns:
-            New SumSquares atom representing the subsampled version
-
-        Raises:
-            NotImplementedError: If the atom does not support subsampling.
-        """
-        raise NotImplementedError("Subsampling not implemented for SumSquares atom.")
 
 
 def _sum_squares_affine_prox(

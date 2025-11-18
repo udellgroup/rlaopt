@@ -104,17 +104,6 @@ class TestNucNorm:
         nuc = NucNorm(matrix_var)
         assert nuc.is_proxable() is True
 
-    def test_is_subsamplable_returns_false(self, matrix_var):
-        """Test nuclear norm is not subsamplable."""
-        nuc = NucNorm(matrix_var)
-        assert nuc.is_subsamplable() is False
-
-    def test_subsample_raises_not_implemented(self, matrix_var):
-        """Test subsample() raises NotImplementedError."""
-        nuc = NucNorm(matrix_var)
-        with pytest.raises(NotImplementedError, match="cannot be subsampled"):
-            nuc.subsample(torch.tensor([0, 1]))
-
     # ----------------------
     # Proximal operator tests
     # ----------------------

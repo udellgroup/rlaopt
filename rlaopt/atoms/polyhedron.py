@@ -6,7 +6,6 @@ from typing import Callable
 from warnings import warn
 
 import torch
-from typing_extensions import Self
 
 from rlaopt.atoms.atom import Atom
 from rlaopt.expression import Variable
@@ -123,13 +122,6 @@ class Polyhedron(Atom):
         """
         return False
 
-    def is_subsamplable(self) -> bool:
-        """Check if the polyhedral constraint supports subsampling.
-
-        Returns:
-            bool: Always False, as constraints cannot be subsampled.
-        """
-        return False
 
     def _prox(
         self, relevant_variable_values: TensorDict, prox_scaling: float
@@ -137,20 +129,7 @@ class Polyhedron(Atom):
         """Polyhedral constraint does not have a prox operator in general."""
         raise NotImplementedError("Polyhedron is not proxable")
 
-    def subsample(self, indices: torch.Tensor) -> Self:
-        """Subsample the polyhedral constraint (not supported).
-
-        Args:
-            indices: Indices to subsample (unused).
-
-        Returns:
-            Polyhedron: Not applicable.
-
-        Raises:
-            NotImplementedError: Polyhedron constraints cannot be subsampled.
-        """
-        raise NotImplementedError("Polyhedron is not subsamplable")
-
+    
     def _scale(self, scaling: float) -> Self:
         """Scale the polyhedral constraint."""
         if isclose(scaling, 0.0):
@@ -158,6 +137,7 @@ class Polyhedron(Atom):
                 f"Scaling a {self.__class__.__name__} constraint by zero has no effect.",  # noqa: E501
             )
         return self  # Scaling does not change the constraint set
+
 
 
 def _validate(A, C, b, lower, upper):
