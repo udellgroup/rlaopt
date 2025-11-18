@@ -256,12 +256,6 @@ class TestSumSquares:
         with pytest.raises(NotImplementedError, match="non-Variable root"):
             ss.prox(torch.ones(5), 1.0)
 
-    def test_subsample_raises_not_implemented(self, vector_var):
-        """Test subsample() raises NotImplementedError."""
-        ss = SumSquares(vector_var)
-        with pytest.raises(NotImplementedError, match="not implemented"):
-            ss.subsample()
-
     # ----------------------
     # Edge cases
     # ----------------------

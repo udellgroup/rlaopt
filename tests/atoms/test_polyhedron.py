@@ -184,17 +184,6 @@ class TestPolyhedron:
         poly = Polyhedron(vector_var, **inequality_only_data)
         assert poly.is_proxable() is False
 
-    def test_is_subsamplable_returns_false(self, vector_var, inequality_only_data):
-        """Test polyhedron is not subsamplable."""
-        poly = Polyhedron(vector_var, **inequality_only_data)
-        assert poly.is_subsamplable() is False
-
-    def test_subsample_raises_not_implemented(self, vector_var, inequality_only_data):
-        """Test subsample() raises NotImplementedError."""
-        poly = Polyhedron(vector_var, **inequality_only_data)
-        with pytest.raises(NotImplementedError, match="not subsamplable"):
-            poly.subsample(torch.tensor([0, 1, 2]))
-
     # ----------------------
     # Edge cases
     # ----------------------

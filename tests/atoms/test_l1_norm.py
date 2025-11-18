@@ -108,17 +108,6 @@ class TestL1NormProperties:
         atom = L1Norm(simple_variable, scaling=1.0)
         assert atom.is_proxable() is True
 
-    def test_is_subsamplable_returns_false(self, simple_variable):
-        """Test that L1-norm is not subsamplable."""
-        atom = L1Norm(simple_variable, scaling=1.0)
-        assert atom.is_subsamplable() is False
-
-    def test_subsample_raises_error(self, simple_variable):
-        """Test that subsample raises NotImplementedError."""
-        atom = L1Norm(simple_variable, scaling=1.0)
-        with pytest.raises(NotImplementedError, match="cannot be subsampled"):
-            atom.subsample([0, 1])
-
 
 class TestL1NormScaling:
     """Tests for L1Norm scalar multiplication."""

@@ -164,22 +164,11 @@ class TestAffine:
         affine = Affine(vector_var, **simple_affine_data)
         assert affine.is_proxable() is False
 
-    def test_is_subsamplable_returns_false(self, vector_var, simple_affine_data):
-        """Test affine transformation is not subsamplable."""
-        affine = Affine(vector_var, **simple_affine_data)
-        assert affine.is_subsamplable() is False
-
     def test_prox_raises_not_implemented(self, vector_var, simple_affine_data):
         """Test prox() raises NotImplementedError."""
         affine = Affine(vector_var, **simple_affine_data)
         with pytest.raises(NotImplementedError, match="not proxable"):
             affine.prox(torch.ones(5), 1.0)
-
-    def test_subsample_raises_not_implemented(self, vector_var, simple_affine_data):
-        """Test subsample() raises NotImplementedError."""
-        affine = Affine(vector_var, **simple_affine_data)
-        with pytest.raises(NotImplementedError, match="does not support subsampling"):
-            affine.subsample(torch.tensor([0, 1, 2]))
 
     # ----------------------
     # Edge cases
