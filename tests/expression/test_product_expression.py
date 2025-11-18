@@ -131,9 +131,6 @@ class TestProductExpression:
             def is_smooth(self):
                 return True
 
-            def is_proxable(self):
-                return False
-
             def forward(self):
                 return self.var.forward() ** 2
 
@@ -149,24 +146,30 @@ class TestProductExpression:
             ProductExpression(complex1, complex2, matmul=False)
 
     # ----------------------
-    # Smoothness and proxability tests
+    # Smoothness tests
     # ----------------------
 
-    def test_is_smooth_always_true(self, vector_var, another_vector_var):
-        """Test products are always smooth."""
+    def test_product_of_smooth_is_smooth(self, vector_var, another_vector_var):
+        """Test products of smooth expressions are smooth."""
         prod = ProductExpression(vector_var, another_vector_var, matmul=False)
         assert prod.is_smooth() is True
 
-    def test_is_proxable_always_false(self, vector_var, another_vector_var):
-        """Test products are not proxable."""
-        prod = ProductExpression(vector_var, another_vector_var, matmul=False)
-        assert prod.is_proxable() is False
+    def test_product_with_nonsmooth_is_nonsmooth(self, vector_var):
+        """Test product with a nonsmooth expression is nonsmooth."""
 
-    def test_prox_raises_not_implemented(self, vector_var, another_vector_var):
-        """Test prox() raises NotImplementedError."""
-        prod = ProductExpression(vector_var, another_vector_var, matmul=False)
-        with pytest.raises(NotImplementedError, match="not proxable"):
-            prod.prox(torch.ones(5), 1.0)
+        class NonsmoothExpression(Expression):
+            def is_smooth(self):
+                return False
+
+            def forward(self):
+                return torch.zeros(5)
+
+            def tree(self):
+                raise NotImplementedError()
+
+        nonsmooth_expr = NonsmoothExpression()
+        prod = ProductExpression(vector_var, nonsmooth_expr, matmul=False)
+        assert prod.is_smooth() is False
 
     # ----------------------
     # Forward evaluation tests

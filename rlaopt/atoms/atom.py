@@ -5,8 +5,8 @@ from abc import ABC, abstractmethod
 import torch
 from typing_extensions import Self
 
-from rlaopt.expression import Expression, Variable
-from rlaopt.expression.tree import ExprTree
+from rlaopt.expression import Expression, ExprTree, Variable
+from rlaopt.ext_tensordict import TensorDict
 
 
 class Atom(Expression, ABC):
@@ -25,7 +25,7 @@ class Atom(Expression, ABC):
         - is_smooth() - whether the function is differentiable everywhere
         - is_proxable() - whether the proximal operator is computable
         - forward() - evaluation of the atom
-        - prox() - prox operator of the atom
+        - _prox() - prox operator of the atom
         - is_subsamplable() - whether the atom supports data subsampling
         - subsample() - create a subsampled version of the atom
     """
@@ -77,8 +77,44 @@ class Atom(Expression, ABC):
         pass
 
     @abstractmethod
-    def prox(self, location: torch.Tensor, prox_scaling: float) -> torch.Tensor:
-        """Proximal operator corresponding to the atom."""
+    def is_proxable(self) -> bool:
+        """Check if the expression has a computable proximal operator.
+
+        The proximal operator is used in proximal gradient methods and ADMM
+        for non-smooth optimization. An expression is proxable if its proximal
+        operator can be computed efficiently in closed form.
+
+        Returns:
+            bool: True if the expression is proxable, False otherwise.
+        """
+        pass
+
+    def prox(self, variable_values: TensorDict, prox_scaling: float) -> TensorDict:
+        """Proximal operator corresponding to the atom.
+
+        Args:
+            variable_values: TensorDict containing the location at which to evaluate
+                the proximal operator.
+            prox_scaling: Scaling parameter for the proximal operator.
+
+        Returns:
+            TensorDict: Result of applying the proximal operator at the given
+                variable_values. Note that the returned TensorDict may contain only a
+                subset of the variables in variable_values, depending on which variables
+                are relevant to the atom.
+
+        Raises:
+            NotImplementedError: If the atom is not proxable.
+        """
+        relevant_vars = self.select_relevant_variables(variable_values)
+        prox_result = self._prox(relevant_vars, prox_scaling)
+        return prox_result
+
+    @abstractmethod
+    def _prox(
+        self, relevant_variable_values: TensorDict, prox_scaling: float
+    ) -> TensorDict:
+        """Proximal operator implementation for the atom."""
         pass
 
     @abstractmethod

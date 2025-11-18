@@ -6,6 +6,7 @@ from typing_extensions import Self
 from rlaopt.atoms.affine import Affine
 from rlaopt.atoms.atom import Atom
 from rlaopt.expression import Expression, Variable
+from rlaopt.ext_tensordict import TensorDict
 
 
 class SumSquares(Atom):
@@ -38,20 +39,16 @@ class SumSquares(Atom):
                 return True
         return False
 
-    def prox(self, location, prox_scaling) -> torch.Tensor:
-        """Proximal operator for the sum of squares.
-
-        Args:
-            location: Point at which to evaluate the proximal operator
-            prox_scaling: Scaling factor for the proximal operator
-
-        Returns:
-            Result of the proximal operator
-        """
+    def _prox(
+        self, relevant_variable_values: TensorDict, prox_scaling: float
+    ) -> TensorDict:
+        """Proximal operator for the sum of squares."""
         input_ = self.get_input("x")
 
         if isinstance(input_, Variable):
-            return 1 / (1 + 2 * prox_scaling) * location
+            return relevant_variable_values.apply(
+                lambda x: 1 / (1 + 2 * prox_scaling) * x
+            )
 
         elif isinstance(input_, Expression):
             # For expressions, SumSquares is only proxable when
@@ -59,7 +56,9 @@ class SumSquares(Atom):
 
             if isinstance(input_, Affine):
                 if isinstance(input_.get_input("x"), Variable):
-                    return _sum_squares_affine_prox(input_, location, prox_scaling)
+                    return relevant_variable_values.apply(
+                        lambda x: _sum_squares_affine_prox(input_, x, prox_scaling)
+                    )
 
                 else:
                     raise NotImplementedError(

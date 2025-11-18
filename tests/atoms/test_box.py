@@ -2,9 +2,11 @@
 
 import pytest
 import torch
+from tensordict import assert_allclose_td
 
 from rlaopt.atoms.box import Box
 from rlaopt.expression import Variable
+from rlaopt.ext_tensordict import TensorDict
 
 
 @pytest.fixture
@@ -41,27 +43,33 @@ class TestBox:
     def test_init_with_both_bounds(self, vector_var):
         """Test initialization with both lower and upper bounds."""
         box = Box(vector_var, lower=torch.zeros(5), upper=torch.ones(5))
-        assert box.lower is not None
-        assert box.upper is not None
-        assert box.A is None
-        assert box.b is None
-        assert box.C is None
+        assert box.get_buffer("lower") is not None
+        assert box.get_buffer("upper") is not None
+        assert box.get_buffer("A") is None
+        assert box.get_buffer("b") is None
+        assert box.get_buffer("C") is None
 
     def test_init_with_scalar_bounds(self, vector_var):
         """Test initialization with scalar bounds."""
         box = Box(vector_var, lower=0.0, upper=1.0)
-        assert box.lower.shape == torch.Size([])
-        assert box.upper.shape == torch.Size([])
+        assert box.get_buffer("lower").shape == torch.Size([])
+        assert box.get_buffer("upper").shape == torch.Size([])
 
     def test_init_with_only_lower_bound(self, nonneg_box):
         """Test initialization with only lower bound sets upper to infinity."""
-        assert nonneg_box.lower is not None
-        assert torch.isinf(nonneg_box.upper) and nonneg_box.upper > 0
+        assert nonneg_box.get_buffer("lower") is not None
+        assert (
+            torch.isinf(nonneg_box.get_buffer("upper"))
+            and nonneg_box.get_buffer("upper") > 0
+        )
 
     def test_init_with_only_upper_bound(self, upper_only_box):
         """Test initialization with only upper bound sets lower to -infinity."""
-        assert upper_only_box.upper is not None
-        assert torch.isinf(upper_only_box.lower) and upper_only_box.lower < 0
+        assert upper_only_box.get_buffer("upper") is not None
+        assert (
+            torch.isinf(upper_only_box.get_buffer("lower"))
+            and upper_only_box.get_buffer("lower") < 0
+        )
 
     # ----------------------
     # Forward evaluation tests
@@ -69,25 +77,25 @@ class TestBox:
 
     def test_forward_returns_zero_when_satisfied(self, standard_box, vector_var):
         """Test forward() returns 0 when constraints are satisfied."""
-        vector_var.value.data = torch.tensor([0.5, 0.5, 0.5, 0.5, 0.5])
+        vector_var.value = torch.tensor([0.5, 0.5, 0.5, 0.5, 0.5])
         result = standard_box.forward()
         assert torch.allclose(result, torch.tensor(0.0))
 
     def test_forward_returns_inf_when_below_lower(self, standard_box, vector_var):
         """Test forward() returns infinity when below lower bound."""
-        vector_var.value.data = torch.tensor([-0.1, 0.5, 0.5, 0.5, 0.5])
+        vector_var.value = torch.tensor([-0.1, 0.5, 0.5, 0.5, 0.5])
         result = standard_box.forward()
         assert torch.isinf(result)
 
     def test_forward_returns_inf_when_above_upper(self, standard_box, vector_var):
         """Test forward() returns infinity when above upper bound."""
-        vector_var.value.data = torch.tensor([0.5, 1.1, 0.5, 0.5, 0.5])
+        vector_var.value = torch.tensor([0.5, 1.1, 0.5, 0.5, 0.5])
         result = standard_box.forward()
         assert torch.isinf(result)
 
     def test_forward_satisfied_at_boundary(self, standard_box, vector_var):
         """Test forward() returns 0 when exactly at bounds."""
-        vector_var.value.data = torch.tensor([0.0, 1.0, 0.5, 0.0, 1.0])
+        vector_var.value = torch.tensor([0.0, 1.0, 0.5, 0.0, 1.0])
         result = standard_box.forward()
         assert torch.allclose(result, torch.tensor(0.0))
 
@@ -107,41 +115,57 @@ class TestBox:
     # Proximal operator tests
     # ----------------------
 
-    def test_prox_clamps_values_within_bounds(self, standard_box):
+    def test_prox_clamps_values_within_bounds(self, standard_box, vector_var):
         """Test prox() clamps values to lie within bounds."""
-        location = torch.tensor([-1.0, 0.5, 2.0, 0.0, 1.5])
+        location = TensorDict(
+            {vector_var.name: torch.tensor([-1.0, 0.5, 2.0, 0.0, 1.5])}
+        )
         result = standard_box.prox(location, prox_scaling=1.0)
-        expected = torch.tensor([0.0, 0.5, 1.0, 0.0, 1.0])
-        assert torch.allclose(result, expected)
+        expected = TensorDict(
+            {vector_var.name: torch.tensor([0.0, 0.5, 1.0, 0.0, 1.0])}
+        )
+        assert_allclose_td(result, expected)
 
-    def test_prox_is_independent_of_scaling(self, standard_box):
+    def test_prox_is_independent_of_scaling(self, standard_box, vector_var):
         """Test prox() gives same result regardless of scaling parameter."""
-        location = torch.tensor([-1.0, 0.5, 2.0, 0.0, 1.5])
+        location = TensorDict(
+            {vector_var.name: torch.tensor([-1.0, 0.5, 2.0, 0.0, 1.5])}
+        )
         result1 = standard_box.prox(location, prox_scaling=1.0)
         result2 = standard_box.prox(location, prox_scaling=100.0)
-        assert torch.allclose(result1, result2)
+        assert_allclose_td(result1, result2)
 
-    def test_prox_with_lower_bound_only(self, nonneg_box):
+    def test_prox_with_lower_bound_only(self, nonneg_box, vector_var):
         """Test prox() with only lower bound enforces non-negativity."""
-        location = torch.tensor([-5.0, 0.5, 10.0, -1.0, 3.0])
+        location = TensorDict(
+            {vector_var.name: torch.tensor([-5.0, 0.5, 10.0, -1.0, 3.0])}
+        )
         result = nonneg_box.prox(location, prox_scaling=1.0)
         # Should clamp negative values to 0, leave positive unchanged
-        expected = torch.tensor([0.0, 0.5, 10.0, 0.0, 3.0])
-        assert torch.allclose(result, expected)
+        expected = TensorDict(
+            {vector_var.name: torch.tensor([0.0, 0.5, 10.0, 0.0, 3.0])}
+        )
+        assert_allclose_td(result, expected)
 
-    def test_prox_with_upper_bound_only(self, upper_only_box):
+    def test_prox_with_upper_bound_only(self, upper_only_box, vector_var):
         """Test prox() with only upper bound."""
-        location = torch.tensor([-5.0, 0.5, 10.0, -1.0, 0.8])
+        location = TensorDict(
+            {vector_var.name: torch.tensor([-5.0, 0.5, 10.0, -1.0, 0.8])}
+        )
         result = upper_only_box.prox(location, prox_scaling=1.0)
         # Should clamp values above 1 to 1, leave others unchanged
-        expected = torch.tensor([-5.0, 0.5, 1.0, -1.0, 0.8])
-        assert torch.allclose(result, expected)
+        expected = TensorDict(
+            {vector_var.name: torch.tensor([-5.0, 0.5, 1.0, -1.0, 0.8])}
+        )
+        assert_allclose_td(result, expected)
 
-    def test_prox_returns_identity_for_feasible_point(self, standard_box):
+    def test_prox_returns_identity_for_feasible_point(self, standard_box, vector_var):
         """Test prox() returns input unchanged if already feasible."""
-        location = torch.tensor([0.3, 0.5, 0.7, 0.2, 0.9])
+        location = TensorDict(
+            {vector_var.name: torch.tensor([0.3, 0.5, 0.7, 0.2, 0.9])}
+        )
         result = standard_box.prox(location, prox_scaling=1.0)
-        assert torch.allclose(result, location)
+        assert_allclose_td(result, location)
 
     # ----------------------
     # Edge cases
@@ -153,10 +177,14 @@ class TestBox:
         upper = torch.tensor([1.0, 1.0, 2.0, 0.0, 3.0])
         box = Box(vector_var, lower=lower, upper=upper)
 
-        location = torch.tensor([-1.0, 0.0, 1.0, -3.0, 5.0])
+        location = TensorDict(
+            {vector_var.name: torch.tensor([-1.0, 0.0, 1.0, -3.0, 5.0])}
+        )
         result = box.prox(location, prox_scaling=1.0)
-        expected = torch.tensor([0.0, 0.0, 1.0, -2.0, 3.0])
-        assert torch.allclose(result, expected)
+        expected = TensorDict(
+            {vector_var.name: torch.tensor([0.0, 0.0, 1.0, -2.0, 3.0])}
+        )
+        assert_allclose_td(result, expected)
 
     def test_unbounded_box_allows_any_value(self, vector_var):
         """Test box with no bounds (unconstrained), leads to a ValueError."""

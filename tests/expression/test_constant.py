@@ -68,10 +68,6 @@ class TestConstant:
         """Test constants are smooth."""
         assert scalar_const.is_smooth() is True
 
-    def test_is_proxable_returns_true(self, scalar_const):
-        """Test constants are proxable."""
-        assert scalar_const.is_proxable() is True
-
     def test_tree(self, scalar_const):
         """Test tree() returns correct structure."""
         assert scalar_const.tree() == ExprTree("Constant")

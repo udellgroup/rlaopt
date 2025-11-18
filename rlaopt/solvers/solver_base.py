@@ -8,7 +8,6 @@ import torch
 from rlaopt.expression import Expression
 from rlaopt.ext_tensordict import TensorDict
 from rlaopt.linalg import LinSys
-from rlaopt.operator_split import OperatorSplit
 from rlaopt.solvers.configs_base import SolverConfig, StoppingCriteria
 
 
@@ -31,11 +30,11 @@ class OptimSolver(ABC):
     """
 
     @abstractmethod
-    def __init__(self, obj: Expression | OperatorSplit, config: SolverConfig):
+    def __init__(self, obj: Expression, config: SolverConfig):
         """Initialize the solver with an objective function.
 
         Args:
-            obj (Expression | OperatorSplit): The objective function
+            obj (Expression): The objective function
                 to optimize.
             config (SolverConfig): Configuration for the solver.
         """

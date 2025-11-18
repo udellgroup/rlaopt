@@ -7,6 +7,7 @@ from typing_extensions import Self
 
 from rlaopt.atoms.atom import Atom
 from rlaopt.expression import Variable
+from rlaopt.ext_tensordict import TensorDict
 
 
 class NucNorm(Atom):
@@ -79,23 +80,22 @@ class NucNorm(Atom):
         """
         return True
 
-    def prox(self, location: torch.Tensor, prox_scaling: float) -> torch.Tensor:
+    def _prox(
+        self, relevant_variable_values: TensorDict, prox_scaling: float
+    ) -> TensorDict:
         """Compute the proximal operator of the nuclear norm.
 
         The proximal operator performs singular value soft-thresholding.
-
-        Args:
-            location: Point at which to evaluate the proximal operator.
-            prox_scaling: Scaling factor for the proximal operator.
-
-        Returns:
-            torch.Tensor: Result of the proximal operator (soft-thresholded matrix).
         """
         scale = prox_scaling * self.get_buffer("scaling")
-        if location.shape[0] >= location.shape[1]:
-            return _prox_nuc_norm.apply(location, scale)
-        else:
-            return _prox_nuc_norm.apply(location.T, scale).T
+
+        def prox_func(location: torch.Tensor) -> torch.Tensor:
+            if location.shape[0] >= location.shape[1]:
+                return _prox_nuc_norm.apply(location, scale)
+            else:
+                return _prox_nuc_norm.apply(location.T, scale).T
+
+        return relevant_variable_values.apply(prox_func)
 
     def is_subsamplable(self) -> bool:
         """Check if the nuclear norm supports subsampling.

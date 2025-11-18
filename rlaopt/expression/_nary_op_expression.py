@@ -21,7 +21,7 @@ class _NAryOpExpression(Expression, ABC):
         _expr_signatures: Cached function signatures for kwargs filtering.
     """
 
-    def __init__(self, *exprs):
+    def __init__(self, *exprs: Expression):
         """Initialize with variable number of expressions.
 
         Args:

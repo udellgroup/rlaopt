@@ -8,7 +8,6 @@ from rlaopt.expression import expr_types
 from rlaopt.expression._nary_op_expression import _NAryOpExpression
 from rlaopt.expression.constant import Constant
 from rlaopt.expression.expression import Expression
-from rlaopt.ext_tensordict import TensorDict
 
 
 class AddExpression(_NAryOpExpression):
@@ -20,7 +19,7 @@ class AddExpression(_NAryOpExpression):
         *exprs: Expressions to sum together.
     """
 
-    def __init__(self, *exprs):
+    def __init__(self, *exprs: Expression):
         """Initialize sum expression.
 
         Note: Flattening and optimization are handled by _create_add in utils.py.
@@ -30,7 +29,6 @@ class AddExpression(_NAryOpExpression):
             *exprs: Variable number of expressions to sum.
         """
         super().__init__(*exprs)
-        self._prox = self._build_prox()
 
         # Build op method for adding expressions
         self._op = self._build_op()
@@ -49,84 +47,24 @@ class AddExpression(_NAryOpExpression):
         """
         return self._op(values)
 
-    def is_proxable(self):
-        """Check if sum is proxable.
-
-        A sum is proxable if:
-        1. All non-smooth terms are proxable, AND
-        2. Non-smooth terms operate on disjoint sets of variables.
+    def get_non_smooth_exprs(self) -> list[Expression]:
+        """Get the non-smooth part of the sum expression as a list of expressions.
 
         Returns:
-            bool: True if the sum is proxable.
+            list[Expression]: Non-smooth part of the sum.
         """
-        non_smooth_exprs = self._get_non_smooth_exprs()
-
-        # All non-smooth terms must be proxable
-        if any(not expr.is_proxable() for expr in non_smooth_exprs):
-            return False
-
-        # Check for variable overlap
-        seen_variables = set()
-        for expr in non_smooth_exprs:
-            expr_var_names = set(expr.get_variable_names())
-            if seen_variables & expr_var_names:  # intersection
-                return False
-            seen_variables.update(expr_var_names)
-
-        return True
-
-    def prox(self, location, prox_scaling):
-        """Compute proximal operator of the sum.
-
-        Args:
-            location: Point at which to evaluate proximal operator.
-            prox_scaling: Scaling factor for proximal operator.
-
-        Returns:
-            torch.Tensor or dict: Result of proximal operator.
-
-        Raises:
-            NotImplementedError: If the sum is not proxable.
-        """
-        return self._prox(location, prox_scaling)
-
-    def _get_smooth_exprs(self) -> list[Expression]:
-        return [e for e in self.exprs if e.is_smooth()]
-
-    def _get_non_smooth_exprs(self) -> list[Expression]:
         return [e for e in self.exprs if not e.is_smooth()]
 
-    def get_smooth_part(self) -> Expression | None:
+    def get_smooth_part(self) -> Expression:
         """Get the smooth part of the sum expression.
 
         Returns:
-            Expression or None: Smooth part of the sum, or None if no smooth terms.
+            Expression: Smooth part of the sum.
         """
-        smooth_exprs = self._get_smooth_exprs()
+        smooth_exprs = [e for e in self.exprs if e.is_smooth()]
         if not smooth_exprs:
-            return None
+            return Constant(0.0)
         return AddExpression(*smooth_exprs)
-
-    def get_non_smooth_part(self) -> Expression | None:
-        """Get the non-smooth part of the sum expression.
-
-        Returns:
-            Expression or None: Non-smooth part of the sum, or None if
-                no non-smooth terms.
-        """
-        non_smooth_exprs = self._get_non_smooth_exprs()
-        if not non_smooth_exprs:
-            return None
-        return AddExpression(*non_smooth_exprs)
-
-    @property
-    def num_non_smooth_exprs(self):
-        """Get count of non-smooth terms.
-
-        Returns:
-            int: Number of non-smooth expressions in the sum.
-        """
-        return len(self._get_non_smooth_exprs())
 
     def _build_op(self) -> Callable[[list[torch.Tensor]], torch.Tensor]:
         """Build the addition op method for AddExpression."""
@@ -143,48 +81,6 @@ class AddExpression(_NAryOpExpression):
                 return values[0]
 
         return add_op
-
-    def _build_prox(self):
-        """Build the proximal operator function.
-
-        Returns:
-            Callable: Proximal operator function.
-        """
-        if not self.is_proxable():
-
-            def prox(location: torch.Tensor, prox_scaling: float) -> torch.Tensor:
-                raise NotImplementedError("Expression is not proxable")
-
-            return prox
-
-        elif self.num_non_smooth_exprs == 1:
-            proxes = self._get_proxes()
-            return proxes[0]
-
-        else:
-            proxes = self._get_proxes()
-
-            def prox(location: TensorDict, prox_scaling: float) -> TensorDict:
-                return TensorDict(
-                    {
-                        loc_name: prox_fn(loc, prox_scaling)
-                        for (loc_name, loc), prox_fn in zip(location.items(), proxes)
-                    }
-                )
-
-            return prox
-
-    def _get_proxes(self) -> list[Callable[[torch.Tensor, float], torch.Tensor]]:
-        """Get proximal operators of non-smooth expressions.
-
-        Returns:
-            list: List of proximal operator functions.
-        """
-        proxes = []
-        for expr in self.exprs:
-            if not expr.is_smooth():
-                proxes.append(expr.prox)
-        return proxes
 
     def is_commutative_operation(self) -> bool:
         """Addition is commutative.
@@ -210,7 +106,7 @@ class ProductExpression(_NAryOpExpression):
         matmul: Whether to use matrix multiplication.
     """
 
-    def __init__(self, *exprs, matmul: bool = False):
+    def __init__(self, *exprs: Expression, matmul: bool = False):
         """Initialize product expression.
 
         Args:
@@ -277,26 +173,6 @@ class ProductExpression(_NAryOpExpression):
             ValueError: If expression list is empty.
         """
         return self._op(values)
-
-    def is_proxable(self):
-        """Products are not proxable.
-
-        Returns:
-            bool: Always False.
-        """
-        return False
-
-    def prox(self, location, prox_scaling):
-        """Products don't have proximal operators.
-
-        Args:
-            location: Unused.
-            prox_scaling: Unused.
-
-        Raises:
-            NotImplementedError: Always.
-        """
-        raise NotImplementedError("ProductExpression is not proxable")
 
     def is_commutative_operation(self) -> bool:
         """Multiplication is commutative except for matrix multiplication.

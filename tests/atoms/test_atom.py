@@ -29,7 +29,7 @@ class MockAtom(Atom):
         """Never proxable for testing purposes."""
         return False
 
-    def prox(self, location: torch.Tensor, prox_scaling: float) -> torch.Tensor:
+    def _prox(self, relevant_variable_values, prox_scaling):
         """Mock prox method."""
         raise NotImplementedError("MockAtom does not implement prox.")
 
@@ -37,7 +37,7 @@ class MockAtom(Atom):
         """Never subsamplable for testing purposes."""
         return False
 
-    def subsample(self, indices: torch.Tensor):
+    def subsample(self, indices):
         """Mock subsample method."""
         raise NotImplementedError("MockAtom does not implement subsample.")
 

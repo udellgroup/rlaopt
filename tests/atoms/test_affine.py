@@ -5,6 +5,7 @@ import torch
 
 from rlaopt.atoms.affine import Affine
 from rlaopt.expression import Expression, Variable
+from rlaopt.ext_tensordict import TensorDict
 
 
 @pytest.fixture
@@ -70,8 +71,8 @@ class TestAffine:
     ):
         """Test initialization stores A and b correctly."""
         affine = Affine(vector_var, **nontrivial_affine_data)
-        assert torch.equal(affine.A, nontrivial_affine_data["A"])
-        assert torch.equal(affine.b, nontrivial_affine_data["b"])
+        assert torch.equal(affine.get_buffer("A"), nontrivial_affine_data["A"])
+        assert torch.equal(affine.get_buffer("b"), nontrivial_affine_data["b"])
 
     # ----------------------
     # Forward evaluation tests
@@ -173,7 +174,7 @@ class TestAffine:
         """Test prox() raises NotImplementedError."""
         affine = Affine(vector_var, **simple_affine_data)
         with pytest.raises(NotImplementedError, match="not proxable"):
-            affine.prox(torch.ones(5), 1.0)
+            affine.prox(TensorDict({vector_var.name: torch.ones(5)}), 1.0)
 
     def test_subsample_raises_not_implemented(self, vector_var, simple_affine_data):
         """Test subsample() raises NotImplementedError."""

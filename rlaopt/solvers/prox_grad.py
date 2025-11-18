@@ -71,25 +71,20 @@ class ProxGrad(OptimSolver):
     - Combinations of acceleration and line search
     """
 
-    def __init__(self, obj: Expression | OperatorSplit, config: ProxGradConfig):
+    def __init__(self, obj: Expression, config: ProxGradConfig):
         """Initialize the proximal gradient solver.
 
         Args:
-            obj: The optimization objective (Expression or OperatorSplit).
-                If an Expression, it will be automatically converted to OperatorSplit.
+            obj: The optimization objective (Expression).
             config: Configuration for the solver.
         """
+        if not isinstance(obj, Expression):
+            raise ValueError("ProxGrad solver requires an Expression objective.")
+        if not isinstance(config, ProxGradConfig):
+            raise ValueError("ProxGrad solver requires a ProxGradConfig configuration.")
         super().__init__(obj, config)
 
-        # Convert to OperatorSplit if needed
-        if isinstance(obj, Expression):
-            op_split = OperatorSplit.from_expression(obj)
-        elif isinstance(obj, OperatorSplit):
-            op_split = obj
-        else:
-            raise TypeError(
-                f"obj must be an Expression or OperatorSplit, got {type(obj).__name__}"
-            )
+        op_split = OperatorSplit(obj)
 
         self._init_state = _build_init_state(config.eta, config.use_acceleration)
         self._step = _build_step(
@@ -173,7 +168,7 @@ def _build_step(
 ]:
     """Build the step function based on configuration."""
     # Extract the function, gradient, and prox operator
-    f, grad_f, prox = op_split.f_func, op_split.grad_f, op_split.prox
+    f, grad_f, prox = op_split.func_f, op_split.grad_f, op_split.prox
 
     # Setup function computing stopping criteria
     def err_fn(var_vals: TensorDict, state: ProxGradState) -> torch.Tensor:
