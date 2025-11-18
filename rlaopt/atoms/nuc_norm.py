@@ -97,28 +97,6 @@ class NucNorm(Atom):
 
         return relevant_variable_values.apply(prox_func)
 
-    def is_subsamplable(self) -> bool:
-        """Check if the nuclear norm supports subsampling.
-
-        Returns:
-            bool: Always False, as nuclear norm cannot be subsampled.
-        """
-        return False
-
-    def subsample(self, indices: torch.Tensor) -> Self:
-        """Subsample the nuclear norm (not supported).
-
-        Args:
-            indices: Indices to subsample (unused).
-
-        Returns:
-            NucNorm: Not applicable.
-
-        Raises:
-            NotImplementedError: Nuclear norm cannot be subsampled.
-        """
-        raise NotImplementedError("Nuclear norm cannot be subsampled")
-
     def _scale(self, scaling: float) -> Self:
         """Scale the nuclear norm atom."""
         new_scaling = self.get_buffer("scaling") * scaling

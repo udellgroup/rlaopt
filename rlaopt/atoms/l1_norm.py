@@ -54,14 +54,6 @@ class L1Norm(Atom):
 
         return relevant_variable_values.apply(soft_threshold)
 
-    def is_subsamplable(self) -> bool:
-        """Returns False because L1-norm is not subsamplable."""
-        return False
-
-    def subsample(self, indices) -> Self:
-        """Raises NotImplementedError because L1-norm cannot be subsampled."""
-        raise NotImplementedError("L1-norm cannot be subsampled.")
-
     def _scale(self, scaling: float) -> Self:
         """Scale the L1-norm atom."""
         new_scaling = self.get_buffer("scaling") * scaling
