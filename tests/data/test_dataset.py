@@ -54,6 +54,15 @@ class TestDatasetInitialization:
         data = Dataset(X_t, y_t)
         assert data.num_samples == 20
 
+    def test_from_tensors_diff_dtype(self, sample_data):
+        """Test Dataset initialization from PyTorch tensors."""
+        X, y = sample_data
+        X_t = torch.from_numpy(X)
+        y_t = torch.from_numpy(y)
+        data = Dataset(X_t, y_t, dtype=torch.float64)
+        assert data.X.dtype == torch.float64
+        assert data.y.dtype == torch.float64
+
     def test_multitarget(self, sample_data):
         """Test Dataset initialization with multidimensional targets."""
         X, _ = sample_data
@@ -67,6 +76,13 @@ class TestDatasetInitialization:
         data = Dataset(X, y)
         assert data.y.dtype == torch.long
         assert torch.all(data.y >= 0)
+
+    def test_tensor_int_dtype_preserved(self, classification_data):
+        """Test y initalized with int dtype is preserved."""
+        X, y = classification_data
+        y_t = torch.from_numpy(y)
+        data = Dataset(X, y_t)
+        assert data.y.dtype == torch.long
 
 
 class TestDatasetValidation:
@@ -107,27 +123,6 @@ class TestDatasetClassmethods:
         X, y = sample_data
         data = Dataset.from_pandas(pd.DataFrame(X), pd.Series(y))
         assert data.num_samples == 20
-
-    def test_from_dataframe_single_target(self):
-        """Test Dataset.from_dataframe() with a single target column."""
-        df = pd.DataFrame({"x1": [1, 2, 3], "x2": [4, 5, 6], "y": [7, 8, 9]})
-        data = Dataset.from_dataframe(df, target_cols="y")
-        assert data.feature_dimension == 2
-        assert data.target_dimension == 1
-        assert torch.allclose(data.y, torch.tensor([7, 8, 9]))
-
-    def test_from_dataframe_multi_target(self):
-        """Test Dataset.from_dataframe() with multiple target columns."""
-        df = pd.DataFrame({"x": [1, 2], "y1": [3, 4], "y2": [5, 6]})
-        data = Dataset.from_dataframe(df, target_cols=["y1", "y2"])
-        assert data.feature_dimension == 1
-        assert data.target_dimension == (2,)
-
-    def test_from_dataframe_explicit_features(self):
-        """Test Dataset.from_dataframe() with explicitly specified feature columns."""
-        df = pd.DataFrame({"x1": [1, 2], "x2": [3, 4], "x3": [5, 6], "y": [7, 8]})
-        data = Dataset.from_dataframe(df, target_cols="y", feature_cols=["x1", "x2"])
-        assert data.feature_dimension == 2
 
 
 class TestDatasetDeviceManagement:

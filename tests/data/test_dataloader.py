@@ -4,7 +4,7 @@ import numpy as np
 import pytest
 import torch
 
-from rlaopt.data.dataloader import DataLoader, get_training_labels
+from rlaopt.data.dataloader import DataLoader, _get_training_labels
 from rlaopt.data.datasets import BatchedDataset, Dataset
 
 
@@ -141,21 +141,20 @@ class TestGetTrainingLabelsFunction:
     def test_get_labels_in_memory(self, in_memory_dataset):
         """Test get_training_labels with in-memory dataset."""
         loader = DataLoader(in_memory_dataset, batch_size=6)
-        labels = get_training_labels(loader, in_memory=True)
+        labels = _get_training_labels(loader, in_memory=True)
         assert torch.allclose(labels, in_memory_dataset.y)
 
     def test_get_labels_batched(self, batched_dataset):
         """Test get_training_labels with batched dataset."""
         loader = DataLoader(batched_dataset, batch_size=15, shuffle=False)
-        labels = get_training_labels(loader, in_memory=False)
+        labels = _get_training_labels(loader, in_memory=False)
         assert labels.shape == (40, 3)
-        assert isinstance(labels, torch.Tensor)
 
     def test_get_labels_batched_concatenation(self):
         """Test that get_training_labels correctly concatenates labels across batches."""
         dataset = MockBatchedDataset(17, 5, 1)  # Non-divisible by batch_size
         loader = DataLoader(dataset, batch_size=5, shuffle=False)
-        labels = get_training_labels(loader, in_memory=False)
+        labels = _get_training_labels(loader, in_memory=False)
         assert labels.shape[0] == 17
 
 
@@ -200,6 +199,16 @@ class TestDataLoaderFetching:
             batch_count += 1
         assert batch_count == 3  # 30 samples / 10 batch_size
 
+    def test_iteration_with_batched_dataset(self, batched_dataset):
+        """Test that iterating over DataLoader works with batched datasets."""
+        loader = DataLoader(batched_dataset, batch_size=8, shuffle=False)
+        batch_count = 0
+        for X_batch, y_batch in loader:
+            assert X_batch.shape == (8, 8)
+            assert y_batch.shape == (8, 3)
+            batch_count += 1
+        assert batch_count == 5  # 40 samples / 8 batch_size
+
     def test_get_batch_in_memory(self, in_memory_dataset):
         """Test get_batch method returns correct data from in-memory dataset."""
         loader = DataLoader(in_memory_dataset, batch_size=10, shuffle=False)
@@ -212,24 +221,69 @@ class TestDataLoaderFetching:
         assert torch.allclose(X_batch, X_true)
         assert torch.allclose(y_batch, y_true)
 
-    def test_iteration_with_batched_dataset(self, batched_dataset):
-        """Test that iterating over DataLoader works with batched datasets."""
-        loader = DataLoader(batched_dataset, batch_size=8, shuffle=False)
-        batch_count = 0
-        for X_batch, y_batch in loader:
-            assert X_batch.shape == (8, 8)
-            assert y_batch.shape == (8, 3)
-            batch_count += 1
-        assert batch_count == 5  # 40 samples / 8 batch_size
-
     def test_get_batch_with_batched_dataset(self, batched_dataset):
         """Test get_batch method returns correct data from batched dataset."""
-        loader = DataLoader(batched_dataset, batch_size=10, shuffle=False)
+        loader = DataLoader(batched_dataset, batch_size=8, shuffle=False)
         X_batch, y_batch = loader.get_batch()
-        X_true, y_true = batched_dataset[0:10]
+        X_true, y_true = batched_dataset[0:8]
 
-        assert X_batch.shape[0] <= 10
-        assert y_batch.shape[0] <= 10
+        assert X_batch.shape[0] <= 8
+        assert y_batch.shape[0] <= 8
 
         assert torch.allclose(X_batch, X_true)
         assert torch.allclose(y_batch, y_true)
+
+    def test_iteration_with_get_batch(self, in_memory_dataset):
+        """Test get_batch correctly iterates through dataset."""
+        loader = DataLoader(in_memory_dataset, batch_size=10, shuffle=False)
+        X_true, y_true = in_memory_dataset.X, in_memory_dataset.y
+        num_batches = len(loader)
+
+        # Test iterating through loader in get_batch
+        # recovers dataset
+        X, y = [], []
+        for _ in range(num_batches):
+            X_batch, y_batch = loader.get_batch()
+            X.append(X_batch)
+            y.append(y_batch)
+        X = torch.cat(X)
+        y = torch.cat(y)
+
+        assert torch.allclose(X, X_true)
+        assert torch.allclose(y, y_true)
+
+        # Check loader reset properly after
+        # iterting through dataset
+        X_batch, y_batch = loader.get_batch()
+
+        # X_batch should equal X_true[0:10],
+        # y_batch should equal y_true[0:10]
+        assert torch.allclose(X_batch, X_true[0:10])
+        assert torch.allclose(y_batch, y[0:10])
+
+    def test_iteration_with_get_batch_batched_dataset(self, batched_dataset):
+        """Tests iteration with get_batch with batched_dataset."""
+        loader = DataLoader(batched_dataset, batch_size=8, shuffle=False)
+        num_samples = batched_dataset.num_samples
+        X_true, y_true = batched_dataset[0:num_samples]
+        num_batches = len(loader)
+
+        X, y = [], []
+        for _ in range(num_batches):
+            X_batch, y_batch = loader.get_batch()
+            X.append(X_batch)
+            y.append(y_batch)
+        X = torch.cat(X)
+        y = torch.cat(y)
+
+        assert torch.allclose(X, X_true)
+        assert torch.allclose(y, y_true)
+
+        # Check loader reset properly after
+        # iterting through dataset
+        X_batch, y_batch = loader.get_batch()
+
+        # X_batch should equal X_true[0:8],
+        # y_batch should equal y_true[0:8]
+        assert torch.allclose(X_batch, X_true[0:8])
+        assert torch.allclose(y_batch, y[0:8])

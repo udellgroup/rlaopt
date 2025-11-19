@@ -73,7 +73,7 @@ class TestBatchedDatasetGetitem:
     @pytest.fixture
     def dataset(self):
         """Create a concrete batched dataset fixture for testing.
-        
+
         Returns:
             ConcreteBatchedDataset: A dataset with 50 samples, 8 features, and 3 target dimensions.
         """
