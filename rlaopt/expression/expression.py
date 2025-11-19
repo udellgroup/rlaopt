@@ -13,6 +13,7 @@ from abc import ABC, abstractmethod
 from collections import defaultdict
 
 import torch
+from typing_extensions import Self
 
 from rlaopt.expression import expr_types
 from rlaopt.expression.tree import ExprTree
@@ -208,6 +209,43 @@ class Expression(torch.nn.Module, ABC):
                 mapping[module.name].append(full_param_name)
         return mapping
 
+    def transpose(self) -> Self:
+        """Create a transpose operation.
+
+        Optimizes double transpose (A.T.T returns A).
+
+        Returns:
+            Expression: Transposed expression or original if already transposed twice.
+        """
+        from rlaopt.expression.unary_expressions import Transpose
+
+        # Optimize A.T.T -> A
+        if isinstance(self, Transpose):
+            return self.operand
+        return Transpose(self)
+
+    @property
+    def T(self) -> Self:
+        """Transpose property (shorthand for transpose()).
+
+        Returns:
+            Expression: Transposed expression.
+        """
+        return self.transpose()
+
+    def sum(self, dim=None) -> Self:
+        """Create a sum reduction operation.
+
+        Args:
+            dim: Dimension to sum over (None for all dimensions).
+
+        Returns:
+            ReduceSum: Expression computing the sum.
+        """
+        from rlaopt.expression.unary_expressions import ReduceSum
+
+        return ReduceSum(self, dim=dim)
+
     # ----------------------
     # Centralized operator overloads
     # ----------------------
@@ -259,7 +297,7 @@ class Expression(torch.nn.Module, ABC):
         """Negate this expression.
 
         Returns:
-            ProductExpression: Negation of self.
+            Expression: Negation of self.
         """
         return _create_product(-1.0, self, matmul=False)
 
@@ -270,7 +308,7 @@ class Expression(torch.nn.Module, ABC):
             other: Expression, float, or int to multiply.
 
         Returns:
-            ProductExpression or AddExpression: Elementwise product of self and other.
+            Expression: Elementwise product of self and other.
                 If multiplying a scalar by a sum, automatically distributes.
         """
         return _create_product(self, other, matmul=False)
@@ -282,7 +320,7 @@ class Expression(torch.nn.Module, ABC):
             other: Float or int to multiply.
 
         Returns:
-            ProductExpression or AddExpression: Elementwise product of other and self.
+            Expression: Elementwise product of other and self.
                 If multiplying a scalar by a sum, automatically distributes.
         """
         return _create_product(other, self, matmul=False)
@@ -308,7 +346,7 @@ class Expression(torch.nn.Module, ABC):
             other: Expression, float, or int to multiply.
 
         Returns:
-            ProductExpression: Matrix product of self and other.
+            Expression: Matrix product of self and other.
         """
         return _create_product(self, other, matmul=True)
 
@@ -319,7 +357,7 @@ class Expression(torch.nn.Module, ABC):
             other: Expression, float, or int to multiply.
 
         Returns:
-            ProductExpression: Matrix product of other and self.
+            Expression: Matrix product of other and self.
         """
         return _create_product(other, self, matmul=True)
 
@@ -330,8 +368,8 @@ class Expression(torch.nn.Module, ABC):
             exponent: Power to raise to.
 
         Returns:
-            UnaryOpExpression: Result of exponentiation.
+            Expression: Result of exponentiation.
         """
-        return expr_types.unary_op_expr()(
-            self, lambda t: torch.pow(t, exponent), name=f"power_{exponent}"
-        )
+        from rlaopt.expression.unary_expressions import Power
+
+        return Power(self, exponent)
