@@ -65,28 +65,6 @@ class ElasticNet(Atom):
         """
         return False
 
-    def is_subsamplable(self) -> bool:
-        """Check if the elastic net supports subsampling.
-
-        Returns:
-            bool: Always False, as regularization operates on all parameters.
-        """
-        return False
-
-    def subsample(self, indices: torch.Tensor) -> Self:
-        """Subsample the elastic net (not supported).
-
-        Args:
-            indices: Indices to subsample (unused).
-
-        Returns:
-            ElasticNet: Not applicable.
-
-        Raises:
-            NotImplementedError: Elastic net does not support subsampling.
-        """
-        raise NotImplementedError("Elastic net atom does not support subsampling")
-
     def forward(self) -> torch.Tensor:
         """Evaluate the elastic net penalty at the current variable value.
 

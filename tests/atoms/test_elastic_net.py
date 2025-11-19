@@ -119,17 +119,6 @@ class TestElasticNetAbstractMethods:
         atom = ElasticNet(simple_variable)
         assert atom.is_proxable() is True
 
-    def test_is_subsamplable_returns_false(self, simple_variable):
-        """Test that elastic net is not subsamplable."""
-        atom = ElasticNet(simple_variable)
-        assert atom.is_subsamplable() is False
-
-    def test_subsample_raises_error(self, simple_variable):
-        """Test that subsample raises NotImplementedError."""
-        atom = ElasticNet(simple_variable)
-        with pytest.raises(NotImplementedError, match="does not support subsampling"):
-            atom.subsample(torch.tensor([0, 1]))
-
 
 class TestElasticNetScaling:
     """Tests for ElasticNet scalar multiplication."""
