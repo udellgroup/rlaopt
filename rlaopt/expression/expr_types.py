@@ -17,9 +17,9 @@ def nary_op_expr():
 
 def unary_op_expr():
     """Return _UnaryOpExpression class to avoid circular imports."""
-    from rlaopt.expression import _unary_op_expression
+    from rlaopt.expression import unary_expressions
 
-    return _unary_op_expression._UnaryOpExpression
+    return unary_expressions.Unary
 
 
 def add_expr():
