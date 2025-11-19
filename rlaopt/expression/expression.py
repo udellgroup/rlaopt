@@ -81,6 +81,17 @@ class Expression(torch.nn.Module, ABC):
         """
         pass
 
+    def is_affine(self) -> bool:
+        """Check if the expression is affine.
+
+        An expression is affine if it can be expressed as a linear function of variables
+        plus a constant.
+
+        Returns:
+            bool: True if the expression is affine, False otherwise.
+        """
+        return False
+
     def evaluate(self, variable_values: TensorDict) -> torch.Tensor:
         """Evaluate the expression at specified variable values.
 

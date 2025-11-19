@@ -205,6 +205,14 @@ class Variable(Expression):
         """
         return ExprTree(f"Variable({self._name})")
 
+    def is_affine(self) -> bool:
+        """Variables are affine expressions.
+
+        Returns:
+            bool: Always True.
+        """
+        return True
+
     def sum(self, dim=None):
         """Create a sum operation over this variable.
 
