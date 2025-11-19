@@ -102,9 +102,9 @@ class DataLoader(torch.utils.data.DataLoader):
         )
 
         if isinstance(dataset, Dataset):
-            self._y = partial(get_training_labels, loader=self, in_memory=True)
+            self._y = partial(_get_training_labels, loader=self, in_memory=True)
         else:
-            self._y = partial(get_training_labels, loader=self, in_memory=False)
+            self._y = partial(_get_training_labels, loader=self, in_memory=False)
 
         self.data_iter = iter(self)
         self._shuffle = shuffle
@@ -141,13 +141,8 @@ class DataLoader(torch.utils.data.DataLoader):
         """
         return self._y()
 
-    @property
-    def shuffle(self) -> bool:
-        """Returns True if loader shuffles the data."""
-        return self._shuffle
 
-
-def get_training_labels(loader: DataLoader, in_memory: bool):
+def _get_training_labels(loader: DataLoader, in_memory: bool):
     """Retrieve all training labels from a DataLoader.
 
     Extracts training labels from the DataLoader's dataset using the appropriate

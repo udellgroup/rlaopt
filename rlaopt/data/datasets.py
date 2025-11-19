@@ -11,15 +11,15 @@ Classes:
 """
 
 from abc import ABC, abstractmethod
-from typing import Optional, Union
 
 import numpy as np
 import pandas as pd
 import torch
 from torch import Tensor
+from typing_extensions import Self
 
 
-class AbstractDataset(torch.utils.data.Dataset, ABC):
+class BaseDataset(torch.utils.data.Dataset, ABC):
     """Abstract base class for all dataset types.
 
     Defines the common interface that all dataset classes must implement,
@@ -45,7 +45,7 @@ class AbstractDataset(torch.utils.data.Dataset, ABC):
         pass
 
 
-class BatchedDataset(AbstractDataset, ABC):
+class BatchedDataset(BaseDataset, ABC):
     """Abstract base class for datasets that are too large to fit in memory.
 
     Subclasses must implement __getitem__ and __len__ following torch.utils.data.Dataset
@@ -125,7 +125,7 @@ class BatchedDataset(AbstractDataset, ABC):
         pass
 
 
-class Dataset(AbstractDataset, torch.utils.data.TensorDataset):
+class Dataset(BaseDataset, torch.utils.data.TensorDataset):
     """In-memory dataset for classical machine learning tasks.
 
     Handles data matrices with labels/response vectors that fit in memory.
@@ -162,9 +162,9 @@ class Dataset(AbstractDataset, torch.utils.data.TensorDataset):
 
     def __init__(
         self,
-        X: Union[Tensor, np.ndarray, pd.DataFrame, pd.Series],
-        y: Union[Tensor, np.ndarray, pd.DataFrame, pd.Series],
-        device: Optional[Union[str, torch.device]] = None,
+        X: Tensor | np.ndarray | pd.DataFrame | pd.Series,
+        y: Tensor | np.ndarray | pd.DataFrame | pd.Series,
+        device: str | torch.device | None = None,
         dtype: torch.dtype = torch.float32,
     ):
         """Initialize Dataset with feature matrix and target array."""
@@ -219,7 +219,7 @@ class Dataset(AbstractDataset, torch.utils.data.TensorDataset):
         cls,
         X: np.ndarray,
         y: np.ndarray,
-        device: Optional[Union[str, torch.device]] = None,
+        device: str | torch.device = None,
         dtype: torch.dtype = torch.float32,
     ):
         """Create a Dataset from numpy arrays.
@@ -246,9 +246,9 @@ class Dataset(AbstractDataset, torch.utils.data.TensorDataset):
     @classmethod
     def from_pandas(
         cls,
-        X: Union[pd.DataFrame, pd.Series],
-        y: Union[pd.DataFrame, pd.Series],
-        device: Optional[Union[str, torch.device]] = None,
+        X: pd.DataFrame | pd.Series,
+        y: pd.DataFrame | pd.Series,
+        device: str | torch.device | None = None,
         dtype: torch.dtype = torch.float32,
     ):
         """Create a Dataset from pandas DataFrames or Series.
@@ -267,68 +267,22 @@ class Dataset(AbstractDataset, torch.utils.data.TensorDataset):
             Dataset: Dataset instance with data on specified device.
 
         Examples:
+            >>> # From separate DataFrames
             >>> df_X = pd.DataFrame({'x1': [1, 2, 3], 'x2': [4, 5, 6]})
             >>> df_y = pd.Series([7, 8, 9])
             >>> data = Dataset.from_pandas(df_X, df_y)
-        """
-        return cls(X, y, device=device, dtype=dtype)
 
-    @classmethod
-    def from_dataframe(
-        cls,
-        df: pd.DataFrame,
-        target_cols: Union[str, list],
-        feature_cols: Optional[Union[str, list]] = None,
-        device: Optional[Union[str, torch.device]] = None,
-        dtype: torch.dtype = torch.float32,
-    ):
-        """Create a Dataset from a single pandas DataFrame.
-
-        Specify target and feature columns to split the DataFrame into X and y.
-
-        Args:
-            df (pd.DataFrame): DataFrame containing both features and targets.
-            target_cols (str or list): Column name(s) for target variable(s).
-            feature_cols (str or list, optional): Column name(s) for features.
-                If None, uses all columns except target_cols. Defaults to None.
-            device (str or torch.device, optional): Device to place tensors on
-                (e.g., 'cpu', 'cuda', 'cuda:0'). Defaults to None.
-            dtype (torch.dtype, optional): Data type for tensors. Defaults to
-                torch.float32.
-
-        Returns:
-            Dataset: Dataset instance with data on specified device.
-
-        Examples:
+            >>> # From a single DataFrame using column selection
             >>> df = pd.DataFrame({'x1': [1, 2, 3], 'x2': [4, 5, 6], 'y': [7, 8, 9]})
-            >>> data = Dataset.from_dataframe(df, target_cols='y')
-            >>> data = Dataset.from_dataframe(df, target_cols=['y'],
-            ...                               feature_cols=['x1', 'x2'])
+            >>> data = Dataset.from_pandas(df[['x1', 'x2']], df['y'])
 
             >>> # Multi-target
             >>> df_multi = pd.DataFrame({'x1': [1, 2], 'y1': [3, 4], 'y2': [5, 6]})
-            >>> data = Dataset.from_dataframe(df_multi, target_cols=['y1', 'y2'])
+            >>> data = Dataset.from_pandas(df_multi[['x1']], df_multi[['y1', 'y2']])
         """
-        # Ensure target_cols is a list
-        if isinstance(target_cols, str):
-            target_cols = [target_cols]
-
-        # If feature_cols not specified, use all columns except target_cols
-        if feature_cols is None:
-            feature_cols = [col for col in df.columns if col not in target_cols]
-        elif isinstance(feature_cols, str):
-            feature_cols = [feature_cols]
-
-        X = df[feature_cols]
-        y = df[target_cols]
-
-        # Squeeze if single target column
-        if len(target_cols) == 1:
-            y = y.squeeze()
-
         return cls(X, y, device=device, dtype=dtype)
 
-    def to(self, device: Union[str, torch.device]) -> "Dataset":
+    def to(self, device: str | torch.device) -> Self:
         """Move dataset to specified device.
 
         Args:
