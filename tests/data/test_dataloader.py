@@ -4,7 +4,7 @@ import numpy as np
 import pytest
 import torch
 
-from rlaopt.data.dataloader import DataLoader, _get_training_labels
+from rlaopt.data.dataloader import DataLoader
 from rlaopt.data.datasets import BatchedDataset, Dataset
 
 
@@ -133,29 +133,6 @@ class TestDataLoaderYProperty:
         loader = DataLoader(dataset, batch_size=4)
         labels = loader.y
         assert labels.shape == (20, 3, 2)
-
-
-class TestGetTrainingLabelsFunction:
-    """Test the get_training_labels helper function."""
-
-    def test_get_labels_in_memory(self, in_memory_dataset):
-        """Test get_training_labels with in-memory dataset."""
-        loader = DataLoader(in_memory_dataset, batch_size=6)
-        labels = _get_training_labels(loader, in_memory=True)
-        assert torch.allclose(labels, in_memory_dataset.y)
-
-    def test_get_labels_batched(self, batched_dataset):
-        """Test get_training_labels with batched dataset."""
-        loader = DataLoader(batched_dataset, batch_size=15, shuffle=False)
-        labels = _get_training_labels(loader, in_memory=False)
-        assert labels.shape == (40, 3)
-
-    def test_get_labels_batched_concatenation(self):
-        """Test that get_training_labels correctly concatenates labels across batches."""
-        dataset = MockBatchedDataset(17, 5, 1)  # Non-divisible by batch_size
-        loader = DataLoader(dataset, batch_size=5, shuffle=False)
-        labels = _get_training_labels(loader, in_memory=False)
-        assert labels.shape[0] == 17
 
 
 class TestDataLoaderParameters:
