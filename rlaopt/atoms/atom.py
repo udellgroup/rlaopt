@@ -79,6 +79,12 @@ class Atom(Expression, ABC):
         Raises:
             NotImplementedError: If the atom is not proxable.
         """
+        if not self.is_proxable():
+            raise NotImplementedError(
+                f"Proximal operator for {self.__class__.__name__} with given inputs "
+                "is not implemented."
+            )
+
         relevant_vars = self.select_relevant_variables(variable_values)
         prox_result = self._prox(relevant_vars, prox_scaling)
         return prox_result

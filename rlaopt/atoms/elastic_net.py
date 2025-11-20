@@ -4,7 +4,7 @@ import torch
 from typing_extensions import Self
 
 from rlaopt.atoms.atom import Atom
-from rlaopt.expression import Variable
+from rlaopt.expression import Expression, Variable
 from rlaopt.ext_tensordict import TensorDict
 
 
@@ -15,12 +15,12 @@ class ElasticNet(Atom):
         l1_scaling * ||x||₁ + (l2_scaling / 2) * ||x||₂²
 
     Args:
-        x: Variable to apply the elastic net penalty to.
+        x: Expression to apply the elastic net penalty to.
         l1_scaling: Scaling factor for the L1-norm penalty. Defaults to 1.0.
         l2_scaling: Scaling factor for the L2-norm penalty. Defaults to 1.0.
 
     Raises:
-        TypeError: If x is not a Variable.
+        TypeError: If x is not an Expression.
 
     Examples:
         >>> x = Variable((100,), name='weights')
@@ -37,24 +37,23 @@ class ElasticNet(Atom):
 
     def __init__(
         self,
-        x: Variable,
+        x: Expression,
         l1_scaling: float | torch.Tensor = 1.0,
         l2_scaling: float | torch.Tensor = 1.0,
     ):
         """Initialize the elastic net atom.
 
         Args:
-            x: Variable to apply the elastic net penalty to.
+            x: Expression to apply the elastic net penalty to.
             l1_scaling: Scaling factor for the L1-norm penalty. Defaults to 1.0.
             l2_scaling: Scaling factor for the L2-norm penalty. Defaults to 1.0.
 
         Raises:
-            TypeError: If x is not a Variable.
+            TypeError: If x is not an Expression.
         """
         super().__init__(
             exprs={"x": x},
             buffers={"l1_scaling": l1_scaling, "l2_scaling": l2_scaling},
-            variable_names=["x"],
         )
 
     def is_smooth(self) -> bool:
@@ -83,13 +82,11 @@ class ElasticNet(Atom):
         )
 
     def is_proxable(self) -> bool:
-        """Check if the elastic net has a computable proximal operator.
-
-        Returns:
-            bool: Always True, as the elastic net proximal operator
-                has a closed-form solution (soft-thresholding with scaling).
-        """
-        return True
+        """Returns True if the input is a Variable."""
+        input_ = self.get_input("x")
+        if isinstance(input_, Variable):
+            return True
+        return False
 
     def _prox(
         self, relevant_variable_values: TensorDict, prox_scaling: float

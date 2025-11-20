@@ -4,26 +4,24 @@ import torch
 from typing_extensions import Self
 
 from rlaopt.atoms.atom import Atom
-from rlaopt.expression import Variable
+from rlaopt.expression import Expression, Variable
 from rlaopt.ext_tensordict import TensorDict
 
 
 class L1Norm(Atom):
     """L1-norm atom."""
 
-    def __init__(self, x: Variable, scaling: float | torch.Tensor = 1.0):
+    def __init__(self, x: Expression, scaling: float | torch.Tensor = 1.0):
         """Initializes the L1-norm atom with optional scaling.
 
         Args:
-            x: Variable to apply the L1-norm to.
+            x: Expression to apply the L1-norm to.
             scaling: Scaling factor for the L1-norm (default: 1.0).
 
         Raises:
-        TypeError: If x is not a Variable.
+            TypeError: If x is not an Expression.
         """
-        super().__init__(
-            exprs={"x": x}, buffers={"scaling": scaling}, variable_names=["x"]
-        )
+        super().__init__(exprs={"x": x}, buffers={"scaling": scaling})
 
     def is_smooth(self) -> bool:
         """Returns False because L1-norm is not smooth."""
@@ -35,8 +33,11 @@ class L1Norm(Atom):
         return self.get_buffer("scaling") * torch.sum(torch.abs(value))
 
     def is_proxable(self) -> bool:
-        """Returns True because L1-norm is proxable."""
-        return True
+        """Returns True if the input is a Variable."""
+        input_ = self.get_input("x")
+        if isinstance(input_, Variable):
+            return True
+        return False
 
     def _prox(
         self, relevant_variable_values: TensorDict, prox_scaling: float

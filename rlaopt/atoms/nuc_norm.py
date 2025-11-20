@@ -6,7 +6,7 @@ import torch
 from typing_extensions import Self
 
 from rlaopt.atoms.atom import Atom
-from rlaopt.expression import Variable
+from rlaopt.expression import Expression, Variable
 from rlaopt.ext_tensordict import TensorDict
 
 
@@ -21,12 +21,11 @@ class NucNorm(Atom):
     where σᵢ(X) are the singular values of X.
 
     Args:
-        x: 2D matrix variable to apply the nuclear norm to.
+        x: Expression to apply the nuclear norm to.
         scaling: Scaling factor for the nuclear norm. Defaults to 1.0.
 
     Raises:
-        TypeError: If x is not a Variable.
-        ValueError: If x is not a 2D matrix.
+        TypeError: If x is not an Expression.
 
     Examples:
         >>> X = Variable((10, 5), name='X')
@@ -34,25 +33,17 @@ class NucNorm(Atom):
         >>> loss = nuc_norm.forward()
     """
 
-    def __init__(self, x: Variable, scaling: float | torch.Tensor = 1.0):
+    def __init__(self, x: Expression, scaling: float | torch.Tensor = 1.0):
         """Initialize the nuclear norm atom.
 
         Args:
-            x: 2D matrix variable to apply the nuclear norm to.
+            x: 2D matrix expression to apply the nuclear norm to.
             scaling: Scaling factor for the nuclear norm. Defaults to 1.0.
 
         Raises:
-            TypeError: If x is not a Variable.
-            ValueError: If x is not a 2D matrix.
+            TypeError: If x is not an Expression.
         """
-        if x.value.dim() != 2:
-            raise ValueError(
-                f"Variable value must be 2D Tensor, but got {x.value.dim()}D Tensor."
-            )
-
-        super().__init__(
-            exprs={"x": x}, buffers={"scaling": scaling}, variable_names=["x"]
-        )
+        super().__init__(exprs={"x": x}, buffers={"scaling": scaling})
 
     def is_smooth(self) -> bool:
         """Check if the nuclear norm is smooth.
@@ -73,12 +64,11 @@ class NucNorm(Atom):
         return self.get_buffer("scaling") * torch.sum(S)
 
     def is_proxable(self) -> bool:
-        """Check if the nuclear norm has a computable proximal operator.
-
-        Returns:
-            bool: Always True, as the nuclear norm is proxable.
-        """
-        return True
+        """Returns True if the input is a Variable."""
+        input_ = self.get_input("x")
+        if isinstance(input_, Variable):
+            return True
+        return False
 
     def _prox(
         self, relevant_variable_values: TensorDict, prox_scaling: float
