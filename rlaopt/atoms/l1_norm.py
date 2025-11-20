@@ -1,15 +1,26 @@
 """Implementation of the L1-norm atom."""
 
 import torch
-from typing_extensions import Self
 
-from rlaopt.atoms.atom import Atom, AtomDecomposition
-from rlaopt.expression import Expression, Variable
+from rlaopt.atoms.nonsmooth_regularizer import NonsmoothRegularizer
+from rlaopt.expression import Expression
 from rlaopt.ext_tensordict import TensorDict
 
 
-class L1Norm(Atom):
-    """L1-norm atom."""
+class L1Norm(NonsmoothRegularizer):
+    """L1-norm regularization atom.
+
+    Computes the scaled L1-norm: scaling * ||x||₁ = scaling * Σᵢ |xᵢ|
+
+    Args:
+        x: Expression to apply the L1-norm to.
+        scaling: Scaling factor for the L1-norm (default: 1.0).
+
+    Examples:
+        >>> x = Variable((100,), name='weights')
+        >>> l1 = L1Norm(x, scaling=0.01)
+        >>> penalty = l1.forward()
+    """
 
     def __init__(self, x: Expression, scaling: float | torch.Tensor = 1.0):
         """Initializes the L1-norm atom with optional scaling.
@@ -17,27 +28,13 @@ class L1Norm(Atom):
         Args:
             x: Expression to apply the L1-norm to.
             scaling: Scaling factor for the L1-norm (default: 1.0).
-
-        Raises:
-            TypeError: If x is not an Expression.
         """
-        super().__init__(exprs={"x": x}, buffers={"scaling": scaling})
-
-    def is_smooth(self) -> bool:
-        """Returns False because L1-norm is not smooth."""
-        return False
+        super().__init__(x, scaling_params={"scaling": scaling})
 
     def forward(self) -> torch.Tensor:
         """Evaluates the scaled L1-norm."""
         value = self.get_input("x").forward()
         return self.get_buffer("scaling") * torch.sum(torch.abs(value))
-
-    def is_proxable(self) -> bool:
-        """Returns True if the input is a Variable."""
-        input_ = self.get_input("x")
-        if isinstance(input_, Variable):
-            return True
-        return False
 
     def _prox(
         self, relevant_variable_values: TensorDict, prox_scaling: float
@@ -54,27 +51,3 @@ class L1Norm(Atom):
             return torch.sign(x) * torch.nn.functional.relu(torch.abs(x) - threshold)
 
         return relevant_variable_values.apply(soft_threshold)
-
-    def decompose(self) -> list[AtomDecomposition] | None:
-        """Decompose the L1-norm atom if its input is an affine expression.
-
-        Returns:
-            list[AtomDecomposition] | None: Decomposition containing the new atom r(z)
-                and affine expression if decomposable, None otherwise.
-        """
-        # If the input expression is not affine, cannot decompose
-        input_expr = self.get_input("x")
-        if not input_expr.is_affine():
-            return None
-
-        new_var = Variable.like(input_expr)
-
-        scaling = self.get_buffer("scaling")
-        new_atom = L1Norm(new_var, scaling=scaling)
-
-        return [AtomDecomposition(atom=new_atom, affine_expr=input_expr)]
-
-    def _scale(self, scaling: float) -> Self:
-        """Scale the L1-norm atom."""
-        new_scaling = self.get_buffer("scaling") * scaling
-        return L1Norm(self.get_input("x"), scaling=new_scaling)

@@ -3,14 +3,13 @@
 from typing import Any
 
 import torch
-from typing_extensions import Self
 
-from rlaopt.atoms.atom import Atom, AtomDecomposition
-from rlaopt.expression import Expression, Variable
+from rlaopt.atoms.nonsmooth_regularizer import NonsmoothRegularizer
+from rlaopt.expression import Expression
 from rlaopt.ext_tensordict import TensorDict
 
 
-class NucNorm(Atom):
+class NucNorm(NonsmoothRegularizer):
     """Nuclear norm (sum of singular values) of a matrix variable.
 
     The nuclear norm is defined as the sum of the singular values of a matrix.
@@ -39,19 +38,8 @@ class NucNorm(Atom):
         Args:
             x: 2D matrix expression to apply the nuclear norm to.
             scaling: Scaling factor for the nuclear norm. Defaults to 1.0.
-
-        Raises:
-            TypeError: If x is not an Expression.
         """
-        super().__init__(exprs={"x": x}, buffers={"scaling": scaling})
-
-    def is_smooth(self) -> bool:
-        """Check if the nuclear norm is smooth.
-
-        Returns:
-            bool: Always False, as the nuclear norm is non-smooth.
-        """
-        return False
+        super().__init__(x, scaling_params={"scaling": scaling})
 
     def forward(self) -> torch.Tensor:
         """Evaluate the nuclear norm at the registered variable value.
@@ -62,32 +50,6 @@ class NucNorm(Atom):
         value = self.get_input("x").forward()
         S = torch.linalg.svdvals(value)
         return self.get_buffer("scaling") * torch.sum(S)
-
-    def is_proxable(self) -> bool:
-        """Returns True if the input is a Variable."""
-        input_ = self.get_input("x")
-        if isinstance(input_, Variable):
-            return True
-        return False
-
-    def decompose(self) -> list[AtomDecomposition] | None:
-        """Decompose the NucNorm atom if its input is an affine expression.
-
-        Returns:
-            list[AtomDecomposition] | None: Decomposition containing the new atom r(z)
-                and affine expression if decomposable, None otherwise.
-        """
-        # If the input expression is not affine, cannot decompose
-        input_expr = self.get_input("x")
-        if not input_expr.is_affine():
-            return None
-
-        new_var = Variable.like(input_expr)
-
-        scaling = self.get_buffer("scaling")
-        new_atom = NucNorm(new_var, scaling=scaling)
-
-        return [AtomDecomposition(atom=new_atom, affine_expr=input_expr)]
 
     def _prox(
         self, relevant_variable_values: TensorDict, prox_scaling: float
@@ -105,11 +67,6 @@ class NucNorm(Atom):
                 return _prox_nuc_norm.apply(location.T, scale).T
 
         return relevant_variable_values.apply(prox_func)
-
-    def _scale(self, scaling: float) -> Self:
-        """Scale the nuclear norm atom."""
-        new_scaling = self.get_buffer("scaling") * scaling
-        return NucNorm(self.get_input("x"), scaling=new_scaling)
 
 
 class _prox_nuc_norm(torch.autograd.Function):
