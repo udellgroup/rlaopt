@@ -168,13 +168,11 @@ class Polyhedron(Atom):
     def _decompose_equality(self, input_var: Variable) -> AtomDecomposition:
         """Decompose equality constraint."""
         input_expr = self.get_buffer("A") @ input_var - self.get_buffer("b")
-        input_value = input_expr.forward()
-        new_var = Variable(
-            input_value.shape, dtype=input_value.dtype, device=input_value.device
-        )
+        new_var = Variable.like(input_expr)
 
         from rlaopt.atoms.box import Box
 
+        input_value = input_expr.forward()
         new_atom = Box(
             new_var,
             lower=torch.zeros_like(input_value),
@@ -189,10 +187,7 @@ class Polyhedron(Atom):
         upper = self.get_buffer("upper")
         # C could be None (identity)
         input_expr = C @ input_var if C is not None else input_var
-        input_value = input_expr.forward()
-        new_var = Variable(
-            input_value.shape, dtype=input_value.dtype, device=input_value.device
-        )
+        new_var = Variable.like(input_expr)
 
         from rlaopt.atoms.box import Box
 

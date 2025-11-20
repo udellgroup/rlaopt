@@ -82,11 +82,7 @@ class NucNorm(Atom):
         if not input_expr.is_affine():
             return None
 
-        # Create a new variable with the same shape as the input expression
-        input_value = input_expr.forward()
-        new_var = Variable(
-            input_value.shape, dtype=input_value.dtype, device=input_value.device
-        )
+        new_var = Variable.like(input_expr)
 
         scaling = self.get_buffer("scaling")
         new_atom = NucNorm(new_var, scaling=scaling)

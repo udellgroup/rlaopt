@@ -1,6 +1,7 @@
 """Module for Variable class."""
 
 import torch
+from typing_extensions import Self
 
 from rlaopt.expression.expression import Expression
 from rlaopt.expression.tree import ExprTree
@@ -96,6 +97,22 @@ class Variable(Expression):
             self._name = name
         else:
             raise TypeError(f"Expected name to be a string, got {type(name)} instead.")
+
+    @classmethod
+    def like(cls, expr: Expression) -> Self:
+        """Create a new Variable with same shape, dtype, and device as an expression.
+
+        This is useful for creating auxiliary variables in decomposition methods
+        that match the properties of an existing expression.
+
+        Args:
+            expr: Expression to match properties from.
+
+        Returns:
+            Self: New variable with same shape, dtype, and device as expr's value.
+        """
+        value = expr.forward()
+        return cls(value.shape, dtype=value.dtype, device=value.device)
 
     @property
     def value(self) -> torch.nn.Parameter:
