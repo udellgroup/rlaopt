@@ -10,11 +10,11 @@ from rlaopt.ext_tensordict import TensorDict
 class SumSquares(Atom):
     """Sum of squared elements atom."""
 
-    def __init__(self, x: Variable | Expression):
+    def __init__(self, x: Expression):
         """Initializes the sum squared atom.
 
         Args:
-            x: Variable or Expression to apply the sum of squares to.
+            x: Expression to apply the sum of squares to.
         """
         super().__init__(exprs={"x": x}, buffers={})
 
@@ -38,14 +38,4 @@ class SumSquares(Atom):
         self, relevant_variable_values: TensorDict, prox_scaling: float
     ) -> TensorDict:
         """Proximal operator for the sum of squares."""
-        input_ = self.get_input("x")
-
-        if isinstance(input_, Variable):
-            return relevant_variable_values.apply(
-                lambda x: 1 / (1 + 2 * prox_scaling) * x
-            )
-
-        # SumSquares of general Expression is not proxable
-        raise NotImplementedError(
-            "Proximal operator for SumSquares and general Expression is not supported."
-        )
+        return relevant_variable_values.apply(lambda x: 1 / (1 + 2 * prox_scaling) * x)
