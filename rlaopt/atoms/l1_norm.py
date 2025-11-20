@@ -3,7 +3,7 @@
 import torch
 from typing_extensions import Self
 
-from rlaopt.atoms.atom import Atom
+from rlaopt.atoms.atom import Atom, AtomDecomposition
 from rlaopt.expression import Expression, Variable
 from rlaopt.ext_tensordict import TensorDict
 
@@ -54,6 +54,29 @@ class L1Norm(Atom):
             return torch.sign(x) * torch.nn.functional.relu(torch.abs(x) - threshold)
 
         return relevant_variable_values.apply(soft_threshold)
+
+    def decompose(self) -> list[AtomDecomposition] | None:
+        """Decompose the L1-norm atom if its input is an affine expression.
+
+        Returns:
+            list[AtomDecomposition] | None: Decomposition containing the new atom r(z)
+                and affine expression if decomposable, None otherwise.
+        """
+        # If the input expression is not affine, cannot decompose
+        input_expr = self.get_input("x")
+        if not input_expr.is_affine():
+            return None
+
+        # Create a new variable with the same shape as the input expression
+        input_value = input_expr.forward()
+        new_var = Variable(
+            input_value.shape, dtype=input_value.dtype, device=input_value.device
+        )
+
+        scaling = self.get_buffer("scaling")
+        new_atom = L1Norm(new_var, scaling=scaling)
+
+        return [AtomDecomposition(atom=new_atom, affine_expr=input_expr)]
 
     def _scale(self, scaling: float) -> Self:
         """Scale the L1-norm atom."""
