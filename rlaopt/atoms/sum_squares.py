@@ -2,7 +2,6 @@
 
 import torch
 
-from rlaopt.atoms.affine import Affine
 from rlaopt.atoms.atom import Atom
 from rlaopt.expression import Expression, Variable
 from rlaopt.ext_tensordict import TensorDict
@@ -29,13 +28,10 @@ class SumSquares(Atom):
         return torch.sum(value**2)
 
     def is_proxable(self) -> bool:
-        """Returns True if the input is a Variable or Affine with Variable root."""
+        """Returns True if the input is a Variable."""
         input_ = self.get_input("x")
         if isinstance(input_, Variable):
             return True
-        elif isinstance(input_, Affine):
-            if isinstance(input_.get_input("x"), Variable):
-                return True
         return False
 
     def _prox(
@@ -49,51 +45,7 @@ class SumSquares(Atom):
                 lambda x: 1 / (1 + 2 * prox_scaling) * x
             )
 
-        elif isinstance(input_, Expression):
-            # For expressions, SumSquares is only proxable when
-            # input is Affine with a Variable root.
-
-            if isinstance(input_, Affine):
-                if isinstance(input_.get_input("x"), Variable):
-                    return relevant_variable_values.apply(
-                        lambda x: _sum_squares_affine_prox(input_, x, prox_scaling)
-                    )
-
-                else:
-                    raise NotImplementedError(
-                        "Proximal operator for composition of SumSquares and Affine "
-                        "where Affine has non-Variable root is not supported."
-                    )
-
-            # SumSquares of general Expression is not proxable
-            raise NotImplementedError(
-                "Proximal operator for SumSquares and general Expression "
-                "is not supported."
-            )
-
-
-def _sum_squares_affine_prox(
-    input_: Affine, location: torch.Tensor, prox_scaling: float
-) -> torch.Tensor:
-    """Computes prox operator for ||A @ x + b||^2."""
-    # Get data for forming Abar
-    A = input_.get_buffer("A")
-    b = input_.get_buffer("b")
-
-    n = A.shape[1]
-    dtype = A.dtype
-    device = A.device
-
-    # Proximal operator is least-squares problem
-    # Form Abar = [A; 1/sqrt(2*prox_scaling)*I]
-    mu = 1 / (2 * prox_scaling) ** (0.5)
-    Abar = torch.cat((A, mu * torch.eye(n, dtype=dtype, device=device)), dim=0)
-
-    # Get QR factorization and setup right handside
-    _, R = torch.linalg.qr(Abar, mode="reduced")
-    rhs = 1 / (2 * prox_scaling) * location - A.T @ b
-    # Find solution via triangular solves
-    rhs = torch.linalg.solve_triangular(R.T, rhs.reshape(rhs.shape[0], 1), upper=False)
-    return torch.linalg.solve_triangular(R, rhs, upper=True).reshape(
-        rhs.shape[0],
-    )
+        # SumSquares of general Expression is not proxable
+        raise NotImplementedError(
+            "Proximal operator for SumSquares and general Expression is not supported."
+        )
