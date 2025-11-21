@@ -1,0 +1,90 @@
+Solvers
+=======
+
+Solvers are algorithms that find solutions to optimization problems. rlaopt provides several solvers, each suited for different types of problems.
+
+Available Solvers
+-----------------
+
+Proximal Gradient (ProxGrad)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The :class:`~rlaopt.solvers.prox_grad.ProxGrad` solver is designed for problems of the form:
+
+.. math::
+
+   \minimize_x f(x) + g(x)
+
+where :math:`f` is smooth (differentiable) and :math:`g` is proxable (has an efficient proximal operator).
+
+.. code-block:: python
+
+   from rlaopt.solvers import ProxGrad, ProxGradConfig
+
+   config = ProxGradConfig(
+       eta=0.01,              # Step size
+       use_linesearch=True,   # Use line search
+       use_acceleration=False # Use Nesterov acceleration
+   )
+   solver = ProxGrad(objective, config)
+   result = solver.solve()
+
+Features:
+* Supports backtracking line search
+* Optional Nesterov acceleration
+* Works with any combination of smooth and proxable atoms
+
+PCG (Preconditioned Conjugate Gradient)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The :class:`~rlaopt.solvers.pcg.PCG` solver is a preconditioned conjugate gradient method for solving linear systems.
+
+.. code-block:: python
+
+   from rlaopt.solvers import PCG, PCGConfig
+
+   config = PCGConfig(max_iters=1000, tol=1e-6)
+   solver = PCG(linear_system, config)
+   result = solver.solve()
+
+Choosing a Solver
+-----------------
+
+**Use ProxGrad when:**
+* Your objective has both smooth and non-smooth components
+* You have L1 regularization or other proxable penalties
+* You need to solve problems like Lasso, Elastic Net, etc.
+
+**Use PCG when:**
+* You need to solve linear systems
+* Your problem is purely quadratic
+* You need efficient preconditioning
+
+Solver Configuration
+--------------------
+
+Each solver has a configuration class that controls its behavior:
+
+* :class:`~rlaopt.solvers.prox_grad.ProxGradConfig`: Step size, line search, acceleration
+* :class:`~rlaopt.solvers.pcg.PCGConfig`: Iteration limits, tolerance, preconditioner
+
+.. code-block:: python
+
+   config = ProxGradConfig(
+       eta=0.01,
+       use_linesearch=True,
+       max_iters=1000,
+       tol=1e-4
+   )
+
+Stopping Criteria
+-----------------
+
+All solvers support stopping criteria:
+
+* ``max_iters``: Maximum number of iterations
+* ``tol``: Convergence tolerance
+
+The solver will stop when either criterion is met.
+
+
