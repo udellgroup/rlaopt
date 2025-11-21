@@ -26,3 +26,4 @@ Basic Solver Usage
 The :doc:`basic_solver` example provides a simple introduction to using rlaopt solvers.
 
 
+

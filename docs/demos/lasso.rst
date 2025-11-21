@@ -47,24 +47,22 @@ Now we'll set up the optimization problem using rlaopt:
 
 .. code-block:: python
 
-   from rlaopt.expression import Variable
+   from rlaopt.expression import Variable, Constant
    from rlaopt.atoms import L1Norm, SumSquares
    from rlaopt.solvers import ProxGrad, ProxGradConfig
 
-   # Create variables
+   # Create optimization variable
    beta = Variable((n_features,), name='beta')
-   X_var = Variable((n_samples, n_features), name='X')
-   y_var = Variable((n_samples,), name='y')
 
-   # Set the data (these are fixed, not optimized)
-   X_var.value = X
-   y_var.value = y
+   # X and y are data tensors, not variables
+   X_const = Constant(X)
+   y_const = Constant(y)
 
    # Regularization parameter
    lambda_reg = 0.1
 
    # Build the objective: ||X*beta - y||^2 + lambda * ||beta||_1
-   residual = X_var @ beta - y_var
+   residual = X_const @ beta - y_const
    data_fit = SumSquares(residual)
    regularization = L1Norm(beta, scaling=lambda_reg)
    objective = data_fit + regularization
@@ -87,7 +85,8 @@ Configure and run the solver:
 
    # Create and run the solver
    solver = ProxGrad(objective, config)
-   result = solver.solve()
+   # solver.solve() returns (variable_values, final_error)
+   variable_values, final_error = solver.solve()
 
    # Get the solution
    beta_opt = beta.value.data
@@ -150,5 +149,6 @@ Notes
 * The line search helps adapt the step size automatically
 * The regularization parameter :math:`\lambda` controls the sparsity of the solution
 * Larger :math:`\lambda` values lead to sparser solutions
+
 
 

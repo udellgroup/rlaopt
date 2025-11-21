@@ -25,7 +25,8 @@ Here's a simple example of creating variables and building expressions:
 
 .. code-block:: python
 
-   from rlaopt.expression import Variable
+   import torch
+   from rlaopt.expression import Variable, Constant
    from rlaopt.atoms import L1Norm, SumSquares
    from rlaopt.solvers import ProxGrad, ProxGradConfig
 
@@ -33,8 +34,9 @@ Here's a simple example of creating variables and building expressions:
    x = Variable((10,), name='x')
 
    # Build an objective: ||Ax - b||^2 + lambda * ||x||_1
-   A = Variable((5, 10), name='A')
-   b = Variable((5,), name='b')
+   # A and b are data matrices
+   A = Constant(torch.randn(5, 10))
+   b = Constant(torch.randn(5))
    lambda_reg = 0.1
 
    # Create the objective expression
@@ -44,7 +46,7 @@ Here's a simple example of creating variables and building expressions:
    # Solve using proximal gradient
    config = ProxGradConfig(eta=0.01, use_linesearch=True)
    solver = ProxGrad(objective, config)
-   solution = solver.solve()
+   variable_values, final_error = solver.solve()
 
 Lasso Regression Example
 ~~~~~~~~~~~~~~~~~~~~~~~~
@@ -64,25 +66,25 @@ A complete example of solving a Lasso regression problem:
    y = torch.randn(n_samples)
    lambda_reg = 0.1
 
-   # Create variables
+   # Create optimization variable
    beta = Variable((n_features,), name='beta')
-   X_var = Variable(X.shape, name='X')
-   y_var = Variable(y.shape, name='y')
 
-   # Set data
-   X_var.value = X
-   y_var.value = y
+   # X and y are data tensors
+   from rlaopt.expression import Constant
+   X_const = Constant(X)
+   y_const = Constant(y)
 
    # Build Lasso objective: ||X*beta - y||^2 + lambda * ||beta||_1
-   residual = X_var @ beta - y_var
+   residual = X_const @ beta - y_const
    objective = SumSquares(residual) + L1Norm(beta, scaling=lambda_reg)
 
    # Solve
    config = ProxGradConfig(eta=0.01, max_iters=1000, tol=1e-4)
    solver = ProxGrad(objective, config)
-   result = solver.solve()
+   variable_values, final_error = solver.solve()
 
    print(f"Solution: {beta.value.data}")
+   print(f"Final error: {final_error}")
 
 Key Features
 ------------

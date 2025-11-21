@@ -6,20 +6,19 @@ This page provides a step-by-step guide to building and solving optimization pro
 Step 1: Define Variables
 -------------------------
 
-First, create the optimization variables:
+First, create the optimization variables and data constants:
 
 .. code-block:: python
 
-   from rlaopt.expression import Variable
+   import torch
+   from rlaopt.expression import Variable, Constant
 
-   # Create variables for your problem
+   # Create optimization variable
    x = Variable((n_features,), name='x')
-   A = Variable((n_samples, n_features), name='A')
-   b = Variable((n_samples,), name='b')
 
-   # Set fixed data values
-   A.value = your_data_matrix
-   b.value = your_target_vector
+   # A and b are data matrices
+   A = Constant(your_data_matrix)
+   b = Constant(your_target_vector)
 
 Step 2: Build the Objective
 ----------------------------
@@ -64,11 +63,13 @@ Call the solver to find the solution:
 .. code-block:: python
 
    # Solve the problem
-   result = solver.solve()
+   # solver.solve() returns (variable_values, final_error)
+   variable_values, final_error = solver.solve()
 
    # Access the solution
    solution = x.value.data
    print(f"Solution: {solution}")
+   print(f"Final error: {final_error}")
 
 Complete Example
 ----------------
@@ -78,30 +79,31 @@ Here's a complete example putting it all together:
 .. code-block:: python
 
    import torch
-   from rlaopt.expression import Variable
+   from rlaopt.expression import Variable, Constant
    from rlaopt.atoms import L1Norm, SumSquares
    from rlaopt.solvers import ProxGrad, ProxGradConfig
 
-   # Step 1: Create variables
+   # Step 1: Create variables and data
    n_samples, n_features = 100, 50
    x = Variable((n_features,), name='beta')
-   X = Variable((n_samples, n_features), name='X')
-   y = Variable((n_samples,), name='y')
-
-   # Set data
-   X.value = torch.randn(n_samples, n_features)
-   y.value = torch.randn(n_samples)
+   
+   # X and y are data tensors, not variables
+   X = torch.randn(n_samples, n_features)
+   y = torch.randn(n_samples)
+   X_const = Constant(X)
+   y_const = Constant(y)
 
    # Step 2: Build objective
-   residual = X @ x - y
+   residual = X_const @ x - y_const
    objective = SumSquares(residual) + L1Norm(x, scaling=0.1)
 
    # Step 3 & 4: Solve
    config = ProxGradConfig(eta=0.01, max_iters=1000, tol=1e-4)
    solver = ProxGrad(objective, config)
-   result = solver.solve()
+   variable_values, final_error = solver.solve()
 
    print(f"Optimal solution: {x.value.data}")
+   print(f"Final error: {final_error}")
 
 Tips
 ----

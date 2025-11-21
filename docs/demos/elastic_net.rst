@@ -13,7 +13,7 @@ Problem Setup
 .. code-block:: python
 
    import torch
-   from rlaopt.expression import Variable
+   from rlaopt.expression import Variable, Constant
    from rlaopt.atoms import ElasticNet, SumSquares
    from rlaopt.solvers import ProxGrad, ProxGradConfig
 
@@ -22,14 +22,12 @@ Problem Setup
    X = torch.randn(n_samples, n_features)
    y = torch.randn(n_samples)
 
-   # Create variables
+   # Create optimization variable
    beta = Variable((n_features,), name='beta')
-   X_var = Variable((n_samples, n_features), name='X')
-   y_var = Variable((n_samples,), name='y')
 
-   # Set data
-   X_var.value = X
-   y_var.value = y
+   # X and y are data tensors, not variables
+   X_const = Constant(X)
+   y_const = Constant(y)
 
 Building the Objective
 ----------------------
@@ -43,7 +41,7 @@ We can use the ElasticNet atom directly:
    lambda_l2 = 0.01
 
    # Build objective
-   residual = X_var @ beta - y_var
+   residual = X_const @ beta - y_const
    data_fit = SumSquares(residual)
    regularization = ElasticNet(beta, l1_scaling=lambda_l1, l2_scaling=lambda_l2)
    objective = data_fit + regularization
@@ -55,8 +53,10 @@ Solving
 
    config = ProxGradConfig(eta=0.01, use_linesearch=True, max_iters=1000, tol=1e-4)
    solver = ProxGrad(objective, config)
-   result = solver.solve()
+   variable_values, final_error = solver.solve()
 
    print(f"Solution: {beta.value.data}")
+   print(f"Final error: {final_error}")
+
 
 

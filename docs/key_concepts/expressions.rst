@@ -18,8 +18,8 @@ A :class:`~rlaopt.expression.variable.Variable` represents an optimization varia
    # Create a variable with shape (10,)
    x = Variable((10,), name='x')
 
-   # Create a matrix variable
-   A = Variable((5, 10), name='A')
+   # Variables can have any shape
+   matrix_var = Variable((5, 10), name='matrix_var')
 
 Constant
 ~~~~~~~~
@@ -41,11 +41,15 @@ Expressions can be combined using standard mathematical operations:
 
 .. code-block:: python
 
-   from rlaopt.expression import Variable
+   import torch
+   from rlaopt.expression import Variable, Constant
 
+   # Create optimization variable
    x = Variable((10,), name='x')
-   A = Variable((5, 10), name='A')
-   b = Variable((5,), name='b')
+
+   # A and b are data matrices
+   A = Constant(torch.randn(5, 10))
+   b = Constant(torch.randn(5))
 
    # Linear combination
    y = A @ x + b
@@ -89,5 +93,6 @@ rlaopt supports natural mathematical syntax through operator overloading:
 * ``**``: Exponentiation
 
 This allows you to write optimization problems in a natural, readable way.
+
 
 

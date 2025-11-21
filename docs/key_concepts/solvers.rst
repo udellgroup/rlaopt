@@ -27,7 +27,7 @@ where :math:`f` is smooth (differentiable) and :math:`g` is proxable (has an eff
        use_acceleration=False # Use Nesterov acceleration
    )
    solver = ProxGrad(objective, config)
-   result = solver.solve()
+   variable_values, final_error = solver.solve()
 
 Features:
 * Supports backtracking line search
@@ -45,7 +45,7 @@ The :class:`~rlaopt.solvers.pcg.PCG` solver is a preconditioned conjugate gradie
 
    config = PCGConfig(max_iters=1000, tol=1e-6)
    solver = PCG(linear_system, config)
-   result = solver.solve()
+   solution, final_residual = solver.solve()
 
 Choosing a Solver
 -----------------
