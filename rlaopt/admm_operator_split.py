@@ -81,17 +81,14 @@ class ADMMSplit:
 
         self._f, decomposed_atoms = _attempt_split(expr)
         self._r = [decomposition.atom for decomposition in decomposed_atoms]
-        affine_exprs = [decomposition.affine_expr for decomposition in decomposed_atoms]
+        self._affine_exprs = [
+            decomposition.affine_expr for decomposition in decomposed_atoms
+        ]
         # We negate the values of b since the decomposition is of the form
         # g(Ax - b) -> g(z) with the constraint Ax - b = z
-        As_and_bs = [
-            _extract_lin_op_and_bias(affine_expr, self._f.variable_values)
-            for affine_expr in affine_exprs
-        ]
-        self._As = [A for A, _ in As_and_bs]
-        self._bs = [b for _, b in As_and_bs]
-        self._A = vstack(self._As)
-        self._b = torch.cat(self._bs, dim=0)
+        self._A, self._b = _extract_lin_op_and_bias(
+            self._affine_exprs, self.f_and_affine_variable_values
+        )
 
     @property
     def f(self) -> Expression:
@@ -116,16 +113,22 @@ class ADMMSplit:
     @property
     def variable_values(self) -> TensorDict:
         """Returns the variable values associated with the composite function."""
-        td_f = self._f.variable_values
-        tds_r = [r.variable_values for r in self._r]
-        if not tds_r:
-            return td_f
-        return merge_tensordicts(td_f, *tds_r)
+        td_f_and_affine = self.f_and_affine_variable_values
+        td_r = self.r_variable_values
+        return merge_tensordicts(td_f_and_affine, td_r)
 
     @property
-    def f_variable_values(self) -> TensorDict:
-        """Returns the variable values associated with the smooth function f."""
-        return self._f.variable_values
+    def f_and_affine_variable_values(self) -> TensorDict:
+        """Returns the variable values associated with f and the affine constraints.
+
+        This is important for constructing the linear operator A, because
+        the affine constraints may depend on variables not present in f, and vice versa.
+        """
+        td_f = self._f.variable_values
+        tds_affine = [expr.variable_values for expr in self._affine_exprs]
+        if not tds_affine:
+            return td_f
+        return merge_tensordicts(td_f, *tds_affine)
 
     @property
     def r_variable_values(self) -> TensorDict:
@@ -133,24 +136,10 @@ class ADMMSplit:
         tds_r = [r.variable_values for r in self._r]
         if not tds_r:
             # Return empty TensorDict if no r atoms
-            return TensorDict()
+            return TensorDict({})
         if len(tds_r) == 1:
             return tds_r[0]
         return merge_tensordicts(*tds_r)
-
-    def evaluate(self, variable_values: TensorDict) -> torch.Tensor:
-        """Evaluate the composite objective function `f + r` at the given variables.
-
-        Args:
-            variable_values (TensorDict): A dictionary of variables.
-
-        Returns:
-            torch.Tensor: The scalar value of the objective function
-                at `variable_values`.
-        """
-        val_f = self._f.evaluate(variable_values)
-        val_r = sum(r.evaluate(variable_values) for r in self._r)
-        return val_f + val_r
 
     def func_f(self, variable_values: TensorDict) -> torch.Tensor:
         """Evaluate the smooth part of the objective function at the given variables.
@@ -254,26 +243,32 @@ def _attempt_split(expr: AddExpression) -> tuple[Expression, list[AtomDecomposit
 
 
 def _extract_lin_op_and_bias(
-    affine_expr: Expression,
-    smooth_expr_vars: TensorDict,
+    affine_exprs: list[Expression],
+    f_and_affine_variable_values: TensorDict,
 ) -> tuple[_AffineExprLinOp, torch.Tensor]:
     """Extracts the linear operator and bias from an affine expression.
 
     Args:
-        affine_expr (Expression): An affine expression of the form Ax - b.
-        smooth_expr_vars (TensorDict): The variable values associated with the
-            smooth part of the objective function.
+        affine_exprs (list[Expression]): List of affine expressions of the form Ax - b.
+        f_and_affine_variable_values (TensorDict): The variable values associated with
+            the smooth part of the objective function along with the affine constraints.
 
     Returns:
         tuple[LinearOperator, torch.Tensor]: A tuple containing the linear operator A
         and the bias vector b.
     """
-    # Evaluate at zero to get the bias
-    zero_td = affine_expr.variable_values.clone()
-    for key in zero_td.keys():
-        zero_td[key] = torch.zeros_like(zero_td[key])
-    bias = affine_expr.evaluate(zero_td)
+    As = []
+    bs = []
+    for affine_expr in affine_exprs:
+        # Compute the bias of the affine expression
+        zero_td = affine_expr.variable_values.apply(torch.zeros_like)
+        bias = affine_expr.evaluate(zero_td)
 
-    lin_op = _AffineExprLinOp(affine_expr, bias, smooth_expr_vars)
-    # Negate bias to match the standard form Ax - b
-    return lin_op, -bias
+        # Get the linear operator corresponding to the affine expression
+        lin_op = _AffineExprLinOp(affine_expr, bias, f_and_affine_variable_values)
+        As.append(lin_op)
+        bs.append(bias)
+
+    A = vstack(As)
+    b = -torch.cat(bs, dim=0)  # Negate to match Ax - b form
+    return A, b
