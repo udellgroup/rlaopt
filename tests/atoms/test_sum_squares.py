@@ -4,7 +4,6 @@ import pytest
 import torch
 from tensordict import assert_allclose_td
 
-from rlaopt.atoms import Affine
 from rlaopt.atoms.sum_squares import SumSquares
 from rlaopt.expression import Expression, Variable
 from rlaopt.ext_tensordict import TensorDict
@@ -13,17 +12,15 @@ from rlaopt.ext_tensordict import TensorDict
 @pytest.fixture
 def vector_var():
     """Create a vector variable."""
-    x = Variable((5,), name="x")
-    x.value.data = torch.tensor([1.0, 2.0, 3.0, 4.0, 5.0])
+    x = Variable(torch.tensor([1.0, 2.0, 3.0, 4.0, 5.0]), name="x")
     return x
 
 
 @pytest.fixture
 def simple_affine(vector_var):
     """Create a simple affine transformation."""
-    A = torch.eye(5)
     b = torch.zeros(5)
-    return Affine(vector_var, A, b)
+    return vector_var + b
 
 
 @pytest.fixture
@@ -37,7 +34,7 @@ def nontrivial_affine(vector_var):
         ]
     )
     b = torch.tensor([1.0, -1.0, 0.5])
-    return Affine(vector_var, A, b)
+    return A @ vector_var + b
 
 
 class TestSumSquares:
@@ -77,7 +74,7 @@ class TestSumSquares:
         result = ss.forward()
         assert torch.allclose(result, torch.tensor(0.0))
 
-    def test_forward_with_affine_expression(self, simple_affine, vector_var):
+    def test_forward_with_affine_expression(self, simple_affine):
         """Test forward() with affine expression."""
         ss = SumSquares(simple_affine)
         result = ss.forward()
@@ -85,7 +82,7 @@ class TestSumSquares:
         expected = torch.tensor(55.0)
         assert torch.allclose(result, expected)
 
-    def test_forward_with_nontrivial_affine(self, nontrivial_affine, vector_var):
+    def test_forward_with_nontrivial_affine(self, nontrivial_affine):
         """Test forward() with non-trivial affine transformation."""
         ss = SumSquares(nontrivial_affine)
         result = ss.forward()
@@ -122,7 +119,7 @@ class TestSumSquares:
         ss = SumSquares(simple_affine)
         assert ss.is_smooth() is True
 
-    def test_is_smooth_with_nonsmooth_expression(self, vector_var):
+    def test_is_smooth_with_nonsmooth_expression(self):
         """Test is_smooth() returns False for non-smooth expression."""
 
         # Create a mock non-smooth expression
@@ -155,21 +152,10 @@ class TestSumSquares:
         ss = SumSquares(vector_var)
         assert ss.is_proxable() is True
 
-    def test_is_proxable_with_affine_of_variable(self, simple_affine):
-        """Test is_proxable() returns True for Affine of Variable."""
-        ss = SumSquares(simple_affine)
-        assert ss.is_proxable() is True
-
     def test_is_proxable_with_general_expression(self, vector_var):
         """Test is_proxable() returns False for general expression."""
         expr = vector_var + 1.0
         ss = SumSquares(expr)
-        assert ss.is_proxable() is False
-
-    def test_is_proxable_with_nested_affine(self, simple_affine):
-        """Test is_proxable() returns False for Affine of Affine."""
-        nested_affine = Affine(simple_affine, torch.eye(5), torch.zeros(5))
-        ss = SumSquares(nested_affine)
         assert ss.is_proxable() is False
 
     # ----------------------
@@ -207,47 +193,6 @@ class TestSumSquares:
         assert_allclose_td(result2, expected2)
 
     # ----------------------
-    # Proximal operator tests - Affine
-    # ----------------------
-
-    def test_prox_with_affine_identity(self, simple_affine, vector_var):
-        """Test prox() with identity affine transformation."""
-        ss = SumSquares(simple_affine)
-        location = TensorDict(
-            {vector_var.name: torch.tensor([3.0, 6.0, 9.0, 12.0, 15.0])}
-        )
-        prox_scaling = 1.0
-
-        result = ss.prox(location, prox_scaling)
-        # With identity A and zero b, should reduce to variable case
-        assert result[vector_var.name].shape == location[vector_var.name].shape
-        assert not torch.isnan(result[vector_var.name]).any()
-
-    def test_prox_with_nontrivial_affine(self, nontrivial_affine, vector_var):
-        """Test prox() with non-trivial affine transformation."""
-        ss = SumSquares(nontrivial_affine)
-        location = TensorDict({vector_var.name: torch.randn(5)})
-        prox_scaling = 0.5
-
-        result = ss.prox(location, prox_scaling)
-        assert result[vector_var.name].shape == location[vector_var.name].shape
-        assert not torch.isnan(result[vector_var.name]).any()
-
-    def test_prox_minimizes_objective_for_affine(self, simple_affine, vector_var):
-        """Test prox() result minimizes the proximal objective."""
-        ss = SumSquares(simple_affine)
-        location_tensor = torch.tensor([2.0, 4.0, 6.0, 8.0, 10.0])
-        location = TensorDict({vector_var.name: location_tensor})
-        prox_scaling = 1.0
-
-        result = ss.prox(location, prox_scaling)
-
-        # The prox result should be closer to minimizing the objective
-        # than the original location (qualitative test)
-        assert not torch.allclose(result[vector_var.name], location_tensor)
-        assert result[vector_var.name].norm() < location_tensor.norm()
-
-    # ----------------------
     # Error handling tests
     # ----------------------
 
@@ -257,14 +202,6 @@ class TestSumSquares:
         ss = SumSquares(expr)
 
         with pytest.raises(NotImplementedError, match="general Expression"):
-            ss.prox(TensorDict({vector_var.name: torch.ones(5)}), 1.0)
-
-    def test_prox_raises_error_for_nested_affine(self, simple_affine, vector_var):
-        """Test prox() raises error for Affine with non-Variable root."""
-        nested_affine = Affine(simple_affine, torch.eye(5), torch.zeros(5))
-        ss = SumSquares(nested_affine)
-
-        with pytest.raises(NotImplementedError, match="non-Variable root"):
             ss.prox(TensorDict({vector_var.name: torch.ones(5)}), 1.0)
 
     # ----------------------
