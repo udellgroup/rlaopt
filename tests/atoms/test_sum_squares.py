@@ -201,7 +201,9 @@ class TestSumSquares:
         expr = vector_var + 1.0
         ss = SumSquares(expr)
 
-        with pytest.raises(NotImplementedError, match="general Expression"):
+        with pytest.raises(
+            NotImplementedError, match="Proximal operator .* not implemented"
+        ):
             ss.prox(TensorDict({vector_var.name: torch.ones(5)}), 1.0)
 
     # ----------------------

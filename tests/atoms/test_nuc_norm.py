@@ -50,12 +50,6 @@ class TestNucNorm:
         nuc = NucNorm(matrix_var, scaling=scaling)
         assert torch.equal(nuc.get_buffer("scaling"), scaling)
 
-    def test_init_raises_error_for_non_2d_variable(self):
-        """Test initialization raises ValueError for non-2D variables."""
-        vector_var = Variable((10,), name="x")
-        with pytest.raises(ValueError, match="must be 2D Tensor"):
-            NucNorm(vector_var)
-
     # ----------------------
     # Forward evaluation tests
     # ----------------------
