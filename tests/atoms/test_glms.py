@@ -34,7 +34,7 @@ def beta_variable():
 
 
 class TweedieLossTest:
-    def test_tweedie_loss_invalid_reduction():
+    def test_tweedie_loss_invalid_reduction(self):  # ← Added self
         """Test that the functional form raises ValueError for invalid reduction."""
         input_ = torch.tensor([1.0, 2.0, 3.0])
         target = torch.tensor([0.5, 1.5, 2.5])
@@ -52,15 +52,15 @@ class TweedieLossTest:
         input_ = torch.zeros(10)
         target = torch.ones(10)
         loss = tweedie_loss(input_, target, reduction="sum")
-        assert loss is torch.Tensor
-        assert loss.shape == 1
+        assert isinstance(loss, torch.Tensor)
+        assert loss.ndim == 0  # Scalar tensor
 
     def test_loss_without_reduction(self):
         input_ = torch.zeros(10)
         target = torch.ones(10)
-        loss_tensor = tweedie_loss(input_, target, reduction="None")
-        assert loss_tensor is torch.Tensor
-        assert loss_tensor.shape == 10
+        loss_tensor = tweedie_loss(input_, target, reduction="none")  # ← Lowercase!
+        assert isinstance(loss, torch.Tensor)
+        assert loss_tensor.shape == (10,)  # ← Should be a tuple
 
 
 class BaseGLMTest(ABC):
