@@ -63,21 +63,21 @@ class TweedieLoss(_Loss):
             )
         self.power = power
 
-    def forward(self, input: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
+    def forward(self, input_: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
         """Compute Tweedie loss.
 
         Args:
-            input: Predicted values (must be positive)
+            input_: Predicted values (must be positive)
             target: Ground truth values (must be non-negative)
 
         Returns:
             Loss value
         """
-        return tweedie_loss(input, target, power=self.power, reduction=self.reduction)
+        return tweedie_loss(input_, target, power=self.power, reduction=self.reduction)
 
 
 def tweedie_loss(
-    input: torch.Tensor,
+    input_: torch.Tensor,
     target: torch.Tensor,
     power: float = 1.5,
     reduction: str = "mean",
@@ -86,7 +86,7 @@ def tweedie_loss(
     """Functional form of Tweedie loss (negative log-likelihood).
 
     Args:
-        input: Predicted values (ŷ), shape (N, *)
+        input_: Predicted values (ŷ), shape (N, *)
         target: Target values (y), shape (N, *)
         power: Tweedie power parameter
         reduction: 'none' | 'mean' | 'sum'
@@ -103,17 +103,17 @@ def tweedie_loss(
     if power == 1:
         # Poisson distribution
         # NLL = ŷ - y*log(ŷ)  [ignoring log(y!) constant]
-        loss = input - target * torch.log(input + eps)
+        loss = input_ - target * torch.log(input_ + eps)
 
     elif power == 2:
         # Gamma distribution
         # NLL = log(ŷ) + y/ŷ  [ignoring log(y) and other constants]
-        loss = torch.log(input + eps) + target / (input + eps)
+        loss = torch.log(input_ + eps) + target / (input_ + eps)
 
     elif power == 3:
         # Inverse Gaussian distribution
         # NLL = (y - ŷ)² / (2 * ŷ² * y)  [ignoring constants not depending on ŷ]
-        loss = torch.pow(target - input, 2) / (2 * torch.pow(input, 2) * target + eps)
+        loss = torch.pow(target - input_, 2) / (2 * torch.pow(input_, 2) * target + eps)
 
     else:
         # General Tweedie case (mostly for 1 < p < 2)
@@ -122,10 +122,10 @@ def tweedie_loss(
         p2 = 2 - power
 
         # First term: y * ŷ^(1-p) / (1-p)
-        term1 = target * torch.pow(input + eps, p1) / p1
+        term1 = target * torch.pow(input_ + eps, p1) / p1
 
         # Second term: ŷ^(2-p) / (2-p)
-        term2 = torch.pow(input + eps, p2) / p2
+        term2 = torch.pow(input_ + eps, p2) / p2
 
         loss = -term1 + term2
 

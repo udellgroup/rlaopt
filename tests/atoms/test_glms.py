@@ -9,7 +9,7 @@ from rlaopt.atoms import (
     InverseGaussianRegression,
     PoissonRegression,
 )
-from rlaopt.atoms.linear_model_base.custom_losses.tweedie import TweedieLoss
+from rlaopt.atoms.linear_model_base.custom_losses.tweedie import tweedie_loss
 from rlaopt.data import DataLoader, Dataset
 from rlaopt.expression import Variable
 
@@ -33,23 +33,33 @@ def beta_variable():
     return Variable(torch.randn(5), name="beta")
 
 
-class TweedieTest:
-    def test_init_with_incorrect_reduction(self):
+class TweedieLossTest:
+    def test_tweedie_loss_invalid_reduction():
+        """Test that the functional form raises ValueError for invalid reduction."""
+        input_ = torch.tensor([1.0, 2.0, 3.0])
+        target = torch.tensor([0.5, 1.5, 2.5])
+        
         with pytest.raises(ValueError, match="Invalid reduction mode:"):
-            TweedieLoss(power=1.5, reduction="median")
+            tweedie_loss(input_, target, power=1.5, reduction="median")
 
-    def test_loss_with_invalid_input(self):
-        loss = TweedieLoss(power=1.5, reduction="sum")
+    def test_loss_with_invalid_targets(self):
         with pytest.raises(ValueError, match="Target values must be non-negative"):
-            input = torch.zeros(10)
+            input_ = torch.zeros(10)
             target = -torch.ones(10)
-            loss.forward(input, target)
+            tweedie_loss(input_, target)
+    
+    def test_loss_with_sum_reduction(self):
+        input_ = torch.zeros(10)
+        target = torch.ones(10)
+        loss = tweedie_loss(input_, target, reduction="sum")
+        assert loss is torch.Tensor
+        assert loss.shape == 1
 
     def test_loss_without_reduction(self):
-        loss = TweedieLoss(power=1.5, reduction="none")
-        input = torch.zeros(10)
+        input_ = torch.zeros(10)
         target = torch.ones(10)
-        loss_tensor = loss.forward(input, target)
+        loss_tensor = tweedie_loss(input_, target, reduction="None")
+        assert loss_tensor is torch.Tensor
         assert loss_tensor.shape == 10
 
 

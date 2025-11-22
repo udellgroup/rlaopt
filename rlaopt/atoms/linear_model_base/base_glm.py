@@ -25,12 +25,12 @@ class BaseGLM(_BaseLinearModel, ABC):
     @abstractmethod
     def link_fn(self, linear_pred: torch.Tensor) -> torch.Tensor:
         """Apply link function to linear predictor."""
-        pass
+        ...
 
     @abstractmethod
     def inv_link_fn(self, prediction: torch.Tensor) -> torch.Tensor:
         """Apply inverse link function."""
-        pass
+        ...
 
     def deviance_fn(
         self,
