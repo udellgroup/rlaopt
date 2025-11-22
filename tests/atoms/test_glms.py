@@ -38,7 +38,7 @@ class TweedieLossTest:
         """Test that the functional form raises ValueError for invalid reduction."""
         input_ = torch.tensor([1.0, 2.0, 3.0])
         target = torch.tensor([0.5, 1.5, 2.5])
-        
+
         with pytest.raises(ValueError, match="Invalid reduction mode:"):
             tweedie_loss(input_, target, power=1.5, reduction="median")
 
@@ -47,7 +47,7 @@ class TweedieLossTest:
             input_ = torch.zeros(10)
             target = -torch.ones(10)
             tweedie_loss(input_, target)
-    
+
     def test_loss_with_sum_reduction(self):
         input_ = torch.zeros(10)
         target = torch.ones(10)
