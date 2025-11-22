@@ -9,7 +9,7 @@ from rlaopt.expression import Variable
 from rlaopt.ext_tensordict import TensorDict
 from rlaopt.utils.device_utils import move_to_source_device
 
-from .loss_factory import get_loss_function
+from .loss_factory import _get_loss_function
 from .loss_types import LossType
 
 
@@ -58,7 +58,7 @@ class _BaseLinearModel(Atom, ABC):
 
         super().__init__(exprs, {}, None)
 
-        _loss_fn = get_loss_function(loss_type)
+        _loss_fn = _get_loss_function(loss_type)
         if loss_type == LossType.POISSON_GAMMA:
             self._loss_fn = _loss_fn(loss_kwargs["power"], reduction="mean")
         else:

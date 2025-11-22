@@ -8,6 +8,7 @@ from rlaopt.atoms import (
     LADRegression,
     LinearRegression,
 )
+from rlaopt.atoms.linear_model_base.base_regressor import _get_central_tendency
 from rlaopt.data import BatchedDataset, DataLoader, Dataset
 from rlaopt.expression import Variable
 
@@ -68,6 +69,16 @@ def batch_regression_data():
 def beta_variable():
     """Create beta variable for regression."""
     return Variable(torch.randn(5), name="beta")
+
+class TestInitLogic:
+    
+    pass
+
+class TestCentralTendency:
+    def test_invalid_central_tendency(self):
+        y = torch.ones(5)
+        with pytest.raises(ValueError, match="Unsupported central tendency"):
+            _get_central_tendency(y, "kurtosis")
 
 
 class BaseRegressorTest(ABC):
@@ -133,7 +144,7 @@ class BaseRegressorTest(ABC):
         assert grad_beta is not None
         grad_intercept = batched_model.get_input("intercept").forward().grad
         assert grad_intercept is not None
-
+    
 
 class TestLinearRegression(BaseRegressorTest):
     """Test suite for LinearRegression (OLS)."""

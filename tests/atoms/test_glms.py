@@ -58,9 +58,9 @@ class TweedieLossTest:
     def test_loss_without_reduction(self):
         input_ = torch.zeros(10)
         target = torch.ones(10)
-        loss_tensor = tweedie_loss(input_, target, reduction="none")  # ← Lowercase!
-        assert isinstance(loss, torch.Tensor)
-        assert loss_tensor.shape == (10,)  # ← Should be a tuple
+        loss_tensor = tweedie_loss(input_, target, reduction="none") 
+        assert isinstance(loss_tensor, torch.Tensor)
+        assert loss_tensor.shape == (10,) 
 
 
 class BaseGLMTest(ABC):
@@ -83,6 +83,10 @@ class BaseGLMTest(ABC):
         pred = model.predict(X=X_test)
         assert pred.shape == (20,)
         assert (pred > 0).all()
+    
+    def test_loss(self, model):
+        loss = model.loss()
+        assert isinstance(loss, torch.Tensor)
 
     def test_link_inv_link_fn_consistency(self, model):
         """Test that link and inv_link_fn are inverses."""
@@ -158,6 +162,10 @@ class TestCompoundPoissonGammaRegression(BaseGLMTest):
         loss = model.forward()
         assert loss.ndim == 0
         assert not torch.isnan(loss)
+    
+    def test_power_property(self, model):
+        power = model.power
+        assert isinstance(power, float)
 
 
 class TestPoissonRegression(BaseGLMTest):

@@ -22,8 +22,8 @@ LOSSES = {
 }
 
 
-def get_loss_function(loss_type: LossType) -> _Loss:
-    """Factory function to get the appropriate loss function based on the loss type.
+def _get_loss_function(loss_type: LossType) -> _Loss:
+    """Internal Factory function to get the appropriate loss function based on the loss type.
 
     Args:
         loss_type (LossType): The type of loss function to retrieve.
@@ -31,10 +31,6 @@ def get_loss_function(loss_type: LossType) -> _Loss:
     Returns:
         An instance of the specified loss function.
 
-    Raises:
-        ValueError: If the provided loss type is not recognized.
     """
-    if loss_type not in LOSSES:
-        raise ValueError(f"Unsupported loss type: {loss_type}")
 
     return LOSSES[loss_type]
