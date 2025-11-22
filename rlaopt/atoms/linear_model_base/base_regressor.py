@@ -5,22 +5,15 @@ import torch
 
 from rlaopt.atoms.linear_model_base.base import _BaseLinearModel
 from rlaopt.atoms.linear_model_base.loss_types import LossType
-
 from rlaopt.ext_tensordict import TensorDict
+
 
 class BaseRegressor(_BaseLinearModel):
     """Linear model for regression tasks."""
 
-    def __init__(
-            self, 
-            loss_type,
-            beta, 
-            dataloader,
-            fit_intercept = True, 
-            **loss_kwargs 
-    ):
+    def __init__(self, loss_type, beta, dataloader, fit_intercept=True, **loss_kwargs):
         super().__init__(loss_type, beta, dataloader, fit_intercept, **loss_kwargs)
-        
+
         # Build score function based on loss type.
         # Get central tendency based on loss type.
         if loss_type == LossType.LEAST_SQUARES:
@@ -29,7 +22,7 @@ class BaseRegressor(_BaseLinearModel):
             central_tendency = "median"
         # Get deviance function and build score function.
         self._score_fn = _build_regression_score_fn(self, central_tendency)
-        
+
     def predict(
         self, beta_value: TensorDict | None = None, X: torch.Tensor | None = None
     ) -> torch.Tensor:
@@ -42,16 +35,15 @@ class BaseRegressor(_BaseLinearModel):
         Returns:
             Predicted target values
         """
-
         beta_tensor, intercept_tensor = self._get_params(beta_value)
         return BaseRegressor._get_raw_prediction(
             beta_tensor,
-            intercept_tensor, 
-            self.dataloader, 
+            intercept_tensor,
+            self.dataloader,
             X=X,
-            fit_intercept=self.fit_intercept
+            fit_intercept=self.fit_intercept,
         )
-    
+
     def score(
         self,
         beta_value: TensorDict | None = None,
@@ -61,9 +53,9 @@ class BaseRegressor(_BaseLinearModel):
         """Computes generalized regression score (R^2).
 
         Computes the generalized R^2 score as
-        
+
         R_generalized^2 = 1 - (loss_model / loss_null),
-        
+
         where loss_model is the loss of the model predictions and
         loss_null is the loss of a null model predicting the central
         tendency (mean or median) of the target values.
@@ -80,12 +72,12 @@ class BaseRegressor(_BaseLinearModel):
             Generalized Regression score (R^2)
         """
         return self._score_fn(beta_value, X, y)
-    
-    
-def _build_regression_score_fn(
-    model: BaseRegressor, central_tendency_type: str) -> Callable:
-    """Build regression score function based on loss type."""
 
+
+def _build_regression_score_fn(
+    model: BaseRegressor, central_tendency_type: str
+) -> Callable:
+    """Build regression score function based on loss type."""
     central_tendency = partial(_get_central_tendency, type=central_tendency_type)
 
     def _score(
@@ -98,13 +90,11 @@ def _build_regression_score_fn(
         y_null = central_tendency(y)
         loss_model, loss_null = model._loss_fn(y_pred, y), model._loss_fn(y_null, y)
         return _get_regression_score(loss_model, loss_null)
-    
+
     return _score
 
 
-def _get_regression_score(
-    loss_model: torch.Tensor, loss_null: torch.Tensor
-) -> float:
+def _get_regression_score(loss_model: torch.Tensor, loss_null: torch.Tensor) -> float:
     """Compute regression score as 1 - (loss_model / loss_null)."""
     return 1 - (loss_model / loss_null).item()
 

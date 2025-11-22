@@ -1,14 +1,13 @@
 import torch
-
-from .loss_types import LossType
-
+from torch.nn.modules.loss import _Loss
 
 from .custom_losses.tweedie import (
     CompoundPoissonGammaLoss,
-    PoissonLoss,
     GammaLoss,
     InverseGaussianLoss,
-) 
+    PoissonLoss,
+)
+from .loss_types import LossType
 
 LOSSES = {
     LossType.POISSON_GAMMA: CompoundPoissonGammaLoss,
@@ -19,11 +18,11 @@ LOSSES = {
     LossType.LEAST_SQUARES: torch.nn.MSELoss,
     LossType.LOGISTIC: torch.nn.BCEWithLogitsLoss,
     LossType.MULTINOMIAL: torch.nn.CrossEntropyLoss,
-    LossType.POISSON: PoissonLoss
+    LossType.POISSON: PoissonLoss,
 }
 
 
-def get_loss_function(loss_type: LossType):
+def get_loss_function(loss_type: LossType) -> _Loss:
     """Factory function to get the appropriate loss function based on the loss type.
 
     Args:

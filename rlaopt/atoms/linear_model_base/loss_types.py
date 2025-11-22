@@ -13,4 +13,3 @@ class LossType(Enum):
     MULTINOMIAL = "multinomial"
     POISSON = "poisson"
     POISSON_GAMMA = "poisson_gamma"
-    

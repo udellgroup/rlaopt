@@ -16,6 +16,7 @@ from rlaopt.atoms.linear_model_base.loss_types import LossType
 # Regression Model Classes
 # ===========================================================================#
 
+
 class HuberRegression(BaseRegressor):
     """Huber regression model (robust to outliers).
 
@@ -35,10 +36,16 @@ class HuberRegression(BaseRegressor):
             from quadratic to linear. Smaller values increase robustness to outliers.
             Defaults to 1.0.
     """
-    
+
     def __init__(self, beta, dataloader, fit_intercept=True, delta: float = 1.0):
         super().__init__(LossType.HUBER, beta, dataloader, fit_intercept, delta=delta)
-        self.delta = delta
+        self._delta = delta
+
+    @property
+    def delta(self):
+        """Returns Huber loss threshold parameter"""
+        return self._delta
+
 
 class LADRegression(BaseRegressor):
     """Least absolute deviation (LAD) regression model.
@@ -57,6 +64,7 @@ class LADRegression(BaseRegressor):
 
     def __init__(self, beta, dataloader, fit_intercept=True):
         super().__init__(LossType.L1_LOSS, beta, dataloader, fit_intercept)
+
 
 class LinearRegression(BaseRegressor):
     """Ordinary least squares (OLS) linear regression model.
@@ -81,8 +89,8 @@ class LinearRegression(BaseRegressor):
 # Classification Model Classes
 # ===========================================================================#
 
+
 class LogisticRegression(BaseClassifier):
-    
     """Binary logistic regression model.
 
     Logistic regression is used for binary classification tasks. It models the
@@ -103,8 +111,8 @@ class LogisticRegression(BaseClassifier):
     def __init__(self, beta, dataloader, fit_intercept=True):
         super().__init__(LossType.LOGISTIC, beta, dataloader, fit_intercept)
 
-class MultinomialRegression(BaseClassifier):
 
+class MultinomialRegression(BaseClassifier):
     """Multinomial (softmax) regression model for multi-class classification.
 
     Multinomial regression extends logistic regression to handle more than two
@@ -126,14 +134,72 @@ class MultinomialRegression(BaseClassifier):
         beta: Model parameters variable representing regression coefficients.
             Shape should be (n_features, n_classes) for multi-class classification.
     """
-    
+
     def __init__(self, beta, dataloader, fit_intercept=True):
         super().__init__(LossType.MULTINOMIAL, beta, dataloader, fit_intercept)
 
-    
+
 # ===========================================================================#
 # Generalized Linear Model (GLM) Classes
 # ===========================================================================#
+
+
+class CompoundPoissonGammaRegression(BaseGLM):
+    """Compound Poisson-Gamma (Tweedie) regression model with log link function.
+
+    The Compound Poisson-Gamma distribution, also known as the Tweedie distribution
+    with power parameter p ∈ (1, 2), is particularly useful for modeling positive
+    continuous data with a point mass at zero. This makes it ideal for scenarios
+    where many observations are exactly zero, but non-zero values are continuous
+    and positive.
+
+    Common applications:
+        - Insurance claims: Many policies have zero claims, non-zero claims are continuous
+        - Rainfall modeling: Many days have zero rainfall, rainy days have continuous amounts
+        - Customer spending: Many customers spend nothing, active customers spend varying amounts
+        - Healthcare costs: Many patients incur zero costs, others have continuous expenses
+
+    The model uses a log link function to ensure predictions are always positive:
+        ŷ = exp(X @ β)
+
+    The Tweedie distribution combines:
+        - A Poisson process governing the number of events (including zero events)
+        - A Gamma distribution for the size of each event when it occurs
+        - Results in a distribution with Var(Y) = φμ^p where p is in (1,2)
+
+
+    Args:
+        beta: Model parameters variable representing regression coefficients.
+        dataloader: DataLoader containing the training data with features and
+            non-negative continuous targets (may include zeros).
+        fit_intercept: boolean specifying whether to use an intercept.
+        power: float in (1,2) specifying the power used in the loss,
+        default value is 1.5
+
+
+    Note:
+        Unlike pure Poisson (p=1) or Gamma (p=2) regression, the Compound
+        Poisson-Gamma with p in (1, 2) handles the mixed discrete-continuous nature
+        of the data with a moderate mean-variance relationship.
+    """
+
+    def __init__(self, beta, dataloader, fit_intercept=True, power: float = 1.5):
+        super().__init__(
+            LossType.POISSON_GAMMA, beta, dataloader, fit_intercept, power=power
+        )
+        self._power = power
+
+    def link_fn(self, y_pred: torch.Tensor) -> torch.Tensor:
+        return log_link_fn(y_pred)
+
+    def inv_link_fn(self, linear_pred: torch.Tensor) -> torch.Tensor:
+        return inv_log_link_fn(linear_pred)
+
+    @property
+    def power(self) -> float:
+        """Returns power used to define the loss."""
+        return self._power
+
 
 class GammaRegression(BaseGLM):
     """Gamma regression model with log link function.
@@ -144,7 +210,7 @@ class GammaRegression(BaseGLM):
     positive.
 
     The Gamma loss (negative log-likelihood) is defined as:
-        L(y, ŷ) = log(ŷ) + y/ŷ 
+        L(y, ŷ) = log(ŷ) + y/ŷ
 
     where ŷ = exp(X @ β) is the predicted mean.
 
@@ -156,40 +222,40 @@ class GammaRegression(BaseGLM):
 
     def __init__(self, beta, dataloader, fit_intercept=True):
         super().__init__(LossType.GAMMA, beta, dataloader, fit_intercept)
-    
+
     def link_fn(self, y_pred: torch.Tensor) -> torch.Tensor:
         return log_link_fn(y_pred)
-    
+
     def inv_link_fn(self, linear_pred: torch.Tensor) -> torch.Tensor:
         return inv_log_link_fn(linear_pred)
 
 
 class InverseGaussianRegression(BaseGLM):
-     """Inverse Gaussian regression model with log link function.
+    """Inverse Gaussian regression model with log link function.
 
     Inverse Gaussian regression is used for modeling continuous, positive-valued
     target variables that are right-skewed. It assumes the target variable follows
-    an Inverse Gaussian distribution and uses a log link function to ensure 
+    an Inverse Gaussian distribution and uses a log link function to ensure
     predictions are positive.
 
     The Inverse Gaussian loss (negative log-likelihood) is defined as:
-        L(y, ŷ) = (y - ŷ)^2 / (2 * y * ŷ^2) 
+       L(y, ŷ) = (y - ŷ)^2 / (2 * y * ŷ^2)
 
     where ŷ = exp(X @ β) is the predicted mean.
 
     Args:
-        dataloader: DataLoader containing the training data with features and
-            positive continuous targets.
-        beta: Model parameters variable representing regression coefficients.
+       dataloader: DataLoader containing the training data with features and
+           positive continuous targets.
+       beta: Model parameters variable representing regression coefficients.
     """
 
-     def __init__(self, beta, dataloader, fit_intercept=True):
-          super().__init__(LossType.INV_GAUSS, beta, dataloader, fit_intercept)
-     
-     def link_fn(self, y_pred: torch.Tensor) -> torch.Tensor:
+    def __init__(self, beta, dataloader, fit_intercept=True):
+        super().__init__(LossType.INV_GAUSS, beta, dataloader, fit_intercept)
+
+    def link_fn(self, y_pred: torch.Tensor) -> torch.Tensor:
         return log_link_fn(y_pred)
-    
-     def inv_link_fn(self, linear_pred: torch.Tensor) -> torch.Tensor:
+
+    def inv_link_fn(self, linear_pred: torch.Tensor) -> torch.Tensor:
         return inv_log_link_fn(linear_pred)
 
 
@@ -201,7 +267,7 @@ class PoissonRegression(BaseGLM):
     log link function to ensure predictions are positive.
 
     The Poisson loss (negative log-likelihood) is defined as:
-        L(y, ŷ) = ŷ - y * log(ŷ) 
+        L(y, ŷ) = ŷ - y * log(ŷ)
 
     where ŷ = exp(X @ β) is the predicted rate parameter.
 
@@ -210,21 +276,22 @@ class PoissonRegression(BaseGLM):
             targets (must be non-negative).
         beta: Model parameters variable representing regression coefficients.
     """
-    
+
     def __init__(self, beta, dataloader, fit_intercept=True):
         super().__init__(LossType.POISSON, beta, dataloader, fit_intercept)
-    
+
     def link_fn(self, y_pred: torch.Tensor) -> torch.Tensor:
         return log_link_fn(y_pred)
-    
+
     def inv_link_fn(self, linear_pred: torch.Tensor) -> torch.Tensor:
         return inv_log_link_fn(linear_pred)
 
 
 def log_link_fn(y_pred: torch.Tensor) -> torch.Tensor:
-        """Compute log of the link function (i.e., linear predictor)."""
-        return torch.log(y_pred)
-    
+    """Compute log of the link function (i.e., linear predictor)."""
+    return torch.log(y_pred)
+
+
 def inv_log_link_fn(linear_pred: torch.Tensor) -> torch.Tensor:
-        """Compute inverse of the log link function (i.e., predicted mean)."""
-        return torch.exp(linear_pred)
+    """Compute inverse of the log link function (i.e., predicted mean)."""
+    return torch.exp(linear_pred)

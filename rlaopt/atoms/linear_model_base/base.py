@@ -17,12 +17,12 @@ class _BaseLinearModel(Atom, ABC):
     """Base class for all Linear Models."""
 
     def __init__(
-        self, 
+        self,
         loss_type: LossType,
-        beta: Variable, 
-        dataloader: DataLoader,  
+        beta: Variable,
+        dataloader: DataLoader,
         fit_intercept: bool = True,
-        **loss_kwargs
+        **loss_kwargs,
     ):
         feature_dim = dataloader.dataset.feature_dimension
         target_dim = dataloader.dataset.target_dimension
@@ -36,31 +36,36 @@ class _BaseLinearModel(Atom, ABC):
                 raise ValueError
             if beta_shape[0] != target_dim:
                 raise ValueError
-            
+
             if beta_shape[1] != feature_dim:
                 raise ValueError
         else:
             if beta_shape[0] != feature_dim:
                 raise ValueError
-        
+
         # Add weights to exprs dict
         exprs = {"beta": beta}
-        
+
         # Add intercept if specified
         if fit_intercept:
             intercept_ = Variable(
-                (target_dim,), name="intercept", device=beta_value.device,
-                dtype=beta_value.dtype
+                (target_dim,),
+                name="intercept",
+                device=beta_value.device,
+                dtype=beta_value.dtype,
             )
             exprs["intercept"] = intercept_
 
         super().__init__(exprs, {}, None)
 
-        self._loss_fn = get_loss_function(loss_type)(reduction="mean", **loss_kwargs)
+        _loss_fn = get_loss_function(loss_type)
+        if loss_type == LossType.POISSON_GAMMA:
+            self._loss_fn = _loss_fn(loss_kwargs["power"], reduction="mean")
+        else:
+            self._loss_fn = _loss_fn(reduction="mean", **loss_kwargs)
         self.dataloader = dataloader
         self.fit_intercept = fit_intercept
-        
-       
+
     @abstractmethod
     def score(
         self,
@@ -69,44 +74,42 @@ class _BaseLinearModel(Atom, ABC):
         y: torch.Tensor | None = None,
     ) -> float:
         pass
-    
+
     @abstractmethod
     def predict(
         self,
         beta_value: TensorDict | None = None,
         X: torch.Tensor | None = None,
     ) -> torch.Tensor:
-        pass 
-       
+        pass
+
     def forward(self):
         beta_tensor, intercept_tensor = self._get_params()
-      
+
         return _BaseLinearModel._get_loss(
-            beta_tensor, 
+            beta_tensor,
             intercept_tensor,
             self._loss_fn,
             self.dataloader,
-            fit_intercept=self.fit_intercept
+            fit_intercept=self.fit_intercept,
         )
 
-            
     def loss(
         self,
         beta_value: TensorDict | None = None,
         X: torch.Tensor | None = None,
         y: torch.Tensor | None = None,
     ) -> torch.Tensor:
-        
         beta_tensor, intercept_tensor = self._get_params(beta_value)
-        
+
         return _BaseLinearModel._get_loss(
-            beta_tensor, 
-            intercept_tensor, 
-            self._loss_fn, 
-            self.dataloader, 
-            X=X, 
+            beta_tensor,
+            intercept_tensor,
+            self._loss_fn,
+            self.dataloader,
+            X=X,
             y=y,
-            fit_intercept=self.fit_intercept
+            fit_intercept=self.fit_intercept,
         )
 
     def is_smooth(self):
@@ -114,11 +117,10 @@ class _BaseLinearModel(Atom, ABC):
 
     def is_proxable(self):
         return False
-    
+
     def _get_params(
-        self,
-        beta_value: TensorDict | None = None
-) -> tuple[torch.Tensor, torch.Tensor | None]:
+        self, beta_value: TensorDict | None = None
+    ) -> tuple[torch.Tensor, torch.Tensor | None]:
         """Get beta and intercept parameters from model or provided TensorDict."""
         if beta_value is not None:
             beta_tensor = beta_value["beta"]
@@ -126,13 +128,15 @@ class _BaseLinearModel(Atom, ABC):
                 intercept_tensor = beta_value.get("intercept")
                 if intercept_tensor is None:
                     raise ValueError(
-                        "Provided beta_value has no intercept key. " \
-                        "If fit_intercept is True, beta_value must have key" \
+                        "Provided beta_value has no intercept key. "
+                        "If fit_intercept is True, beta_value must have key"
                         "intercept."
                     )
         else:
             beta_tensor = self.get_input("beta").forward()
-            intercept_tensor = self.get_input("intercept").forward() if self.fit_intercept else None
+            intercept_tensor = (
+                self.get_input("intercept").forward() if self.fit_intercept else None
+            )
         return beta_tensor, intercept_tensor
 
     def _get_target_values(self, X, y) -> torch.Tensor:
@@ -140,8 +144,10 @@ class _BaseLinearModel(Atom, ABC):
         return y if _has_test_data(X, y) else self.dataloader.y
 
     def _prox(self, location, prox_scaling):
-        raise NotImplementedError("Proximal operator not supported for linear model atoms.")
-    
+        raise NotImplementedError(
+            "Proximal operator not supported for linear model atoms."
+        )
+
     @staticmethod
     def _get_loss(
         beta: torch.Tensor,
@@ -171,47 +177,46 @@ class _BaseLinearModel(Atom, ABC):
         # Case 1: Test data provided
         if _has_test_data(X, y):
             predictions = _BaseLinearModel._get_raw_prediction(
-                beta, 
-                intercept, 
-                dataloader, 
-                X=X, 
-                inv_link_fn=inv_link_fn, 
-                fit_intercept=fit_intercept
+                beta,
+                intercept,
+                dataloader,
+                X=X,
+                inv_link_fn=inv_link_fn,
+                fit_intercept=fit_intercept,
             )
             return loss_fn(predictions, y)
 
         # Case 2: Training data - in-memory Dataset
         if isinstance(dataloader.dataset, Dataset):
             predictions = _BaseLinearModel._get_raw_prediction(
-                beta, 
-                intercept, 
-                dataloader, 
-                inv_link_fn=inv_link_fn, 
-                fit_intercept=fit_intercept
+                beta,
+                intercept,
+                dataloader,
+                inv_link_fn=inv_link_fn,
+                fit_intercept=fit_intercept,
             )
             return loss_fn(predictions, dataloader.dataset.y)
 
         # Case 3: Training data - BatchedDataset
-     
+
         total_loss = 0.0
         n_samples = 0
 
         for X_batch, y_batch in dataloader:
             loss = _BaseLinearModel._batch_loss(
-                beta, 
-                intercept, 
-                X_batch, 
-                y_batch, 
-                loss_fn, 
-                normalize=False, 
-                inv_link_fn=inv_link_fn, 
-                fit_intercept=fit_intercept
+                beta,
+                intercept,
+                X_batch,
+                y_batch,
+                loss_fn,
+                normalize=False,
+                inv_link_fn=inv_link_fn,
+                fit_intercept=fit_intercept,
             )
             total_loss += loss
             n_samples += X_batch.shape[0]
 
         return total_loss / n_samples
-
 
     @staticmethod
     def _get_raw_prediction(
@@ -253,13 +258,14 @@ class _BaseLinearModel(Atom, ABC):
         # Case 3: Training dataset - batched (for both Dataset and BatchedDataset)
         predictions = []
         for X_batch, _ in dataloader:
-            batch_pred, _ = _BaseLinearModel._batch_raw_predict(beta, intercept, X_batch, fit_intercept=fit_intercept)
+            batch_pred, _ = _BaseLinearModel._batch_raw_predict(
+                beta, intercept, X_batch, fit_intercept=fit_intercept
+            )
             if inv_link_fn:
                 batch_pred = inv_link_fn(batch_pred)
             predictions.append(batch_pred)
         return torch.cat(predictions, dim=0)
 
-    
     @staticmethod
     def _batch_loss(
         beta: torch.Tensor,
@@ -287,12 +293,12 @@ class _BaseLinearModel(Atom, ABC):
             Loss for the batch
         """
         pred_batch, y_batch = _BaseLinearModel._batch_raw_predict(
-            beta, 
-            intercept, 
-            X_batch, 
-            y_batch, 
-            inv_link_fn=inv_link_fn, 
-            fit_intercept=fit_intercept
+            beta,
+            intercept,
+            X_batch,
+            y_batch,
+            inv_link_fn=inv_link_fn,
+            fit_intercept=fit_intercept,
         )
 
         # Compute loss with sum reduction for proper averaging
@@ -331,11 +337,11 @@ class _BaseLinearModel(Atom, ABC):
             X_batch, y_batch = move_to_source_device((X_batch, y_batch), beta)
         else:
             X_batch = move_to_source_device(X_batch, beta)
-        
+
         linear_pred = X_batch @ beta
         if fit_intercept:
             linear_pred = linear_pred + intercept
-        
+
         if inv_link_fn:
             return inv_link_fn(linear_pred), y_batch
         else:
