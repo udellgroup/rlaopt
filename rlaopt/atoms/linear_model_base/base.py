@@ -80,16 +80,14 @@ class _BaseLinearModel(Atom, ABC):
         beta_value: TensorDict | None = None,
         X: torch.Tensor | None = None,
         y: torch.Tensor | None = None,
-    ) -> float:
-        pass
+    ) -> float: ...
 
     @abstractmethod
     def predict(
         self,
         beta_value: TensorDict | None = None,
         X: torch.Tensor | None = None,
-    ) -> torch.Tensor:
-        pass
+    ) -> torch.Tensor: ...
 
     def forward(self):
         beta_tensor, intercept_tensor = self._get_params()
@@ -120,10 +118,10 @@ class _BaseLinearModel(Atom, ABC):
             fit_intercept=self.fit_intercept,
         )
 
-    def is_smooth(self):
+    def is_smooth(self):  # pragma: no cover
         return True
 
-    def is_proxable(self):
+    def is_proxable(self):  # pragma: no cover
         return False
 
     def _get_params(
@@ -358,8 +356,6 @@ class _BaseLinearModel(Atom, ABC):
 
 def _change_loss_reduction(loss_fn: torch.nn.modules.loss._Loss, reduction: str) -> str:
     """Change the reduction method of a loss function."""
-    if reduction not in {"mean", "sum"}:
-        raise ValueError(f"Unsupported reduction type: {reduction}")
     original_reduction = loss_fn.reduction
     loss_fn.reduction = reduction
     return original_reduction

@@ -36,7 +36,7 @@ class BaseRegressor(_BaseLinearModel):
             Predicted target values
         """
         beta_tensor, intercept_tensor = self._get_params(beta_value)
-        return BaseRegressor._get_raw_prediction(
+        return _BaseLinearModel._get_raw_prediction(
             beta_tensor,
             intercept_tensor,
             self.dataloader,

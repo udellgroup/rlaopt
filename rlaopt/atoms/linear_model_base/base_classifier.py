@@ -23,7 +23,7 @@ class BaseClassifier(_BaseLinearModel):
             Decision function scores
         """
         beta_tensor, intercept_tensor = self._get_params(beta_value)
-        return BaseClassifier._get_raw_prediction(
+        return _BaseLinearModel._get_raw_prediction(
             beta_tensor,
             intercept_tensor,
             self.dataloader,

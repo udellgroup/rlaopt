@@ -58,7 +58,7 @@ class BaseGLM(_BaseLinearModel, ABC):
     ) -> torch.Tensor:
         """Predict with link function applied."""
         beta_tensor, intercept_tensor = self._get_params(beta_value)
-        return BaseGLM._get_raw_prediction(
+        return _BaseLinearModel._get_raw_prediction(
             beta_tensor,
             intercept_tensor,
             self.dataloader,
@@ -75,7 +75,7 @@ class BaseGLM(_BaseLinearModel, ABC):
     ) -> torch.Tensor:
         """Compute loss with inverse link applied."""
         beta_tensor, intercept_tensor = self._get_params(beta_value)
-        return BaseGLM._get_loss(
+        return _BaseLinearModel._get_loss(
             beta_tensor,
             intercept_tensor,
             self._loss_fn,

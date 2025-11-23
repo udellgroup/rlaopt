@@ -106,14 +106,6 @@ class BaseRegressorTest(ABC):
         """Fixture to create batched model instance - must be implemented by subclasses."""
         pass
 
-    def is_smooth(self, model):
-        smooth_bool = model.is_smooth()
-        assert smooth_bool is True
-
-    def is_proxable(self, model):
-        is_proxable_bool = model.is_proxable()
-        assert is_proxable_bool is False
-
     def test_predict_training_data(self, model, batched_model):
         """Test prediction on training data."""
         pred = model.predict()
