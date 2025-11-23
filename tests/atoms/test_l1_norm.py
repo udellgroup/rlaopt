@@ -4,6 +4,7 @@ import pytest
 import torch
 from tensordict import assert_allclose_td
 
+from rlaopt.atoms import SumSquares
 from rlaopt.atoms.l1_norm import L1Norm
 from rlaopt.expression import ExprTree, Variable
 from rlaopt.ext_tensordict import TensorDict
@@ -122,3 +123,61 @@ class TestL1NormScaling:
         assert isinstance(scaled, L1Norm)
         assert scaled.tree() == ExprTree("L1Norm", ExprTree("Variable(x)"))
         assert torch.allclose(scaled.forward(), torch.tensor(36.0))
+
+
+class TestL1NormDecompose:
+    """Tests for L1Norm decompose method."""
+
+    def test_decompose_with_variable_input(self, simple_variable):
+        """Test decompose with a Variable input."""
+        atom = L1Norm(simple_variable, scaling=2.0)
+        decompositions = atom.decompose()
+
+        # Should return a list with one decomposition
+        assert len(decompositions) == 1
+        decomp = decompositions[0]
+
+        # Check that the decomposed atom is an L1Norm
+        assert isinstance(decomp.atom, L1Norm)
+
+        # Check that the new atom has the same scaling
+        assert torch.allclose(decomp.atom.get_buffer("scaling"), torch.tensor(2.0))
+
+        # The new atom should have a different variable
+        new_var = decomp.atom.get_input("x")
+        assert new_var is not simple_variable
+        assert isinstance(new_var, Variable)
+
+    def test_decompose_with_affine_expression(self):
+        """Test decompose with an affine expression input."""
+        x = Variable((3,), name="x")
+        A = torch.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]])
+        b = torch.tensor([1.0, 2.0])
+        affine_expr = A @ x + b
+
+        atom = L1Norm(affine_expr, scaling=1.5)
+        decompositions = atom.decompose()
+
+        # Should return a list with one decomposition
+        assert len(decompositions) == 1
+        decomp = decompositions[0]
+
+        # Check that the decomposed atom is an L1Norm
+        assert isinstance(decomp.atom, L1Norm)
+
+        # Check that the affine expression is preserved
+        assert decomp.affine_expr is affine_expr
+
+        # Check that the new atom has the same scaling
+        assert torch.allclose(decomp.atom.get_buffer("scaling"), torch.tensor(1.5))
+
+    def test_decompose_with_non_affine_expression(self):
+        """Test decompose with a non-affine expression returns None."""
+        x = Variable((3,), name="x")
+        non_affine_expr = SumSquares(x)
+
+        atom = L1Norm(non_affine_expr, scaling=1.0)
+        decompositions = atom.decompose()
+
+        # Should return None for non-affine input
+        assert decompositions is None

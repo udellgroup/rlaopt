@@ -217,3 +217,19 @@ class TestSumSquares:
         result = ss.prox(location, prox_scaling=1.0)
         expected = TensorDict({vector_var.name: torch.zeros(5)})
         assert_allclose_td(result, expected)
+
+
+class TestSumSquaresDecompose:
+    """Test SumSquares decompose method."""
+
+    def test_decompose_returns_none(self, vector_var):
+        """Test decompose returns None (not implemented for SumSquares)."""
+        ss = SumSquares(vector_var)
+        result = ss.decompose()
+        assert result is None
+
+    def test_decompose_with_affine_expression_returns_none(self, simple_affine):
+        """Test decompose returns None even with affine expression."""
+        ss = SumSquares(simple_affine)
+        result = ss.decompose()
+        assert result is None
