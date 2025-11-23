@@ -20,118 +20,6 @@ def least_squares():
     return A, b, x
 
 
-class TestAllSmoothExpression:
-    """Tests for ADMMSplit with all smooth terms."""
-
-    @pytest.fixture
-    def single_var_smooth(self):
-        """Single variable smooth problem."""
-        x = Variable(torch.tensor([1.0, 2.0, 3.0, 4.0, 5.0]), name="x")
-        expr = SumSquares(x)
-        obj = ADMMSplit(expr)
-        return obj, x
-
-    @pytest.fixture
-    def least_squares_smooth(self, least_squares):
-        """Least squares smooth problem."""
-        A, b, x = least_squares
-        expr = 0.5 * SumSquares(A @ x - b)
-        obj = ADMMSplit(expr)
-        return obj, A, b, x
-
-    def test_initialization(self, single_var_smooth):
-        """Test ADMMSplit initializes correctly with all smooth terms."""
-        obj, _ = single_var_smooth
-        assert obj.f is not None
-        assert obj.r is not None
-        assert len(obj.r) == 0
-        assert obj.f.is_smooth()
-
-    def test_A_and_b_empty(self, single_var_smooth):
-        """Test A and b are appropriately sized when no decomposition."""
-        obj, _ = single_var_smooth
-        # A should have 0 rows (no constraints)
-        assert obj.A.shape[0] == 0
-        assert obj.b.shape[0] == 0
-
-    def test_variable_values(self, single_var_smooth):
-        """Test variable_values property."""
-        obj, x = single_var_smooth
-        var_vals = obj.variable_values
-        assert var_vals.keys() == {"x"}
-        assert torch.equal(var_vals["x"], x.value)
-
-    def test_f_and_affine_variable_values(self, single_var_smooth):
-        """Test f_and_affine_variable_values property."""
-        obj, x = single_var_smooth
-        var_vals = obj.f_and_affine_variable_values
-        assert var_vals.keys() == {"x"}
-        assert torch.equal(var_vals["x"], x.value)
-
-    def test_r_variable_values_empty(self, single_var_smooth):
-        """Test r_variable_values is empty when no non-smooth terms."""
-        obj, _ = single_var_smooth
-        r_vals = obj.r_variable_values
-        assert len(r_vals.keys()) == 0
-
-    def test_func_f(self, least_squares_smooth):
-        """Test func_f method."""
-        obj, A, b, _ = least_squares_smooth
-        p = A.shape[1]
-        new_vals = TensorDict({"x": torch.zeros(p)})
-        result = obj.func_f(new_vals)
-        expected = 0.5 * torch.linalg.norm(b) ** 2
-        assert torch.allclose(result, expected)
-
-    def test_grad_f(self, least_squares_smooth):
-        """Test grad_f method."""
-        obj, A, b, _ = least_squares_smooth
-        p = A.shape[1]
-        new_vals = TensorDict({"x": torch.zeros(p)})
-        grads = obj.grad_f(new_vals)
-        assert "x" in grads
-        assert torch.allclose(grads["x"], -A.T @ b)
-
-    def test_hvp_f(self, least_squares_smooth):
-        """Test hvp_f method."""
-        obj, A, _, _ = least_squares_smooth
-        p = A.shape[1]
-        new_vals = TensorDict({"x": torch.zeros(p)})
-        v = torch.ones(p)
-        result = obj.hvp_f(new_vals, v)
-        expected = A.T @ (A @ v)
-        assert torch.allclose(result, expected)
-
-    def test_hvp_f_ATA_linop(self, least_squares_smooth):
-        """Test hvp_f_ATA_linop with only smooth terms."""
-        obj, A, _, _ = least_squares_smooth
-        p = A.shape[1]
-        new_vals = TensorDict({"x": torch.zeros(p)})
-        rho = 1.0
-        sigma = 0.1
-
-        # Get the linear operator
-        linop = obj.hvp_f_ATA_linop(new_vals, rho, sigma)
-
-        # Test it on a vector
-        v = torch.ones(p)
-        result = linop @ v
-
-        # Expected: H @ v + rho * A^T A @ v + sigma * v
-        # Since A is empty for all-smooth, this is just H @ v + sigma * v
-        hessian_v = A.T @ (A @ v)  # H @ v for least squares
-        expected = hessian_v + sigma * v
-
-        assert torch.allclose(result, expected)
-
-    def test_prox_unchanged(self, single_var_smooth):
-        """Test prox returns input unchanged (no non-smooth terms)."""
-        obj, x = single_var_smooth
-        input_vals = obj.variable_values.clone()
-        result = obj.prox(input_vals, 1.0)
-        assert torch.equal(result["x"], x.value)
-
-
 class TestAllNonsmoothExpression:
     """Tests for ADMMSplit with all non-smooth terms."""
 
@@ -492,4 +380,12 @@ class TestErrorConditions:
         expr = L1Norm(x**2)
 
         with pytest.raises(ValueError, match="decomposable"):
+            ADMMSplit(expr)
+
+    def test_all_smooth_raises_error(self):
+        """Test that all-smooth expressions raise ValueError."""
+        x = Variable(torch.ones(5), name="x")
+        expr = SumSquares(x)
+
+        with pytest.raises(ValueError, match="at least one non-smooth term"):
             ADMMSplit(expr)

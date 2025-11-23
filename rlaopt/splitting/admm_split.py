@@ -94,6 +94,14 @@ class ADMMSplit(_OperatorSplit):
                     "All non-smooth terms must be decomposable for ADMM splitting."
                 )
             decomposed_atoms.extend(decomposition)
+
+        # ADMM requires at least one non-smooth term
+        if not decomposed_atoms:
+            raise ValueError(
+                "ADMM splitting requires at least one non-smooth term. "
+                "For purely smooth problems, use ProxGrad instead."
+            )
+
         return smooth_part, decomposed_atoms
 
     @property
