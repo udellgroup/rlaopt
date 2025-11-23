@@ -130,20 +130,13 @@ class ADMMSplit(_OperatorSplit):
         """
         td_f = self._f.variable_values
         tds_affine = [expr.variable_values for expr in self._affine_exprs]
-        if not tds_affine:
-            return td_f
         return merge_tensordicts(td_f, *tds_affine)
 
     @property
     def r_variable_values(self) -> TensorDict:
         """Returns the variable values associated with the proximal function r."""
         tds_r = [r.variable_values for r in self._r]
-        if not tds_r:
-            # Return empty TensorDict if no r atoms
-            return TensorDict({})
-        if len(tds_r) == 1:
-            return tds_r[0]
-        return merge_tensordicts(*tds_r)
+        return merge_tensordicts(TensorDict({}), *tds_r)
 
     def hvp_f_ATA_linop(
         self, variable_values: TensorDict, rho: float, sigma: float

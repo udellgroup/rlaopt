@@ -131,6 +131,16 @@ class TestAllNonsmoothExpression:
         # Should have auxiliary variables from decomposition
         assert len(r_vals.keys()) > 0
 
+    def test_variable_values(self, single_nonsmooth):
+        """Test variable_values includes original variables."""
+        obj, x = single_nonsmooth
+        var_vals = obj.variable_values
+        # Should include original variable x
+        assert "x" in var_vals
+        assert torch.equal(var_vals["x"], x.value)
+        # Should also include auxiliary variables from r
+        assert len(var_vals.keys()) == 2
+
 
 class TestMixedSameVariable:
     """Tests for ADMMSplit with mixed smooth/non-smooth on same variable."""
@@ -210,6 +220,16 @@ class TestMixedSameVariable:
         hessian_v = A.T @ (A @ v)
         expected = hessian_v + rho * v + sigma * v
         assert torch.allclose(result, expected)
+
+    def test_variable_values(self, elastic_net_problem):
+        """Test variable_values merges f and r variables."""
+        obj, _, _, x = elastic_net_problem
+        var_vals = obj.variable_values
+        # Should include original variable x
+        assert "x" in var_vals
+        assert torch.equal(var_vals["x"], x.value)
+        # Should also include auxiliary variables from r
+        assert len(var_vals.keys()) == 2
 
 
 class TestMixedDisjointVariables:
@@ -313,6 +333,18 @@ class TestMixedDisjointVariables:
         # y is not in smooth part, should be zero
         assert torch.allclose(grads["y"], torch.zeros(3))
 
+    def test_variable_values(self, smooth_has_extra_var):
+        """Test variable_values includes all variables."""
+        obj, x, y = smooth_has_extra_var
+        var_vals = obj.variable_values
+        # Should include both original variables x and y
+        assert "x" in var_vals
+        assert "y" in var_vals
+        assert torch.equal(var_vals["x"], x.value)
+        assert torch.equal(var_vals["y"], y.value)
+        # Should also include auxiliary variables from r
+        assert len(var_vals.keys()) == 3  # x, y, and one auxiliary variable
+
 
 class TestMultipleDecomposableAtoms:
     """Tests for ADMMSplit with multiple decomposable atoms."""
@@ -353,6 +385,18 @@ class TestMultipleDecomposableAtoms:
         obj, _, _ = multiple_atoms
         assert obj.b.shape[0] == 8
         assert torch.allclose(obj.b, torch.zeros(8))
+
+    def test_variable_values(self, multiple_atoms):
+        """Test variable_values includes all variables."""
+        obj, x, y = multiple_atoms
+        var_vals = obj.variable_values
+        # Should include both original variables x and y
+        assert "x" in var_vals
+        assert "y" in var_vals
+        assert torch.equal(var_vals["x"], x.value)
+        assert torch.equal(var_vals["y"], y.value)
+        # Should also include auxiliary variables from r (two atoms)
+        assert len(var_vals.keys()) == 4  # x, y, and two auxiliary variables
 
 
 class TestErrorConditions:
