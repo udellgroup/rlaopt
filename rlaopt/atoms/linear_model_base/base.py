@@ -25,23 +25,31 @@ class _BaseLinearModel(Atom, ABC):
         **loss_kwargs,
     ):
         feature_dim = dataloader.dataset.feature_dimension
-        target_dim = dataloader.dataset.target_dimension
+        if loss_type in [LossType.LOGISTIC, LossType.MULTINOMIAL]:
+            target_dim = int(dataloader.dataset.y.max().item())
+            if loss_type == LossType.MULTINOMIAL:
+                target_dim += 1
+        else:
+            target_dim = dataloader.dataset.target_dimension
 
         beta_value = beta.forward()
         beta_shape = beta_value.shape
 
         # Validate beta is consistent with dataset in dataloader
-        if target_dim > 1:
-            if len(beta_shape) != 2:
-                raise ValueError
-            if beta_shape[0] != target_dim:
-                raise ValueError
-
-            if beta_shape[1] != feature_dim:
-                raise ValueError
-        else:
-            if beta_shape[0] != feature_dim:
-                raise ValueError
+        expected_shape = (
+            (
+                feature_dim,
+                target_dim,
+            )
+            if target_dim > 1
+            else (feature_dim,)
+        )
+        if beta_shape != expected_shape:
+            raise ValueError(
+                f"Expected beta.shape={expected_shape} to match dataset dimensions "
+                f"(feature_dim={feature_dim}), target_dim={target_dim}, "
+                f"but got beta.shape={beta_shape}"
+            )
 
         # Add weights to exprs dict
         exprs = {"beta": beta}

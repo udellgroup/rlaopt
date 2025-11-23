@@ -70,9 +70,19 @@ def beta_variable():
     """Create beta variable for regression."""
     return Variable(torch.randn(5), name="beta")
 
+
 class TestInitLogic:
-    
-    pass
+    X, y = (
+        torch.ones(10, 5),
+        torch.ones(
+            10,
+        ),
+    )
+    dataset = Dataset(X, y)
+    beta = Variable((2,), name="beta")
+    with pytest.raises(ValueError, match="Expected"):
+        model = LinearRegression(beta, DataLoader(dataset))
+
 
 class TestCentralTendency:
     def test_invalid_central_tendency(self):
@@ -95,6 +105,14 @@ class BaseRegressorTest(ABC):
     def batched_model(self, batch_regression_data, beta_variable):
         """Fixture to create batched model instance - must be implemented by subclasses."""
         pass
+
+    def is_smooth(self, model):
+        smooth_bool = model.is_smooth()
+        assert smooth_bool is True
+
+    def is_proxable(self, model):
+        is_proxable_bool = model.is_proxable()
+        assert is_proxable_bool is False
 
     def test_predict_training_data(self, model, batched_model):
         """Test prediction on training data."""
@@ -144,7 +162,7 @@ class BaseRegressorTest(ABC):
         assert grad_beta is not None
         grad_intercept = batched_model.get_input("intercept").forward().grad
         assert grad_intercept is not None
-    
+
 
 class TestLinearRegression(BaseRegressorTest):
     """Test suite for LinearRegression (OLS)."""
