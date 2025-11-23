@@ -1,6 +1,6 @@
 """Unary expression operations (reduce sum, transpose, power, etc.)."""
 
-from abc import abstractmethod
+from abc import ABC, abstractmethod
 
 import torch
 
@@ -9,7 +9,7 @@ from rlaopt.expression.tree import ExprTree
 from rlaopt.expression.utils import _to_expr
 
 
-class Unary(Expression):
+class _Unary(Expression, ABC):
     """Base class for unary operations on expressions.
 
     All unary operations have a single operand and apply some transformation.
@@ -96,7 +96,7 @@ class Unary(Expression):
         return ExprTree(self._operation_name(), self.operand.tree())
 
 
-class ReduceSum(Unary):
+class ReduceSum(_Unary):
     """Sum reduction operation.
 
     Represents the sum of elements in an expression, optionally along a dimension.
@@ -144,7 +144,7 @@ class ReduceSum(Unary):
         return f"sum_{self.dim}" if self.dim is not None else "sum"
 
 
-class Transpose(Unary):
+class Transpose(_Unary):
     """Matrix transpose operation.
 
     Represents the transpose of a 2D or higher-dimensional expression.
@@ -182,7 +182,7 @@ class Transpose(Unary):
         return "transpose"
 
 
-class Power(Unary):
+class Power(_Unary):
     """Element-wise power operation.
 
     Represents raising an expression to a power element-wise.

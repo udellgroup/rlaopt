@@ -19,7 +19,7 @@ def unary_op_expr():
     """Return _UnaryOpExpression class to avoid circular imports."""
     from rlaopt.expression import unary_expressions
 
-    return unary_expressions.Unary
+    return unary_expressions._Unary
 
 
 def add_expr():
