@@ -59,6 +59,35 @@ class TestVariable:
             Variable([5, 10], name="invalid")
 
     # ----------------------
+    # Classmethod tests
+    # ----------------------
+
+    def test_like_creates_variable_with_same_shape(self, vector_var):
+        """Test Variable.like() creates variable with same shape as expression."""
+        new_var = Variable.like(vector_var)
+        assert new_var.value.shape == vector_var.value.shape
+
+    def test_like_creates_variable_with_same_dtype(self):
+        """Test Variable.like() creates variable with same dtype as expression."""
+        original = Variable((3, 3), dtype=torch.float64, name="original")
+        new_var = Variable.like(original)
+        assert new_var.value.dtype == original.value.dtype
+
+    def test_like_creates_variable_with_same_device(self):
+        """Test Variable.like() creates variable with same device as expression."""
+        original = Variable((3, 3), device=torch.device("cpu"), name="original")
+        new_var = Variable.like(original)
+        assert new_var.value.device == original.value.device
+
+    def test_like_works_with_expression(self):
+        """Test Variable.like() works with any expression, not just Variable."""
+        x = Variable((5,), name="x", dtype=torch.float64)
+        y = Variable((5,), name="y", dtype=torch.float64)
+        new_var = Variable.like(x + y)
+        assert new_var.value.shape == torch.Size([5])
+        assert new_var.value.dtype == torch.float64
+
+    # ----------------------
     # ID and name tests
     # ----------------------
 
@@ -106,6 +135,14 @@ class TestVariable:
     def test_tree(self, vector_var):
         """Test tree() returns correct structure."""
         assert vector_var.tree() == ExprTree("Variable(vector)")
+
+    # ----------------------
+    # is_affine tests
+    # ----------------------
+
+    def test_is_affine(self, vector_var):
+        """Test variables are affine."""
+        assert vector_var.is_affine() is True
 
     # ----------------------
     # Forward evaluation tests
