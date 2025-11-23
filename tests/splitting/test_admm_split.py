@@ -478,21 +478,18 @@ class TestErrorConditions:
         with pytest.raises(ValueError, match="1-dimensional"):
             ADMMSplit(expr)
 
-    def test_non_decomposable_atom_raises_error(self):
-        """Test that non-decomposable atom raises ValueError."""
-        x = Variable(torch.ones(5), name="x")
-        # SumSquares doesn't implement decompose (returns None)
-        expr = SumSquares(x) + SumSquares(x)
-
-        with pytest.raises(ValueError, match="decomposable"):
-            ADMMSplit(expr)
-
     def test_non_atom_nonsmooth_raises_error(self):
         """Test that non-Atom non-smooth term raises ValueError."""
         x = Variable(torch.ones(5), name="x")
-        # x ** 2 is not an Atom
-        non_atom = x**2
-        expr = SumSquares(x) + non_atom
+        expr = L1Norm(x) ** 2
 
         with pytest.raises(ValueError, match="Atom"):
+            ADMMSplit(expr)
+
+    def test_non_decomposable_atom_raises_error(self):
+        """Test that non-decomposable atom raises ValueError."""
+        x = Variable(torch.ones(5), name="x")
+        expr = L1Norm(x**2)
+
+        with pytest.raises(ValueError, match="decomposable"):
             ADMMSplit(expr)
