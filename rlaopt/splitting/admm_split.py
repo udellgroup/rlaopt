@@ -1,7 +1,7 @@
 """ADMMSplit class for representing composite objective functions."""
 
 import torch
-from linops import LinearOperator, vstack
+from linops import IdentityOperator, LinearOperator, hstack, vstack
 from tensordict import merge_tensordicts
 
 from rlaopt.atoms import Atom, AtomDecomposition
@@ -48,7 +48,9 @@ class ADMMSplit(_OperatorSplit):
         ]
         # We negate the values of b since the decomposition is of the form
         # g(Ax - b) -> g(z) with the constraint Ax - b = z
-        self._A, self._b = _extract_lin_op_and_bias(
+        # NOTE: We form A_T explicitly to avoid potential issues with
+        # automatic adjoint creation in certain linop implementations.
+        self._A, self._A_T, self._b = _extract_lin_op_and_bias(
             self._affine_exprs, self.f_and_affine_variable_values
         )
 
@@ -151,14 +153,15 @@ class ADMMSplit(_OperatorSplit):
             LinearOperator: The combined linear operator.
         """
         hvp_op = _HVPLinOp(self._f, variable_values)
-        AT_A = self._A.T @ self._A
-        return hvp_op + rho * AT_A + sigma
+        AT_A = self._A_T @ self._A
+        scaled_identity = sigma * IdentityOperator(hvp_op.shape[0]).to(hvp_op.device)
+        return hvp_op + rho * AT_A + scaled_identity
 
 
 def _extract_lin_op_and_bias(
     affine_exprs: list[Expression],
     f_and_affine_variable_values: TensorDict,
-) -> tuple[_AffineExprLinOp, torch.Tensor]:
+) -> tuple[LinearOperator, LinearOperator, torch.Tensor]:
     """Extracts the linear operator and bias from an affine expression.
 
     Args:
@@ -167,10 +170,11 @@ def _extract_lin_op_and_bias(
             the smooth part of the objective function along with the affine constraints.
 
     Returns:
-        tuple[LinearOperator, torch.Tensor]: A tuple containing the linear operator A
-        and the bias vector b.
+        tuple[LinearOperator, LinearOperator, torch.Tensor]: A tuple containing
+            the linear operator A, its transpose A.T, and the bias vector b.
     """
     As = []
+    ATs = []
     bs = []
     for affine_expr in affine_exprs:
         # Compute the bias of the affine expression
@@ -180,8 +184,12 @@ def _extract_lin_op_and_bias(
         # Get the linear operator corresponding to the affine expression
         lin_op = _AffineExprLinOp(affine_expr, bias, f_and_affine_variable_values)
         As.append(lin_op)
+
+        # Create the adjoint explicitly
+        ATs.append(lin_op.create_adjoint())
         bs.append(bias)
 
     A = vstack(As)
+    A_T = hstack(ATs)
     b = -torch.cat(bs, dim=0)  # Negate to match Ax - b form
-    return A, b
+    return A, A_T, b

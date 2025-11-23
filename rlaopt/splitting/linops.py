@@ -16,6 +16,7 @@ class _AffineExprLinOp(LinearOperator):
         super().__init__()
         self._affine_expr = affine_expr
         self._bias = bias
+        self._smooth_expr_vars = smooth_expr_vars
         self._unflatten = lambda v: smooth_expr_vars.from_flat_tensor(v)
 
         input_dim = smooth_expr_vars.flat_dim()
@@ -25,6 +26,43 @@ class _AffineExprLinOp(LinearOperator):
     def _matmul_impl(self, v: torch.Tensor):
         v_td = self._unflatten(v)
         return self._affine_expr.evaluate(v_td) - self._bias
+
+    def create_adjoint(self) -> LinearOperator:
+        """Create the adjoint operator A.T explicitly."""
+        return _AffineExprAdjointLinOp(
+            self._affine_expr, self._smooth_expr_vars, self._shape
+        )
+
+
+class _AffineExprAdjointLinOp(LinearOperator):
+    """Adjoint (transpose) of _AffineExprLinOp."""
+
+    def __init__(
+        self,
+        affine_expr: Expression,
+        smooth_expr_vars: TensorDict,
+        forward_shape: tuple[int, int],
+    ):
+        super().__init__()
+        self._affine_expr = affine_expr
+        self._smooth_expr_vars = smooth_expr_vars
+
+        # Transpose shape
+        m, n = forward_shape
+        self._shape = (n, m)
+        self._device = smooth_expr_vars.to_flat_tensor().device
+
+    def _matmul_impl(self, v: torch.Tensor) -> torch.Tensor:
+        """Compute A.T @ v using VJP."""
+        zero_vars = self._smooth_expr_vars.apply(torch.zeros_like)
+
+        def forward_fn(var_vals: TensorDict) -> torch.Tensor:
+            return self._affine_expr.evaluate(var_vals)
+
+        _, vjp_fn = torch.func.vjp(forward_fn, zero_vars)
+        vjp_result = vjp_fn(v)[0]
+
+        return vjp_result.to_flat_tensor()
 
 
 class _HVPLinOp(LinearOperator):
