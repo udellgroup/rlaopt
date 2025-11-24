@@ -17,10 +17,14 @@ from pydantic import Field
 from rlaopt.expression import Expression
 from rlaopt.ext_tensordict import TensorDict
 from rlaopt.linalg import (
+    LinSys,
     NystromConfig,
+    Preconditioner,
     PreconditionerConfig,
+    get_preconditioner,
 )
 from rlaopt.solvers.configs_base import SolverConfig, StoppingCriteria
+from rlaopt.solvers.pcg import _PCG
 from rlaopt.solvers.solver_base import OptimSolver, SolverResult, SolverState
 from rlaopt.splitting import ADMMSplit
 
@@ -103,9 +107,10 @@ class ADMMState(SolverState):
 
     aux_variables: TensorDict
     dual_variables: TensorDict
-    primal_residual_norm: torch.Tensor
-    dual_residual_norm: torch.Tensor
+    primal_residual_norm: float
+    dual_residual_norm: float
     rho: float
+    _preconditioner: Preconditioner | None = None
 
 
 @dataclass(frozen=True)
@@ -118,8 +123,8 @@ class ADMMResult(SolverResult):
         dual_residual_norm: Norm of the dual residual.
     """
 
-    primal_residual_norm: torch.Tensor
-    dual_residual_norm: torch.Tensor
+    primal_residual_norm: float
+    dual_residual_norm: float
 
 
 class ADMM(OptimSolver):
@@ -222,6 +227,7 @@ def _build_init_state(
             primal_residual_norm=primal_residual_norm,
             dual_residual_norm=dual_residual_norm,
             rho=rho,
+            _preconditioner=None,
         )
 
     return init_state
@@ -229,7 +235,6 @@ def _build_init_state(
 
 def _build_step(
     op_split: ADMMSplit,
-    rho: float,
     rho_update_factor: float,
     rho_update_threshold: float,
     alpha: float,
@@ -243,7 +248,39 @@ def _build_step(
     def step(
         variable_values: TensorDict, state: ADMMState
     ) -> tuple[TensorDict, ADMMState]:
-        pass
+        # Unpack state
+        iter_ = state.iter_
+        aux_variables = state.aux_variables
+        dual_variables = state.dual_variables
+        aux_variables_flat = aux_variables.to_flat_tensor()
+        dual_variables_flat = dual_variables.to_flat_tensor()
+        primal_residual_norm = state.primal_residual_norm
+        dual_residual_norm = state.dual_residual_norm
+        rho = state.rho
+        preconditioner = state._preconditioner
+
+        # Approximately solve x-subproblem using PCG
+        # Start by forming the linear system
+        # The linear system is initialized with the previous variable values
+        variables_values_flat = variable_values.to_flat_tensor()
+        rhs = -op_split.grad_f(variable_values).to_flat_tensor()
+        rhs += op_split.hvp_f(variable_values, variables_values_flat)
+        rhs += sigma * variables_values_flat
+        rhs += (
+            rho * op_split.A_T @ (aux_variables_flat - dual_variables_flat + op_split.b)
+        )
+        lin_sys = LinSys(
+            op_split.hvp_f_ATA_linop(rho=rho), B=rhs, reg=sigma, w=variables_values_flat
+        )
+        # Compute preconditioner if needed
+        if iter_ % preconditioner_update_freq == 0 or preconditioner is None:
+            preconditioner = get_preconditioner(
+                preconditioner_config,
+                lin_sys.A,
+                lin_sys.dtype,
+            )
+        # Solve the linear system using PCG
+        pcg_solver = _PCG(lin_sys, preconditioner=preconditioner)
 
     return step
 
@@ -265,6 +302,6 @@ def _compute_primal_and_dual_residual_norms(
         op_split.grad_f(variable_values).to_flat_tensor()
         + rho * op_split.A_T @ dual_variables.to_flat_tensor()
     )
-    primal_residual_norm = torch.linalg.norm(primal_residual)
-    dual_residual_norm = torch.linalg.norm(dual_residual)
+    primal_residual_norm = torch.linalg.norm(primal_residual).item()
+    dual_residual_norm = torch.linalg.norm(dual_residual).item()
     return primal_residual_norm, dual_residual_norm

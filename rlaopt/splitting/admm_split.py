@@ -1,7 +1,7 @@
 """ADMMSplit class for representing composite objective functions."""
 
 import torch
-from linops import IdentityOperator, LinearOperator, hstack, vstack
+from linops import LinearOperator, hstack, vstack
 from tensordict import merge_tensordicts
 
 from rlaopt.atoms import Atom, AtomDecomposition
@@ -156,24 +156,22 @@ class ADMMSplit(_OperatorSplit):
         return TensorDict(dual_vars)
 
     def hvp_f_ATA_linop(
-        self, variable_values: TensorDict, rho: float, sigma: float
+        self, variable_values: TensorDict, rho: float
     ) -> LinearOperator:
-        """Form the Hessian + rho * A^T A + sigma * I linear operator.
+        """Form the Hessian + rho * A^T A linear operator.
 
         This is useful for inexactly solving the x-subproblem in ADMM methods.
 
         Args:
             variable_values (TensorDict): A dictionary of variables.
             rho (float): Scaling factor for A^T A term.
-            sigma (float): Scaling factor for the identity term.
 
         Returns:
             LinearOperator: The combined linear operator.
         """
         hvp_op = _HVPLinOp(self._f, variable_values)
         AT_A = self._A_T @ self._A
-        scaled_identity = sigma * IdentityOperator(hvp_op.shape[0]).to(hvp_op.device)
-        return hvp_op + rho * AT_A + scaled_identity
+        return hvp_op + rho * AT_A
 
 
 def _extract_lin_op_and_bias(

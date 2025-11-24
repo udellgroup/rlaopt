@@ -5,7 +5,10 @@ from linops import LinearOperator
 
 from rlaopt.linalg.preconditioners.identity import Identity, IdentityConfig
 from rlaopt.linalg.preconditioners.nystrom import Nystrom, NystromConfig
-from rlaopt.linalg.preconditioners.preconditioner import Preconditioner
+from rlaopt.linalg.preconditioners.preconditioner import (
+    Preconditioner,
+    PreconditionerConfig,
+)
 
 
 def _get_preconditioner_class(
@@ -20,14 +23,14 @@ def _get_preconditioner_class(
 
 
 def get_preconditioner(
-    config: IdentityConfig | NystromConfig,
+    config: PreconditionerConfig,
     A: torch.Tensor | LinearOperator,
     dtype: torch.dtype,
 ) -> Preconditioner:
     """Factory function to create a preconditioner based on the given configuration.
 
     Args:
-        config (IdentityConfig | NystromConfig): Configuration for the preconditioner.
+        config (PreconditionerConfig): Configuration for the preconditioner.
         A (torch.Tensor | LinearOperator): The matrix for which the preconditioner
             is to be created.
         dtype (torch.dtype): Data type for computations.

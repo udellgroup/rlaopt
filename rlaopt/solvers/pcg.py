@@ -64,29 +64,27 @@ class PCGState(SolverState):
     tol: float | None = None
 
 
-class PCG(LinSysSolver):
-    """Block Preconditioned Conjugate Gradient solver for linear systems.
+class _PCG:
+    """Internal PCG implementation that operates on a given preconditioner.
 
-    Solves linear systems of the form:
-        AW = B
-    where A is a symmetric positive-definite matrix.
-
-    The PCG method uses a preconditioner to improve convergence. The algorithm
-    iteratively refines the solution by moving along conjugate search directions
-    that are scaled by the preconditioner.
+    This is the core algorithm implementation. It doesn't inherit from
+    LinSysSolver since it's an internal building block with a different
+    interface. Use the public PCG class for the standard API.
     """
 
-    def __init__(self, lin_sys: LinSys, config: PCGConfig):
-        """Initialize the PCG solver.
+    def __init__(
+        self,
+        lin_sys: LinSys,
+        preconditioner: Preconditioner,
+    ):
+        """Initialize PCG solver with a preconditioner.
 
         Args:
-            lin_sys (LinSys): The linear system to solve.
-            config (PCGConfig): Configuration for the solver.
+            lin_sys: The linear system to solve.
+            preconditioner: Preconditioner instance to use.
         """
-        super().__init__(lin_sys, config)
-        P = get_preconditioner(config.preconditioner_config, lin_sys.A, lin_sys.dtype)
-        self._init_state = _build_init_state(lin_sys, P)
-        self._step = _build_step(lin_sys, P)
+        self._init_state = _build_init_state(lin_sys, preconditioner)
+        self._step = _build_step(lin_sys, preconditioner)
         self._solve = lambda tol, max_iters: _build_solve(
             lin_sys, self._init_state, self._step, tol, max_iters
         )
@@ -136,6 +134,82 @@ class PCG(LinSysSolver):
             tol=stopping_criteria.tol, max_iters=stopping_criteria.max_iters
         )
         return solve_fn(params)
+
+
+class PCG(LinSysSolver):
+    """Block Preconditioned Conjugate Gradient solver for linear systems.
+
+    Solves linear systems of the form:
+        AW = B
+    where A is a symmetric positive-definite matrix.
+
+    The PCG method uses a preconditioner to improve convergence. The algorithm
+    iteratively refines the solution by moving along conjugate search directions
+    that are scaled by the preconditioner.
+    """
+
+    def __init__(self, lin_sys: LinSys, config: PCGConfig):
+        """Initialize the PCG solver.
+
+        Args:
+            lin_sys: The linear system to solve.
+            config: Configuration for the solver.
+        """
+        # Call parent constructor first
+        super().__init__(lin_sys, config)
+
+        # Create preconditioner from config
+        preconditioner = get_preconditioner(
+            config.preconditioner_config,
+            lin_sys.A,
+            lin_sys.dtype,
+        )
+
+        # Delegate to internal implementation (composition)
+        self._impl = _PCG(lin_sys, preconditioner)
+
+    def init_state(self, params: torch.Tensor) -> PCGState:
+        """Initialize the solver state.
+
+        Args:
+            params: Initial parameters (solution estimate).
+
+        Returns:
+            Initial solver state.
+        """
+        return self._impl.init_state(params)
+
+    def step(
+        self, params: torch.Tensor, state: PCGState
+    ) -> tuple[torch.Tensor, PCGState]:
+        """Perform a single PCG iteration step.
+
+        Args:
+            params: Current parameters (solution estimate).
+            state: Current solver state.
+
+        Returns:
+            Tuple of updated parameters and solver state.
+        """
+        return self._impl.step(params, state)
+
+    def solve(
+        self,
+        params: torch.Tensor | None = None,
+        stopping_criteria: PCGStoppingCriteria = PCGStoppingCriteria(),
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        """Solve the linear system AW = B using PCG.
+
+        Args:
+            params: Initial parameters (solution estimate). If None, defaults to
+                parameters in linear system.
+            stopping_criteria: Criteria to determine when to stop the solver.
+                Defaults to PCGStoppingCriteria().
+
+        Returns:
+            Tuple of solution parameters and final residual norm.
+        """
+        return self._impl.solve(params, stopping_criteria)
 
 
 def _compute_convergence_mask(
