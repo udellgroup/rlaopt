@@ -13,13 +13,15 @@ from dataclasses import dataclass
 import torch
 from pydantic import Field
 
+from rlaopt.expression import Expression
 from rlaopt.ext_tensordict import TensorDict
 from rlaopt.linalg import (
     NystromConfig,
     PreconditionerConfig,
 )
 from rlaopt.solvers.configs_base import SolverConfig, StoppingCriteria
-from rlaopt.solvers.solver_base import SolverState
+from rlaopt.solvers.solver_base import OptimSolver, SolverResult, SolverState
+from rlaopt.splitting import ADMMSplit
 
 
 class ADMMConfig(SolverConfig):
@@ -94,9 +96,91 @@ class ADMMState(SolverState):
         dual_variables: Dual variables (u) in ADMM.
         primal_residual_norm: Norm of the primal residual.
         dual_residual_norm: Norm of the dual residual.
+        rho: Current augmented Lagrangian penalty.
     """
 
     aux_variables: TensorDict
     dual_variables: TensorDict
     primal_residual_norm: torch.Tensor
     dual_residual_norm: torch.Tensor
+    rho: float
+
+
+@dataclass(frozen=True)
+class ADMMResult(SolverResult):
+    """Result container for the ADMM solver.
+
+    Attributes:
+        variable_values: Optimized variable values.
+        primal_residual_norm: Norm of the primal residual.
+        dual_residual_norm: Norm of the dual residual.
+    """
+
+    primal_residual_norm: torch.Tensor
+    dual_residual_norm: torch.Tensor
+
+
+class ADMM(OptimSolver):
+    """Alternating Direction Method of Multipliers (ADMM) solver.
+
+    Solves problems of the form:
+        minimize f(x) + sum_i g_i(A_i x - b_i)
+    where f is smooth (differentiable) and each g_i is proxable.
+    """
+
+    def __init__(self, obj: Expression, config: ADMMConfig):
+        """Initialize the ADMM solver.
+
+        Args:
+            obj: The optimization problem to solve.
+            config: Configuration for the ADMM solver.
+        """
+        if not isinstance(obj, Expression):
+            raise ValueError("ADMM solver requires an Expression objective.")
+        if not isinstance(config, ADMMConfig):
+            raise ValueError("ADMM solver requires an ADMMConfig configuration.")
+        super().__init__(obj, config)
+
+        op_split = ADMMSplit(obj)
+
+    def init_state(self, variable_values: TensorDict) -> ADMMState:
+        """Initialize the solver state.
+
+        Args:
+            variable_values: Initial variable values.
+
+        Returns:
+            Initial solver state.
+        """
+        pass
+
+    def step(
+        self, variables_values: TensorDict, state: ADMMState
+    ) -> tuple[TensorDict, ADMMState]:
+        """Perform a single ADMM optimization step.
+
+        Args:
+            variables_values: Current variable values.
+            state: Current ADMM solver state.
+
+        Returns:
+            Tuple of updated variable values and solver state.
+        """
+        pass
+
+    def solve(
+        self,
+        variable_values: TensorDict | None = None,
+        stopping_criteria: ADMMStoppingCriteria = ADMMStoppingCriteria(),
+    ) -> ADMMResult:
+        """Solve the optimization problem using ADMM.
+
+        Args:
+            variable_values: Initial variable values.
+            stopping_criteria: Stopping criteria for the solver.
+
+        Returns:
+            ADMMResult: Result of the optimization containing optimized variable values
+                among other metrics.
+        """
+        pass

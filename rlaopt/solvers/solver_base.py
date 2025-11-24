@@ -22,6 +22,17 @@ class SolverState:
     iter_: int  # Current iteration count
 
 
+@dataclass(frozen=True)
+class SolverResult:
+    """Base class for solver results.
+
+    This class can be extended to include specific result variables
+    returned by different solvers.
+    """
+
+    variable_values: TensorDict  # Optimized variable values
+
+
 class OptimSolver(ABC):
     """Abstract base class for optimization solvers.
 
@@ -70,7 +81,7 @@ class OptimSolver(ABC):
     @abstractmethod
     def solve(
         self, variable_values: TensorDict, stopping_criteria: StoppingCriteria
-    ) -> tuple[TensorDict, torch.Tensor]:
+    ) -> SolverResult:
         """Solve the optimization problem.
 
         Args:
@@ -79,7 +90,8 @@ class OptimSolver(ABC):
             stopping_criteria (StoppingCriteria): Criteria to stop the optimization.
 
         Returns:
-            tuple[TensorDict, torch.Tensor]: Optimized variable values and final error.
+            SolverResult: Result of the optimization containing optimized variable
+                values among other metrics.
         """
         pass
 

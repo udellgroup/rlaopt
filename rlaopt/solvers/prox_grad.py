@@ -9,7 +9,7 @@ from pydantic import Field
 from rlaopt.expression import Expression
 from rlaopt.ext_tensordict import TensorDict
 from rlaopt.solvers.configs_base import SolverConfig, StoppingCriteria
-from rlaopt.solvers.solver_base import OptimSolver, SolverState
+from rlaopt.solvers.solver_base import OptimSolver, SolverResult, SolverState
 from rlaopt.splitting import ProxGradSplit
 
 
@@ -54,6 +54,18 @@ class ProxGradState(SolverState):
     eta: float = 1.0
     variable_values_prev: TensorDict | None = None
     err: torch.Tensor = torch.tensor(torch.inf)
+
+
+@dataclass(frozen=True)
+class ProxGradResult(SolverResult):
+    """Result container for the proximal gradient solver.
+
+    Attributes:
+        variable_values: Optimized variable values.
+        state: Final ProxGrad solver state.
+    """
+
+    err: torch.Tensor
 
 
 class ProxGrad(OptimSolver):
@@ -123,7 +135,7 @@ class ProxGrad(OptimSolver):
         self,
         variable_values: TensorDict | None = None,
         stopping_criteria: ProxGradStoppingCriteria = ProxGradStoppingCriteria(),
-    ) -> tuple[TensorDict, torch.Tensor]:
+    ) -> ProxGradResult:
         """Solve the optimization problem using the proximal gradient method.
 
         Args:
@@ -133,7 +145,8 @@ class ProxGrad(OptimSolver):
                 Defaults to ProxGradStoppingCriteria().
 
         Returns:
-            Tuple of optimized variable values and final solver error.
+            ProxGradResult: Result of the optimization containing optimized variable
+                values among other metrics.
         """
         solve_fn = self._solve(
             tol=stopping_criteria.tol, max_iters=stopping_criteria.max_iters
@@ -246,7 +259,7 @@ def _build_solve(
         while state.err > epsilon and state.iter_ < max_iters:
             var_vals, state = step_fn(var_vals, state)
 
-        return var_vals, state.err
+        return ProxGradResult(variable_values=var_vals, err=state.err)
 
     return solve
 
