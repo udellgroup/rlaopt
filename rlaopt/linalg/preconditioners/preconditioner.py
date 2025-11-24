@@ -27,12 +27,13 @@ class Preconditioner(ABC):
         self._config = config
 
     @abstractmethod
-    def _update(self, A: torch.Tensor | LinearOperator):
+    def _update(self, A: torch.Tensor | LinearOperator, dtype: torch.dtype):
         """Update the preconditioner based on the matrix A.
 
         Args:
             A (torch.Tensor | LinearOperator): The matrix for which to
                 compute the preconditioner.
+            dtype (torch.dtype): The data type for computations.
         """
         pass
 

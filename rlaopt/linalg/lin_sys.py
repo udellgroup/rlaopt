@@ -104,6 +104,15 @@ class LinSys(torch.nn.Module):
         return self.A.device
 
     @property
+    def dtype(self) -> torch.dtype:
+        """Get the data type of the LinSys module.
+
+        Returns:
+            torch.dtype: Data type of the module's tensors.
+        """
+        return self.B.dtype
+
+    @property
     def rhs_norm(self) -> torch.Tensor:
         """Get the norm of the right-hand side B.
 

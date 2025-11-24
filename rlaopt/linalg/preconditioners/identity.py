@@ -26,7 +26,7 @@ class Identity(Preconditioner):
         """
         super().__init__(config)
 
-    def _update(self, A: torch.Tensor | LinearOperator):
+    def _update(self, A: torch.Tensor | LinearOperator, dtype: torch.dtype):
         """Update the Identity preconditioner (no-op)."""
         pass
 

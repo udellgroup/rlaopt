@@ -49,9 +49,6 @@ class NystromConfig(PreconditionerConfig):
         description="Damping mode: 'adaptive' adjusts based on smallest eigenvalue,"
         " 'non_adaptive' uses base_damping only.",
     )
-    dtype: Literal["float32", "float64"] | None = Field(
-        default=None, description="Data type for computations."
-    )
 
     @model_validator(mode="after")
     def validate_rank_max(self) -> Self:
@@ -85,7 +82,7 @@ class Nystrom(Preconditioner):
         self.current_damping = None
         self.using_low_precision = False
 
-    def _update(self, A: torch.Tensor | LinearOperator):
+    def _update(self, A: torch.Tensor | LinearOperator, dtype: torch.dtype):
         """Update the Nyström preconditioner based on the matrix A."""
         # Unpack config
         num_cols_to_add = self._config.rank_init
@@ -94,7 +91,6 @@ class Nystrom(Preconditioner):
         rank_max = self._config.rank_max
         damping_mode = self._config.damping_mode
         base_damping = self._config.base_damping
-        dtype = _convert_to_torch_dtype(self._config.dtype)
 
         if dtype != torch.float64:
             self.using_low_precision = True
@@ -201,20 +197,6 @@ class Nystrom(Preconditioner):
             )
 
         return x_in.squeeze(-1) if x.ndim == 1 else x_in
-
-
-def _convert_to_torch_dtype(
-    dtype_str: Literal["float32", "float64"] | None,
-) -> torch.dtype:
-    """Convert string representation of dtype to torch.dtype."""
-    if dtype_str == "float32":
-        return torch.float32
-    elif dtype_str == "float64":
-        return torch.float64
-    elif dtype_str is None:
-        return torch.get_default_dtype()
-    else:
-        raise ValueError(f"Unsupported dtype string: {dtype_str}")
 
 
 def _generate_ortho_embedding(
