@@ -9,6 +9,7 @@ preconditioned conjugate gradient (PCG).
 """
 
 from dataclasses import dataclass
+from typing import Callable
 
 import torch
 from pydantic import Field
@@ -28,7 +29,7 @@ class ADMMConfig(SolverConfig):
     """Configuration for the ADMM solver.
 
     Attributes:
-        rho: Augmented Lagrangian penalty.
+        rho: Augmented Lagrangian penalty at initialization.
         rho_update_factor: Factor to update rho in primal-dual balancing.
         rho_update_threshold: Threshold for updating rho in primal-dual balancing.
         alpha: Over-relaxation parameter.
@@ -41,7 +42,7 @@ class ADMMConfig(SolverConfig):
 
     rho: float = Field(
         1.0,
-        description="Augmented Lagrangian penalty.",
+        description="Augmented Lagrangian penalty at initialization.",
     )
     rho_update_factor: float = Field(
         2.0,
@@ -92,6 +93,7 @@ class ADMMState(SolverState):
     """State container for the ADMM solver.
 
     Attributes:
+        iter_: Current iteration count.
         aux_variables: Auxiliary variables (z) in ADMM.
         dual_variables: Dual variables (u) in ADMM.
         primal_residual_norm: Norm of the primal residual.
@@ -143,6 +145,8 @@ class ADMM(OptimSolver):
 
         op_split = ADMMSplit(obj)
 
+        self._init_state = _build_init_state(op_split, config.rho)
+
     def init_state(self, variable_values: TensorDict) -> ADMMState:
         """Initialize the solver state.
 
@@ -152,7 +156,7 @@ class ADMM(OptimSolver):
         Returns:
             Initial solver state.
         """
-        pass
+        return self._init_state(variable_values)
 
     def step(
         self, variables_values: TensorDict, state: ADMMState
@@ -184,3 +188,62 @@ class ADMM(OptimSolver):
                 among other metrics.
         """
         pass
+
+
+def _build_init_state(
+    op_split: ADMMSplit, rho: float
+) -> Callable[[TensorDict], ADMMState]:
+    """Build function to initialize ADMM solver state.
+
+    Args:
+        op_split: ADMMSplit instance for the optimization problem.
+        rho: Initial augmented Lagrangian penalty.
+
+    Returns:
+        Function that initializes the ADMM solver state.
+    """
+
+    def init_state(variable_values: TensorDict) -> ADMMState:
+        aux_variables = op_split.r_variable_values
+        dual_variables = op_split.init_dual_variables()
+        primal_residual_norm, dual_residual_norm = (
+            _compute_primal_and_dual_residual_norms(
+                op_split,
+                variable_values,
+                aux_variables,
+                dual_variables,
+                rho,
+            )
+        )
+        return ADMMState(
+            iter_=0,
+            aux_variables=aux_variables,
+            dual_variables=dual_variables,
+            primal_residual_norm=primal_residual_norm,
+            dual_residual_norm=dual_residual_norm,
+            rho=rho,
+        )
+
+    return init_state
+
+
+def _compute_primal_and_dual_residual_norms(
+    op_split: ADMMSplit,
+    variable_values: TensorDict,
+    aux_variables: TensorDict,
+    dual_variables: TensorDict,
+    rho: float,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    """Compute the primal and dual residual norms for ADMM."""
+    primal_residual = (
+        op_split.A @ variable_values.to_flat_tensor()
+        - aux_variables.to_flat_tensor()
+        - op_split.b
+    )
+    dual_residual = (
+        op_split.grad_f(variable_values).to_flat_tensor()
+        + rho * op_split.A_T @ dual_variables.to_flat_tensor()
+    )
+    primal_residual_norm = torch.linalg.norm(primal_residual)
+    dual_residual_norm = torch.linalg.norm(dual_residual)
+    return primal_residual_norm, dual_residual_norm
