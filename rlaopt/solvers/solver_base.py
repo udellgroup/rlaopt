@@ -18,12 +18,10 @@ class ConvergenceStatus(Enum):
     Attributes:
         CONVERGED: Solver converged to within specified tolerance.
         NOT_CONVERGED: Solver did not converge within the maximum iterations.
-        INFEASIBLE: Problem determined to be infeasible.
     """
 
     CONVERGED = "converged"
     NOT_CONVERGED = "not_converged"
-    INFEASIBLE = "infeasible"
 
 
 @dataclass(frozen=True)

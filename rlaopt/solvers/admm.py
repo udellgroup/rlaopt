@@ -64,6 +64,11 @@ class ADMMConfig(SolverConfig):
         description="Threshold for updating rho in primal-dual balancing.",
         gt=0.0,
     )
+    rho_update_freq: int = Field(
+        25,
+        description="Frequency (in iterations) for updating rho.",
+        ge=1,
+    )
     alpha: float = Field(
         1.6,
         description="Over-relaxation parameter.",
@@ -99,9 +104,6 @@ class ADMMStoppingCriteria(StoppingCriteria):
     )
     eps_rel: float = Field(
         1e-4, description="Relative tolerance for primal and dual residuals."
-    )
-    eps_infeas: float = Field(
-        1e-8, description="Tolerance for infeasibility detection."
     )
 
 
@@ -170,11 +172,15 @@ class ADMM(OptimSolver):
             op_split,
             config.rho_update_factor,
             config.rho_update_threshold,
+            config.rho_update_freq,
             config.alpha,
             config.sigma,
             config.gamma,
             config.preconditioner_config,
             config.preconditioner_update_freq,
+        )
+        self._solve = lambda eps_abs, eps_rel, max_iters: _build_solve(
+            op_split, self._init_state, self._step, eps_abs, eps_rel, max_iters
         )
 
     def init_state(self, variable_values: TensorDict) -> ADMMState:
@@ -217,7 +223,12 @@ class ADMM(OptimSolver):
             ADMMResult: Result of the optimization containing optimized variable values
                 among other metrics.
         """
-        pass
+        solve_fn = self._solve(
+            eps_abs=stopping_criteria.eps_abs,
+            eps_rel=stopping_criteria.eps_rel,
+            max_iters=stopping_criteria.max_iters,
+        )
+        return solve_fn(variable_values)
 
 
 def _build_init_state(
@@ -262,6 +273,7 @@ def _build_step(
     op_split: ADMMSplit,
     rho_update_factor: float,
     rho_update_threshold: float,
+    rho_update_freq: int,
     alpha: float,
     sigma: float,
     gamma: float,
@@ -347,6 +359,8 @@ def _build_step(
         new_dual_variables = dual_variables.from_flat_tensor(new_dual_variables_flat)
 
         # Recompute residual norms
+        # This happens before updating rho, but it is fine since we are already
+        # using the scaled form of ADMM
         new_primal_residual_norm, new_dual_residual_norm = (
             _compute_primal_and_dual_residual_norms(
                 op_split,
@@ -356,6 +370,17 @@ def _build_step(
                 rho,
             )
         )
+
+        # Update rho using primal-dual balancing
+        if (iter_ + 1) % rho_update_freq == 0:
+            if new_primal_residual_norm > rho_update_threshold * new_dual_residual_norm:
+                rho *= rho_update_factor
+                new_dual_variables /= rho_update_factor
+            elif new_dual_residual_norm > (
+                rho_update_threshold * new_primal_residual_norm
+            ):
+                rho /= rho_update_factor
+                new_dual_variables *= rho_update_factor
 
         # Return updated state
         new_state = ADMMState(
@@ -371,6 +396,74 @@ def _build_step(
         return new_variable_values, new_state
 
     return step
+
+
+def _build_solve(
+    op_split: ADMMSplit,
+    init_state_fn: Callable[[TensorDict], ADMMState],
+    step_fn: Callable[[TensorDict, ADMMState], tuple[TensorDict, ADMMState]],
+    eps_abs: float,
+    eps_rel: float,
+    max_iters: int,
+) -> Callable[[TensorDict | None], ADMMResult]:
+    """Build the solve function with ADMM stopping criteria.
+
+    Implements Boyd et al. stopping criteria:
+    - Primal feasibility: ||r_primal|| <= eps_primal
+    - Dual feasibility: ||r_dual|| <= eps_dual
+    where:
+    - eps_primal = sqrt(m) * eps_abs + eps_rel * max(||Ax||, ||z||, ||b||)
+    - eps_dual = sqrt(n) * eps_abs + eps_rel * ||rho * A^T * u||
+    """
+
+    def solve(var_vals: TensorDict | None = None) -> ADMMResult:
+        """Solve the optimization problem using ADMM."""
+        if var_vals is None:
+            var_vals = op_split.f_and_affine_variable_values
+
+        state = init_state_fn(var_vals)
+
+        m = op_split.A.shape[0]  # Constraint dimension
+        n = op_split.A.shape[1]  # Variable dimension
+
+        # Main iteration loop
+        while state.iter_ < max_iters:
+            var_vals, state = step_fn(var_vals, state)
+
+            # Compute stopping criteria thresholds (Boyd et al., Section 3.3.1)
+
+            # Primal threshold
+            Ax_norm = torch.linalg.norm(op_split.A @ var_vals.to_flat_tensor()).item()
+            z_norm = state.aux_variables.flat_norm().item()
+            b_norm = torch.linalg.norm(op_split.b).item()
+            eps_primal = (m**0.5) * eps_abs + eps_rel * max(Ax_norm, z_norm, b_norm)
+
+            # Dual threshold
+            ATu_norm = torch.linalg.norm(
+                state.rho * op_split.A_T @ state.dual_variables.to_flat_tensor()
+            ).item()
+            eps_dual = (n**0.5) * eps_abs + eps_rel * ATu_norm
+
+            # Check convergence
+            if (
+                state.primal_residual_norm <= eps_primal
+                and state.dual_residual_norm <= eps_dual
+            ):
+                convergence_status = ConvergenceStatus.CONVERGED
+                break
+        else:
+            # Max iterations reached without convergence
+            convergence_status = ConvergenceStatus.NOT_CONVERGED
+
+        return ADMMResult(
+            variable_values=var_vals,
+            convergence_status=convergence_status,
+            num_iters=state.iter_,
+            primal_residual_norm=state.primal_residual_norm,
+            dual_residual_norm=state.dual_residual_norm,
+        )
+
+    return solve
 
 
 def _compute_primal_and_dual_residual_norms(
