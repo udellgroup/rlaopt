@@ -4,6 +4,7 @@ from dataclasses import dataclass, replace
 from typing import Callable
 
 import torch
+from pydantic import Field
 
 from rlaopt.linalg import (
     IdentityConfig,
@@ -29,10 +30,12 @@ class PCGConfig(SolverConfig):
 class PCGStoppingCriteria(StoppingCriteria):
     """Stopping criteria specific to the PCG solver.
 
-    Inherits from the base StoppingCriteria class.
+    Attributes:
+        max_iters: Maximum number of iterations.
+        tol: Relative tolerance for convergence.
     """
 
-    pass
+    tol: float = Field(default=1e-6, gt=0)
 
 
 @dataclass(frozen=True)

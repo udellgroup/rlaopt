@@ -227,6 +227,27 @@ def _build_init_state(
     return init_state
 
 
+def _build_step(
+    op_split: ADMMSplit,
+    rho: float,
+    rho_update_factor: float,
+    rho_update_threshold: float,
+    alpha: float,
+    sigma: float,
+    gamma: float,
+    preconditioner_config: PreconditionerConfig,
+    preconditioner_update_freq: int,
+) -> Callable[[TensorDict, ADMMState], tuple[TensorDict, ADMMState]]:
+    """Build function to perform a single ADMM optimization step."""
+
+    def step(
+        variable_values: TensorDict, state: ADMMState
+    ) -> tuple[TensorDict, ADMMState]:
+        pass
+
+    return step
+
+
 def _compute_primal_and_dual_residual_norms(
     op_split: ADMMSplit,
     variable_values: TensorDict,
