@@ -1,4 +1,4 @@
-"""ADMM implementation.
+"""Alternating direction method of multipliers (ADMM) implementation.
 
 Our ADMM implementation is based on the description in
 "GeNIOS: an (almost) second-order operator-splitting solver for
@@ -8,13 +8,18 @@ problems by solving the ADMM linear system approximately using
 preconditioned conjugate gradient (PCG).
 """
 
+from dataclasses import dataclass
+
+import torch
 from pydantic import Field
 
+from rlaopt.ext_tensordict import TensorDict
 from rlaopt.linalg import (
     NystromConfig,
     PreconditionerConfig,
 )
 from rlaopt.solvers.configs_base import SolverConfig, StoppingCriteria
+from rlaopt.solvers.solver_base import SolverState
 
 
 class ADMMConfig(SolverConfig):
@@ -56,7 +61,10 @@ class ADMMConfig(SolverConfig):
         1.2,
         description="Exponent for the linear system solve tolerance.",
     )
-    preconditioner_config: PreconditionerConfig = NystromConfig(rank_init=50)
+    preconditioner_config: PreconditionerConfig = Field(
+        NystromConfig(rank_init=50),
+        description="Configuration for the linear system preconditioner.",
+    )
     preconditioner_update_freq: int = Field(
         20,
         description="Frequency (in iterations) for updating the preconditioner.",
@@ -75,3 +83,20 @@ class ADMMStoppingCriteria(StoppingCriteria):
     eps_infeas: float = Field(
         1e-8, description="Tolerance for infeasibility detection."
     )
+
+
+@dataclass(frozen=True)
+class ADMMState(SolverState):
+    """State container for the ADMM solver.
+
+    Attributes:
+        aux_variables: Auxiliary variables (z) in ADMM.
+        dual_variables: Dual variables (u) in ADMM.
+        primal_residual_norm: Norm of the primal residual.
+        dual_residual_norm: Norm of the dual residual.
+    """
+
+    aux_variables: TensorDict
+    dual_variables: TensorDict
+    primal_residual_norm: torch.Tensor
+    dual_residual_norm: torch.Tensor
