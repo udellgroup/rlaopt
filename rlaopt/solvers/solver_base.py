@@ -80,7 +80,7 @@ class OptimSolver(ABC):
 
     @abstractmethod
     def solve(
-        self, variable_values: TensorDict, stopping_criteria: StoppingCriteria
+        self, variable_values: TensorDict | None, stopping_criteria: StoppingCriteria
     ) -> SolverResult:
         """Solve the optimization problem.
 
