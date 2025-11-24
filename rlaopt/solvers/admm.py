@@ -166,6 +166,16 @@ class ADMM(OptimSolver):
         op_split = ADMMSplit(obj)
 
         self._init_state = _build_init_state(op_split, config.rho)
+        self._step = _build_step(
+            op_split,
+            config.rho_update_factor,
+            config.rho_update_threshold,
+            config.alpha,
+            config.sigma,
+            config.gamma,
+            config.preconditioner_config,
+            config.preconditioner_update_freq,
+        )
 
     def init_state(self, variable_values: TensorDict) -> ADMMState:
         """Initialize the solver state.
@@ -190,7 +200,7 @@ class ADMM(OptimSolver):
         Returns:
             Tuple of updated variable values and solver state.
         """
-        pass
+        return self._step(variables_values, state)
 
     def solve(
         self,
@@ -315,9 +325,12 @@ def _build_step(
         new_variable_values = variable_values.from_flat_tensor(new_variable_values_flat)
 
         # Solve z-subproblems using proximal operators
-        A_times_new_variable_values_flat = op_split.A @ new_variable_values_flat
+        variable_values_overrelaxed_flat = (
+            alpha * op_split.A @ new_variable_values_flat
+            + (1 - alpha) * (aux_variables_flat + op_split.b)
+        )
         aux_variables_intermediate_flat = (
-            A_times_new_variable_values_flat + dual_variables_flat - op_split.b
+            variable_values_overrelaxed_flat + dual_variables_flat - op_split.b
         )
         aux_variables_intermediate = aux_variables.from_flat_tensor(
             aux_variables_intermediate_flat
@@ -327,7 +340,7 @@ def _build_step(
         # Update dual variables
         new_dual_variables_flat = (
             dual_variables_flat
-            + A_times_new_variable_values_flat
+            + variable_values_overrelaxed_flat
             - new_aux_variables.to_flat_tensor()
             - op_split.b
         )
