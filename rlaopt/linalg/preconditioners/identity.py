@@ -1,6 +1,7 @@
 """Identity preconditioner and configuration."""
 
 import torch
+from linops import LinearOperator
 
 from rlaopt.linalg.preconditioners.preconditioner import (
     Preconditioner,
@@ -25,7 +26,7 @@ class Identity(Preconditioner):
         """
         super().__init__(config)
 
-    def _update(self, A: torch.Tensor):
+    def _update(self, A: torch.Tensor | LinearOperator):
         """Update the Identity preconditioner (no-op)."""
         pass
 

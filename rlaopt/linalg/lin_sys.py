@@ -3,6 +3,7 @@
 from warnings import warn
 
 import torch
+from linops import LinearOperator, aslinearoperator
 
 
 class LinSys(torch.nn.Module):
@@ -10,7 +11,7 @@ class LinSys(torch.nn.Module):
 
     def __init__(
         self,
-        A: torch.Tensor,
+        A: torch.Tensor | LinearOperator,
         B: torch.Tensor,
         reg: float | torch.Tensor = 0.0,
         w: torch.Tensor | None = None,
@@ -18,7 +19,8 @@ class LinSys(torch.nn.Module):
         """Initialize LinSys module.
 
         Args:
-            A (torch.Tensor): Positive-definite matrix defining the linear system.
+            A (torch.Tensor | LinearOperator): Positive-definite matrix defining
+                the linear system.
             B (torch.Tensor): Right-hand side of the linear system. Must be 1D or 2D.
                 If 1D with shape (N,), it is automatically resized
                     to 2D with shape (N, 1).
@@ -41,9 +43,9 @@ class LinSys(torch.nn.Module):
 
         # Make reg a tensor if it is a float
         if isinstance(reg, float):
-            reg = torch.tensor(reg, device=A.device, dtype=A.dtype)
+            reg = torch.tensor(reg, device=B.device, dtype=B.dtype)
 
-        self.register_buffer("A", A)
+        self.A = aslinearoperator(A)  # Make A a LinearOperator
         self.register_buffer("B", B)
         self.register_buffer("reg", reg)
         self.w = torch.nn.Parameter(w)
@@ -111,18 +113,24 @@ class LinSys(torch.nn.Module):
         return torch.linalg.norm(self.B, dim=0, ord=2)
 
     @staticmethod
-    def _check_inputs(A, B, reg, w):
-        if not torch.is_tensor(A):
+    def _check_inputs(
+        A: torch.Tensor | LinearOperator,
+        B: torch.Tensor,
+        reg: float | torch.Tensor,
+        w: torch.Tensor | None,
+    ):
+        if not (torch.is_tensor(A) or isinstance(A, LinearOperator)):
             raise TypeError(
-                f"A must be a torch.Tensor, but received {type(A).__name__}."
+                "A must be a torch.Tensor or LinearOperator, "
+                f"but received {type(A).__name__}."
             )
         if not torch.is_tensor(B):
             raise TypeError(
                 f"B must be a torch.Tensor, but received {type(B).__name__}."
             )
-        if A.ndim != 2 or A.size(0) != A.size(1):
-            raise ValueError("A must be a square matrix.")
-        if B.ndim not in [1, 2] or B.size(0) != A.size(0):
+        if len(A.shape) != 2 or A.shape[0] != A.shape[1]:
+            raise ValueError("A must be a square matrix or square linear operator.")
+        if B.ndim not in [1, 2] or B.shape[0] != A.shape[0]:
             raise ValueError(
                 "B must be a tensor whose first dimension matches A's size."
             )
