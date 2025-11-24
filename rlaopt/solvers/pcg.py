@@ -14,7 +14,12 @@ from rlaopt.linalg import (
     get_preconditioner,
 )
 from rlaopt.solvers.configs_base import SolverConfig, StoppingCriteria
-from rlaopt.solvers.solver_base import LinSysSolver, SolverState
+from rlaopt.solvers.solver_base import (
+    ConvergenceStatus,
+    LinSysResult,
+    LinSysSolver,
+    SolverState,
+)
 
 
 class PCGConfig(SolverConfig):
@@ -62,6 +67,20 @@ class PCGState(SolverState):
     res_norm: torch.Tensor
     mask: torch.Tensor
     tol: float | None = None
+
+
+@dataclass(frozen=True)
+class PCGResult(LinSysResult):
+    """Result container for the PCG solver.
+
+    Attributes:
+        solution: Converged solution parameters.
+        convergence_status: Status indicating how the solver terminated.
+        num_iters: Number of iterations performed.
+        residual_norm: Final residual norm per component.
+    """
+
+    residual_norm: torch.Tensor
 
 
 class _PCG:
@@ -118,7 +137,7 @@ class _PCG:
         self,
         params: torch.Tensor | None = None,
         stopping_criteria: PCGStoppingCriteria = PCGStoppingCriteria(),
-    ) -> tuple[torch.Tensor, torch.Tensor]:
+    ) -> PCGResult:
         """Solve the linear system AW = B using PCG.
 
         Args:
@@ -128,7 +147,7 @@ class _PCG:
                 Defaults to PCGStoppingCriteria().
 
         Returns:
-            Tuple of solution parameters and final residual norm.
+            PCGResult containing the solution and convergence information.
         """
         solve_fn = self._solve(
             tol=stopping_criteria.tol, max_iters=stopping_criteria.max_iters
@@ -197,7 +216,7 @@ class PCG(LinSysSolver):
         self,
         params: torch.Tensor | None = None,
         stopping_criteria: PCGStoppingCriteria = PCGStoppingCriteria(),
-    ) -> tuple[torch.Tensor, torch.Tensor]:
+    ) -> PCGResult:
         """Solve the linear system AW = B using PCG.
 
         Args:
@@ -207,7 +226,7 @@ class PCG(LinSysSolver):
                 Defaults to PCGStoppingCriteria().
 
         Returns:
-            Tuple of solution parameters and final residual norm.
+            PCGResult containing the solution and convergence information.
         """
         return self._impl.solve(params, stopping_criteria)
 
@@ -351,17 +370,17 @@ def _build_solve(
     step_fn: Callable[[torch.Tensor, PCGState], tuple[torch.Tensor, PCGState]],
     tol: float,
     max_iters: int,
-) -> Callable[[torch.Tensor | None], tuple[torch.Tensor, torch.Tensor]]:
+) -> Callable[[torch.Tensor | None], PCGResult]:
     """Build the solve function with stopping criteria."""
 
-    def solve(params: torch.Tensor | None = None) -> tuple[torch.Tensor, torch.Tensor]:
+    def solve(params: torch.Tensor | None = None) -> PCGResult:
         """Solve the linear system AW = B.
 
         Args:
             params: Initial parameters. If None, defaults to zeros.
 
         Returns:
-            Tuple of solution parameters and final residual norm.
+            PCGResult containing the solution and convergence information.
         """
         if params is None:
             params = lin_sys.w.clone()
@@ -376,7 +395,17 @@ def _build_solve(
         while state.mask.any() and state.iter_ < max_iters:
             params, state = step_fn(params, state)
 
-        # Return final params and residual norm
-        return params, state.res_norm
+        # Determine convergence status
+        if not state.mask.any():
+            convergence_status = ConvergenceStatus.CONVERGED
+        else:
+            convergence_status = ConvergenceStatus.NOT_CONVERGED
+
+        return PCGResult(
+            solution=params,
+            convergence_status=convergence_status,
+            num_iters=state.iter_,
+            residual_norm=state.res_norm,
+        )
 
     return solve

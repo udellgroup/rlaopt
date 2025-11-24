@@ -2,6 +2,7 @@
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
+from enum import Enum
 
 import torch
 
@@ -9,6 +10,20 @@ from rlaopt.expression import Expression
 from rlaopt.ext_tensordict import TensorDict
 from rlaopt.linalg import LinSys
 from rlaopt.solvers.configs_base import SolverConfig, StoppingCriteria
+
+
+class ConvergenceStatus(Enum):
+    """Enumeration of possible solver convergence statuses.
+
+    Attributes:
+        CONVERGED: Solver converged to within specified tolerance.
+        NOT_CONVERGED: Solver did not converge within the maximum iterations.
+        INFEASIBLE: Problem determined to be infeasible.
+    """
+
+    CONVERGED = "converged"
+    NOT_CONVERGED = "not_converged"
+    INFEASIBLE = "infeasible"
 
 
 @dataclass(frozen=True)
@@ -23,14 +38,39 @@ class SolverState:
 
 
 @dataclass(frozen=True)
-class SolverResult:
-    """Base class for solver results.
+class OptimResult:
+    """Base class for optimization solver results.
 
     This class can be extended to include specific result variables
-    returned by different solvers.
+    returned by different optimization solvers.
+
+    Attributes:
+        variable_values: Optimized variable values.
+        convergence_status: Status indicating how the solver terminated.
+        num_iters: Number of iterations performed.
     """
 
-    variable_values: TensorDict  # Optimized variable values
+    variable_values: TensorDict
+    convergence_status: ConvergenceStatus
+    num_iters: int
+
+
+@dataclass(frozen=True)
+class LinSysResult:
+    """Base class for linear system solver results.
+
+    This class can be extended to include specific result variables
+    returned by different linear system solvers.
+
+    Attributes:
+        solution: Solution to the linear system.
+        convergence_status: Status indicating how the solver terminated.
+        num_iters: Number of iterations performed.
+    """
+
+    solution: torch.Tensor
+    convergence_status: ConvergenceStatus
+    num_iters: int
 
 
 class OptimSolver(ABC):
@@ -81,7 +121,7 @@ class OptimSolver(ABC):
     @abstractmethod
     def solve(
         self, variable_values: TensorDict | None, stopping_criteria: StoppingCriteria
-    ) -> SolverResult:
+    ) -> OptimResult:
         """Solve the optimization problem.
 
         Args:
@@ -90,7 +130,7 @@ class OptimSolver(ABC):
             stopping_criteria (StoppingCriteria): Criteria to stop the optimization.
 
         Returns:
-            SolverResult: Result of the optimization containing optimized variable
+            OptimResult: Result of the optimization containing optimized variable
                 values among other metrics.
         """
         pass
@@ -149,7 +189,7 @@ class LinSysSolver(ABC):
     @abstractmethod
     def solve(
         self, params: torch.Tensor, stopping_criteria: StoppingCriteria
-    ) -> tuple[torch.Tensor, torch.Tensor]:
+    ) -> LinSysResult:
         """Solve the linear system AW = B.
 
         Args:
@@ -157,7 +197,6 @@ class LinSysSolver(ABC):
             stopping_criteria (StoppingCriteria): Criteria to stop the solver.
 
         Returns:
-            tuple[torch.Tensor, torch.Tensor]: Optimized parameters and
-                final residual norm.
+            LinSysResult: Result containing the solution and convergence information.
         """
         pass

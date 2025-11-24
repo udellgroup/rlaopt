@@ -24,8 +24,13 @@ from rlaopt.linalg import (
     get_preconditioner,
 )
 from rlaopt.solvers.configs_base import SolverConfig, StoppingCriteria
-from rlaopt.solvers.pcg import _PCG
-from rlaopt.solvers.solver_base import OptimSolver, SolverResult, SolverState
+from rlaopt.solvers.pcg import _PCG, PCGStoppingCriteria
+from rlaopt.solvers.solver_base import (
+    ConvergenceStatus,
+    OptimResult,
+    OptimSolver,
+    SolverState,
+)
 from rlaopt.splitting import ADMMSplit
 
 
@@ -47,26 +52,33 @@ class ADMMConfig(SolverConfig):
     rho: float = Field(
         1.0,
         description="Augmented Lagrangian penalty at initialization.",
+        gt=0.0,
     )
     rho_update_factor: float = Field(
         2.0,
         description="Factor to update rho in primal-dual balancing.",
+        gt=1.0,
     )
     rho_update_threshold: float = Field(
         10.0,
         description="Threshold for updating rho in primal-dual balancing.",
+        gt=0.0,
     )
     alpha: float = Field(
         1.6,
         description="Over-relaxation parameter.",
+        gt=0.0,
+        lt=2.0,
     )
     sigma: float = Field(
         1e-6,
         description="Regularization parameter for the inexact ADMM linear system.",
+        ge=0.0,
     )
     gamma: float = Field(
         1.2,
         description="Exponent for the linear system solve tolerance.",
+        gt=1.0,
     )
     preconditioner_config: PreconditionerConfig = Field(
         NystromConfig(rank_init=50),
@@ -75,6 +87,7 @@ class ADMMConfig(SolverConfig):
     preconditioner_update_freq: int = Field(
         20,
         description="Frequency (in iterations) for updating the preconditioner.",
+        ge=1,
     )
 
 
@@ -114,11 +127,13 @@ class ADMMState(SolverState):
 
 
 @dataclass(frozen=True)
-class ADMMResult(SolverResult):
+class ADMMResult(OptimResult):
     """Result container for the ADMM solver.
 
     Attributes:
         variable_values: Optimized variable values.
+        convergence_status: Status indicating how the solver terminated.
+        num_iters: Number of iterations performed.
         primal_residual_norm: Norm of the primal residual.
         dual_residual_norm: Norm of the dual residual.
     """
@@ -281,6 +296,66 @@ def _build_step(
             )
         # Solve the linear system using PCG
         pcg_solver = _PCG(lin_sys, preconditioner=preconditioner)
+        rel_tol = (
+            min((primal_residual_norm * dual_residual_norm) ** 0.5, 1.0)
+            / (iter_ + 1) ** gamma
+        )
+        stopping_criteria = PCGStoppingCriteria(
+            max_iters=lin_sys.A.shape[0],
+            tol=rel_tol,
+        )
+        pcg_solve_result = pcg_solver.solve(stopping_criteria=stopping_criteria)
+        if pcg_solve_result.convergence_status != ConvergenceStatus.CONVERGED:
+            print(
+                f"PCG for ADMM did not converge in iteration {iter_}. "
+                f"Status: {pcg_solve_result.convergence_status}."
+                "Consider changing the preconditioner."
+            )
+        new_variable_values_flat = pcg_solve_result.solution
+        new_variable_values = variable_values.from_flat_tensor(new_variable_values_flat)
+
+        # Solve z-subproblems using proximal operators
+        A_times_new_variable_values_flat = op_split.A @ new_variable_values_flat
+        aux_variables_intermediate_flat = (
+            A_times_new_variable_values_flat + dual_variables_flat - op_split.b
+        )
+        aux_variables_intermediate = aux_variables.from_flat_tensor(
+            aux_variables_intermediate_flat
+        )
+        new_aux_variables = op_split.prox(aux_variables_intermediate, 1.0 / rho)
+
+        # Update dual variables
+        new_dual_variables_flat = (
+            dual_variables_flat
+            + A_times_new_variable_values_flat
+            - new_aux_variables.to_flat_tensor()
+            - op_split.b
+        )
+        new_dual_variables = dual_variables.from_flat_tensor(new_dual_variables_flat)
+
+        # Recompute residual norms
+        new_primal_residual_norm, new_dual_residual_norm = (
+            _compute_primal_and_dual_residual_norms(
+                op_split,
+                new_variable_values,
+                new_aux_variables,
+                new_dual_variables,
+                rho,
+            )
+        )
+
+        # Return updated state
+        new_state = ADMMState(
+            iter_=iter_ + 1,
+            aux_variables=new_aux_variables,
+            dual_variables=new_dual_variables,
+            primal_residual_norm=new_primal_residual_norm,
+            dual_residual_norm=new_dual_residual_norm,
+            rho=rho,
+            _preconditioner=preconditioner,
+        )
+
+        return new_variable_values, new_state
 
     return step
 
@@ -291,7 +366,7 @@ def _compute_primal_and_dual_residual_norms(
     aux_variables: TensorDict,
     dual_variables: TensorDict,
     rho: float,
-) -> tuple[torch.Tensor, torch.Tensor]:
+) -> tuple[float, float]:
     """Compute the primal and dual residual norms for ADMM."""
     primal_residual = (
         op_split.A @ variable_values.to_flat_tensor()

@@ -9,7 +9,12 @@ from pydantic import Field
 from rlaopt.expression import Expression
 from rlaopt.ext_tensordict import TensorDict
 from rlaopt.solvers.configs_base import SolverConfig, StoppingCriteria
-from rlaopt.solvers.solver_base import OptimSolver, SolverResult, SolverState
+from rlaopt.solvers.solver_base import (
+    ConvergenceStatus,
+    OptimResult,
+    OptimSolver,
+    SolverState,
+)
 from rlaopt.splitting import ProxGradSplit
 
 
@@ -57,15 +62,17 @@ class ProxGradState(SolverState):
 
 
 @dataclass(frozen=True)
-class ProxGradResult(SolverResult):
+class ProxGradResult(OptimResult):
     """Result container for the proximal gradient solver.
 
     Attributes:
         variable_values: Optimized variable values.
-        state: Final ProxGrad solver state.
+        convergence_status: Status indicating how the solver terminated.
+        num_iters: Number of iterations performed.
+        err: Final error metric upon termination.
     """
 
-    err: torch.Tensor
+    err: float
 
 
 class ProxGrad(OptimSolver):
@@ -243,10 +250,10 @@ def _build_solve(
     step_fn: Callable,
     tol: float,
     max_iters: int,
-) -> Callable[[TensorDict | None], tuple[TensorDict, torch.Tensor]]:
+) -> Callable[[TensorDict | None], ProxGradResult]:
     """Build the solve function with stopping criteria."""
 
-    def solve(var_vals: TensorDict | None = None) -> tuple[TensorDict, torch.Tensor]:
+    def solve(var_vals: TensorDict | None = None) -> ProxGradResult:
         """Solve the optimization problem."""
         if var_vals is None:
             var_vals = op_split.variable_values
@@ -259,7 +266,17 @@ def _build_solve(
         while state.err > epsilon and state.iter_ < max_iters:
             var_vals, state = step_fn(var_vals, state)
 
-        return ProxGradResult(variable_values=var_vals, err=state.err)
+        if state.err <= epsilon:
+            convergence_status = ConvergenceStatus.CONVERGED
+        else:
+            convergence_status = ConvergenceStatus.NOT_CONVERGED
+
+        return ProxGradResult(
+            variable_values=var_vals,
+            convergence_status=convergence_status,
+            num_iters=state.iter_,
+            err=state.err.item(),
+        )
 
     return solve
 
