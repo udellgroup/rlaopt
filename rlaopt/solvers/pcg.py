@@ -95,15 +95,18 @@ class _PCG:
         self,
         lin_sys: LinSys,
         preconditioner: Preconditioner,
+        detach: bool = True,
     ):
         """Initialize PCG solver with a preconditioner.
 
         Args:
             lin_sys: The linear system to solve.
             preconditioner: Preconditioner instance to use.
+            detach: Whether to detach params and state from computation graph
+                between iterations.
         """
         self._init_state = _build_init_state(lin_sys, preconditioner)
-        self._step = _build_step(lin_sys, preconditioner)
+        self._step = _build_step(lin_sys, preconditioner, detach)
         self._solve = lambda tol, max_iters: _build_solve(
             lin_sys, self._init_state, self._step, tol, max_iters
         )
@@ -167,15 +170,18 @@ class PCG(LinSysSolver):
     that are scaled by the preconditioner.
     """
 
-    def __init__(self, lin_sys: LinSys, config: PCGConfig):
+    def __init__(self, lin_sys: LinSys, config: PCGConfig, detach: bool = True):
         """Initialize the PCG solver.
 
         Args:
             lin_sys: The linear system to solve.
             config: Configuration for the solver.
+            detach: Whether to detach params and state from computation graph
+                between iterations. Set to False only if you need to differentiate
+                through the entire solver. Default: True.
         """
         # Call parent constructor first
-        super().__init__(lin_sys, config)
+        super().__init__(lin_sys, config, detach)
 
         # Create preconditioner from config
         preconditioner = get_preconditioner(
@@ -185,7 +191,7 @@ class PCG(LinSysSolver):
         )
 
         # Delegate to internal implementation (composition)
-        self._impl = _PCG(lin_sys, preconditioner)
+        self._impl = _PCG(lin_sys, preconditioner, detach)
 
     def init_state(self, params: torch.Tensor) -> PCGState:
         """Initialize the solver state.
@@ -278,6 +284,7 @@ def _build_init_state(
 def _build_step(
     lin_sys: LinSys,
     P: Preconditioner,
+    detach: bool,
 ) -> Callable[[torch.Tensor, PCGState], tuple[torch.Tensor, PCGState]]:
     def step(
         params: torch.Tensor,
@@ -347,6 +354,15 @@ def _build_step(
         else:
             # If no tolerance is set, keep all components active
             mask_new = mask
+
+        # Detach if requested to avoid expanding autodiff tree
+        if detach:
+            params_new = params_new.detach()
+            r_new = r_new.detach()
+            z_new = z_new.detach()
+            p_new = p_new.detach()
+            rz_new = rz_new.detach()
+            res_norm_new = res_norm_new.detach()
 
         new_state = PCGState(
             iter_=state.iter_ + 1,

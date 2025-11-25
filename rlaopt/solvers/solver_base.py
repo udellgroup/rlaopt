@@ -146,15 +146,16 @@ class LinSysSolver(ABC):
     that progressively refine a solution until convergence criteria are met.
     """
 
-    @abstractmethod
-    def __init__(self, lin_sys: LinSys, config: SolverConfig):
+    def __init__(self, lin_sys: LinSys, config: SolverConfig, detach: bool = True):
         """Initialize the solver.
 
         Args:
             lin_sys (LinSys): The linear system to solve.
             config (SolverConfig): Configuration object for the solver.
+            detach (bool): Whether to detach params and state from computation graph
+                between iterations. Set to False only if you need to differentiate
+                through the entire solver. Default: True.
         """
-        pass
 
     @abstractmethod
     def init_state(self, params: torch.Tensor) -> SolverState:

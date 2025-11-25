@@ -184,7 +184,7 @@ class ADMM(OptimSolver):
             config.gamma,
             config.preconditioner_config,
             config.preconditioner_update_freq,
-            self.detach,
+            detach,
         )
         self._solve = lambda eps_abs, eps_rel, max_iters: _build_solve(
             op_split, self._init_state, self._step, eps_abs, eps_rel, max_iters
@@ -320,6 +320,7 @@ def _build_step(
             preconditioner,
             preconditioner_config,
             preconditioner_update_freq,
+            detach,
         )
 
         # Apply over-relaxation
@@ -472,6 +473,7 @@ def _solve_x_subproblem(
     preconditioner: Preconditioner | None,
     preconditioner_config: PreconditionerConfig,
     preconditioner_update_freq: int,
+    detach: bool,
 ) -> tuple[TensorDict, Preconditioner]:
     """Solve the x-subproblem approximately using PCG.
 
@@ -499,7 +501,7 @@ def _solve_x_subproblem(
         )
 
     # Solve the linear system using PCG
-    pcg_solver = _PCG(lin_sys, preconditioner=preconditioner)
+    pcg_solver = _PCG(lin_sys, preconditioner=preconditioner, detach=detach)
     rel_tol = min((primal_residual_norm * dual_residual_norm) ** 0.5, 1.0)
     if rel_tol == 0.0:
         rel_tol = PCG_TOL_EPS
