@@ -155,18 +155,21 @@ class ADMM(OptimSolver):
     where f is smooth (differentiable) and each g_i is proxable.
     """
 
-    def __init__(self, obj: Expression, config: ADMMConfig):
+    def __init__(self, obj: Expression, config: ADMMConfig, detach: bool = True):
         """Initialize the ADMM solver.
 
         Args:
             obj: The optimization problem to solve.
             config: Configuration for the ADMM solver.
+            detach: Whether to detach params and state from computation graph
+                between iterations. Set to False only if you need to differentiate
+                through the entire solver. Default: True.
         """
         if not isinstance(obj, Expression):
             raise ValueError("ADMM solver requires an Expression objective.")
         if not isinstance(config, ADMMConfig):
             raise ValueError("ADMM solver requires an ADMMConfig configuration.")
-        super().__init__(obj, config)
+        super().__init__(obj, config, detach)
 
         op_split = ADMMSplit(obj)
 
@@ -181,6 +184,7 @@ class ADMM(OptimSolver):
             config.gamma,
             config.preconditioner_config,
             config.preconditioner_update_freq,
+            self.detach,
         )
         self._solve = lambda eps_abs, eps_rel, max_iters: _build_solve(
             op_split, self._init_state, self._step, eps_abs, eps_rel, max_iters
@@ -282,6 +286,7 @@ def _build_step(
     gamma: float,
     preconditioner_config: PreconditionerConfig,
     preconditioner_update_freq: int,
+    detach: bool,
 ) -> Callable[[TensorDict, ADMMState], tuple[TensorDict, ADMMState]]:
     """Build function to perform a single ADMM optimization step."""
 
@@ -362,6 +367,12 @@ def _build_step(
             rho_update_threshold,
             rho_update_freq,
         )
+
+        # Detach if requested to avoid expanding autodiff tree
+        if detach:
+            new_variable_values = new_variable_values.detach()
+            new_aux_variables = new_aux_variables.detach()
+            new_dual_variables = new_dual_variables.detach()
 
         # Return updated state
         new_state = ADMMState(

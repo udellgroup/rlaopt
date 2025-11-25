@@ -90,24 +90,27 @@ class ProxGrad(OptimSolver):
     - Combinations of acceleration and line search
     """
 
-    def __init__(self, obj: Expression, config: ProxGradConfig):
+    def __init__(self, obj: Expression, config: ProxGradConfig, detach: bool = True):
         """Initialize the proximal gradient solver.
 
         Args:
             obj: The optimization objective (Expression).
             config: Configuration for the solver.
+            detach: Whether to detach params and state from computation graph
+                between iterations. Set to False only if you need to differentiate
+                through the entire solver. Default: True.
         """
         if not isinstance(obj, Expression):
             raise ValueError("ProxGrad solver requires an Expression objective.")
         if not isinstance(config, ProxGradConfig):
             raise ValueError("ProxGrad solver requires a ProxGradConfig configuration.")
-        super().__init__(obj, config)
+        super().__init__(obj, config, detach)
 
         op_split = ProxGradSplit(obj)
 
         self._init_state = _build_init_state(config.eta, config.use_acceleration)
         self._step = _build_step(
-            op_split, config.use_acceleration, config.use_linesearch
+            op_split, config.use_acceleration, config.use_linesearch, detach
         )
         self._solve = lambda tol, max_iters: _build_solve(
             op_split, self._init_state, self._step, tol, max_iters
@@ -182,6 +185,7 @@ def _build_step(
     op_split: ProxGradSplit,
     use_acceleration: bool,
     use_linesearch: bool,
+    detach: bool,
 ) -> Callable[
     [TensorDict, ProxGradState],
     tuple[TensorDict, ProxGradState],
@@ -205,6 +209,12 @@ def _build_step(
         ) -> tuple[TensorDict, ProxGradState]:
             var_vals_prev = var_vals
             var_vals, state = _accel_prox_grad_ls_step(var_vals, state, f, grad_f, prox)
+
+            # Detach if requested to avoid expanding autodiff tree
+            if detach:
+                var_vals = var_vals.detach()
+                var_vals_prev = var_vals_prev.detach()
+
             return var_vals, replace(
                 state, iter_=state.iter_ + 1, variable_values_prev=var_vals_prev
             )
@@ -217,6 +227,12 @@ def _build_step(
             var_vals_prev = var_vals
             var_vals = _accel_prox_grad_step(var_vals, state, grad_f, prox)
             err = err_fn(var_vals, state)
+
+            # Detach if requested to avoid expanding autodiff tree
+            if detach:
+                var_vals = var_vals.detach()
+                var_vals_prev = var_vals_prev.detach()
+
             return var_vals, replace(
                 state,
                 iter_=state.iter_ + 1,
@@ -230,6 +246,11 @@ def _build_step(
             var_vals: TensorDict, state: ProxGradState
         ) -> tuple[TensorDict, ProxGradState]:
             var_vals, state = _linesearch(var_vals, state, f, grad_f, prox)
+
+            # Detach if requested to avoid expanding autodiff tree
+            if detach:
+                var_vals = var_vals.detach()
+
             return var_vals, replace(state, iter_=state.iter_ + 1)
 
     else:
@@ -239,6 +260,11 @@ def _build_step(
         ) -> tuple[TensorDict, ProxGradState]:
             var_vals = _prox_grad_step(var_vals, state, grad_f, prox)
             err = err_fn(var_vals, state)
+
+            # Detach if requested to avoid expanding autodiff tree
+            if detach:
+                var_vals = var_vals.detach()
+
             return var_vals, replace(state, iter_=state.iter_ + 1, err=err)
 
     return step

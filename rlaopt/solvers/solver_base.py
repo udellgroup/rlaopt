@@ -78,16 +78,17 @@ class OptimSolver(ABC):
     Each solver must implement the `solve` method to perform optimization.
     """
 
-    @abstractmethod
-    def __init__(self, obj: Expression, config: SolverConfig):
+    def __init__(self, obj: Expression, config: SolverConfig, detach: bool = True):
         """Initialize the solver with an objective function.
 
         Args:
             obj (Expression): The objective function
                 to optimize.
             config (SolverConfig): Configuration for the solver.
+            detach (bool): Whether to detach params and state from computation graph
+                between iterations. Set to False only if you need to differentiate
+                through the entire solver. Default: True.
         """
-        pass
 
     @abstractmethod
     def init_state(self, variable_values: TensorDict) -> SolverState:
