@@ -288,6 +288,7 @@ def _build_step(
     def step(
         variable_values: TensorDict, state: ADMMState
     ) -> tuple[TensorDict, ADMMState]:
+        """Perform a single ADMM optimization step."""
         # Unpack state
         iter_ = state.iter_
         aux_variables = state.aux_variables
@@ -299,76 +300,47 @@ def _build_step(
         rho = state.rho
         preconditioner = state._preconditioner
 
-        # Approximately solve x-subproblem using PCG
-        # Start by forming the linear system
-        # The linear system is initialized with the previous variable values
-        variables_values_flat = variable_values.to_flat_tensor()
-        rhs = -op_split.grad_f(variable_values).to_flat_tensor()
-        rhs += op_split.hvp_f(variable_values, variables_values_flat)
-        rhs += sigma * variables_values_flat
-        rhs += (
-            rho * op_split.A_T @ (aux_variables_flat - dual_variables_flat + op_split.b)
+        # Solve x-subproblem
+        new_variable_values, preconditioner = _solve_x_subproblem(
+            op_split,
+            variable_values,
+            aux_variables_flat,
+            dual_variables_flat,
+            rho,
+            sigma,
+            gamma,
+            iter_,
+            primal_residual_norm,
+            dual_residual_norm,
+            preconditioner,
+            preconditioner_config,
+            preconditioner_update_freq,
         )
-        lin_sys = LinSys(
-            op_split.hvp_f_ATA_linop(variable_values, rho),
-            B=rhs,
-            reg=sigma,
-            w=variables_values_flat,
-        )
-        # Compute preconditioner if needed
-        if iter_ % preconditioner_update_freq == 0 or preconditioner is None:
-            preconditioner = get_preconditioner(
-                preconditioner_config,
-                lin_sys.A,
-                lin_sys.dtype,
-            )
-        # Solve the linear system using PCG
-        pcg_solver = _PCG(lin_sys, preconditioner=preconditioner)
-        rel_tol = (
-            min((primal_residual_norm * dual_residual_norm + PCG_TOL_EPS) ** 0.5, 1.0)
-            / (iter_ + 1) ** gamma
-        )
-        # print((primal_residual_norm, dual_residual_norm))
-        stopping_criteria = PCGStoppingCriteria(
-            max_iters=lin_sys.A.shape[0],
-            tol=rel_tol,
-        )
-        pcg_solve_result = pcg_solver.solve(stopping_criteria=stopping_criteria)
-        if pcg_solve_result.convergence_status != ConvergenceStatus.CONVERGED:
-            warn(
-                f"PCG for ADMM did not converge in iteration {iter_}. "
-                f"Status: {pcg_solve_result.convergence_status}."
-                "Consider changing the preconditioner."
-            )
-        # Need to squeeze last dimension since PCG returns 2D tensors
-        new_variable_values_flat = pcg_solve_result.solution.squeeze(-1)
-        new_variable_values = variable_values.from_flat_tensor(new_variable_values_flat)
 
-        # Solve z-subproblems using proximal operators
-        variable_values_overrelaxed_flat = (
-            alpha * op_split.A @ new_variable_values_flat
-            + (1 - alpha) * (aux_variables_flat + op_split.b)
+        # Apply over-relaxation
+        new_variable_values_flat = new_variable_values.to_flat_tensor()
+        variable_values_overrelaxed_flat = _compute_overrelaxation(
+            op_split, alpha, new_variable_values_flat, aux_variables_flat
         )
-        aux_variables_intermediate_flat = (
-            variable_values_overrelaxed_flat + dual_variables_flat - op_split.b
+
+        # Update auxiliary variables
+        new_aux_variables = _update_aux_variables(
+            op_split,
+            variable_values_overrelaxed_flat,
+            dual_variables_flat,
+            aux_variables,
+            rho,
         )
-        aux_variables_intermediate = aux_variables.from_flat_tensor(
-            aux_variables_intermediate_flat
-        )
-        new_aux_variables = op_split.prox(aux_variables_intermediate, 1.0 / rho)
 
         # Update dual variables
-        new_dual_variables_flat = (
-            dual_variables_flat
-            + variable_values_overrelaxed_flat
-            - new_aux_variables.to_flat_tensor()
-            - op_split.b
+        new_dual_variables = _update_dual_variables(
+            op_split,
+            dual_variables,
+            variable_values_overrelaxed_flat,
+            new_aux_variables,
         )
-        new_dual_variables = dual_variables.from_flat_tensor(new_dual_variables_flat)
 
         # Recompute residual norms
-        # This happens before updating rho, but it is fine since we are already
-        # using the scaled form of ADMM
         new_primal_residual_norm, new_dual_residual_norm = (
             _compute_primal_and_dual_residual_norms(
                 op_split,
@@ -380,15 +352,16 @@ def _build_step(
         )
 
         # Update rho using primal-dual balancing
-        if (iter_ + 1) % rho_update_freq == 0:
-            if new_primal_residual_norm > rho_update_threshold * new_dual_residual_norm:
-                rho *= rho_update_factor
-                new_dual_variables /= rho_update_factor
-            elif new_dual_residual_norm > (
-                rho_update_threshold * new_primal_residual_norm
-            ):
-                rho /= rho_update_factor
-                new_dual_variables *= rho_update_factor
+        rho, new_dual_variables = _update_rho(
+            rho,
+            new_dual_variables,
+            new_primal_residual_norm,
+            new_dual_residual_norm,
+            iter_,
+            rho_update_factor,
+            rho_update_threshold,
+            rho_update_freq,
+        )
 
         # Return updated state
         new_state = ADMMState(
@@ -472,6 +445,156 @@ def _build_solve(
         )
 
     return solve
+
+
+def _solve_x_subproblem(
+    op_split: ADMMSplit,
+    variable_values: TensorDict,
+    aux_variables_flat: torch.Tensor,
+    dual_variables_flat: torch.Tensor,
+    rho: float,
+    sigma: float,
+    gamma: float,
+    iter_: int,
+    primal_residual_norm: float,
+    dual_residual_norm: float,
+    preconditioner: Preconditioner | None,
+    preconditioner_config: PreconditionerConfig,
+    preconditioner_update_freq: int,
+) -> tuple[TensorDict, Preconditioner]:
+    """Solve the x-subproblem approximately using PCG.
+
+    Returns:
+        Tuple of updated variable values and preconditioner.
+    """
+    variables_values_flat = variable_values.to_flat_tensor()
+    rhs = -op_split.grad_f(variable_values).to_flat_tensor()
+    rhs += op_split.hvp_f(variable_values, variables_values_flat)
+    rhs += sigma * variables_values_flat
+    rhs += rho * op_split.A_T @ (aux_variables_flat - dual_variables_flat + op_split.b)
+    lin_sys = LinSys(
+        op_split.hvp_f_ATA_linop(variable_values, rho),
+        B=rhs,
+        reg=sigma,
+        w=variables_values_flat,
+    )
+
+    # Compute preconditioner if needed
+    if iter_ % preconditioner_update_freq == 0 or preconditioner is None:
+        preconditioner = get_preconditioner(
+            preconditioner_config,
+            lin_sys.A,
+            lin_sys.dtype,
+        )
+
+    # Solve the linear system using PCG
+    pcg_solver = _PCG(lin_sys, preconditioner=preconditioner)
+    rel_tol = (
+        min((primal_residual_norm * dual_residual_norm + PCG_TOL_EPS) ** 0.5, 1.0)
+        / (iter_ + 1) ** gamma
+    )
+    stopping_criteria = PCGStoppingCriteria(
+        max_iters=lin_sys.A.shape[0],
+        tol=rel_tol,
+    )
+    pcg_solve_result = pcg_solver.solve(stopping_criteria=stopping_criteria)
+
+    if pcg_solve_result.convergence_status != ConvergenceStatus.CONVERGED:
+        warn(
+            f"PCG for ADMM did not converge in iteration {iter_}. "
+            f"Status: {pcg_solve_result.convergence_status}."
+            "Consider changing the preconditioner."
+        )
+
+    # Need to squeeze last dimension since PCG returns 2D tensors
+    new_variable_values_flat = pcg_solve_result.solution.squeeze(-1)
+    new_variable_values = variable_values.from_flat_tensor(new_variable_values_flat)
+
+    return new_variable_values, preconditioner
+
+
+def _compute_overrelaxation(
+    op_split: ADMMSplit,
+    alpha: float,
+    new_variable_values_flat: torch.Tensor,
+    aux_variables_flat: torch.Tensor,
+) -> torch.Tensor:
+    """Apply over-relaxation to the variable values.
+
+    Returns:
+        Over-relaxed variable values.
+    """
+    return alpha * op_split.A @ new_variable_values_flat + (1 - alpha) * (
+        aux_variables_flat + op_split.b
+    )
+
+
+def _update_aux_variables(
+    op_split: ADMMSplit,
+    variable_values_overrelaxed_flat: torch.Tensor,
+    dual_variables_flat: torch.Tensor,
+    aux_variables: TensorDict,
+    rho: float,
+) -> TensorDict:
+    """Update auxiliary variables using proximal operators.
+
+    Returns:
+        Updated auxiliary variables.
+    """
+    aux_variables_intermediate_flat = (
+        variable_values_overrelaxed_flat + dual_variables_flat - op_split.b
+    )
+    aux_variables_intermediate = aux_variables.from_flat_tensor(
+        aux_variables_intermediate_flat
+    )
+    return op_split.prox(aux_variables_intermediate, 1.0 / rho)
+
+
+def _update_dual_variables(
+    op_split: ADMMSplit,
+    dual_variables: TensorDict,
+    variable_values_overrelaxed_flat: torch.Tensor,
+    new_aux_variables: TensorDict,
+) -> TensorDict:
+    """Update dual variables.
+
+    Returns:
+        Updated dual variables.
+    """
+    dual_variables_flat = dual_variables.to_flat_tensor()
+    new_dual_variables_flat = (
+        dual_variables_flat
+        + variable_values_overrelaxed_flat
+        - new_aux_variables.to_flat_tensor()
+        - op_split.b
+    )
+    return dual_variables.from_flat_tensor(new_dual_variables_flat)
+
+
+def _update_rho(
+    rho: float,
+    dual_variables: TensorDict,
+    primal_residual_norm: float,
+    dual_residual_norm: float,
+    iter_: int,
+    rho_update_factor: float,
+    rho_update_threshold: float,
+    rho_update_freq: int,
+) -> tuple[float, TensorDict]:
+    """Update penalty parameter rho using primal-dual balancing.
+
+    Returns:
+        Tuple of updated rho and dual variables.
+    """
+    if (iter_ + 1) % rho_update_freq == 0:
+        if primal_residual_norm > rho_update_threshold * dual_residual_norm:
+            rho *= rho_update_factor
+            dual_variables = dual_variables / rho_update_factor
+        elif dual_residual_norm > rho_update_threshold * primal_residual_norm:
+            rho /= rho_update_factor
+            dual_variables = dual_variables * rho_update_factor
+
+    return rho, dual_variables
 
 
 def _compute_primal_and_dual_residual_norms(
