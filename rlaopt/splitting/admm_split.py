@@ -151,8 +151,7 @@ class ADMMSplit(_OperatorSplit):
         """
         dual_vars = {}
         for idx, shape in enumerate(self._b_shapes):
-            size = shape[0]
-            dual_vars[f"u_{idx}"] = torch.zeros(size, device=self._b.device)
+            dual_vars[f"u_{idx}"] = torch.zeros(shape[0], device=self._b.device)
         return TensorDict(dual_vars)
 
     def hvp_f_ATA_linop(
@@ -171,7 +170,12 @@ class ADMMSplit(_OperatorSplit):
         """
         hvp_op = _HVPLinOp(self._f, variable_values)
         AT_A = self._A_T @ self._A
-        return hvp_op + rho * AT_A
+        # HACK: ensure devices match, since vstack/hstack/summation
+        # may not preserve device info
+        AT_A.device = hvp_op.device
+        total_op = hvp_op + rho * AT_A
+        total_op.device = hvp_op.device
+        return total_op
 
 
 def _extract_lin_op_and_bias(

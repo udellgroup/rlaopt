@@ -33,6 +33,8 @@ from rlaopt.solvers.solver_base import (
 )
 from rlaopt.splitting import ADMMSplit
 
+PCG_TOL_EPS = 1e-10
+
 
 class ADMMConfig(SolverConfig):
     """Configuration for the ADMM solver.
@@ -86,7 +88,7 @@ class ADMMConfig(SolverConfig):
         gt=1.0,
     )
     preconditioner_config: PreconditionerConfig = Field(
-        NystromConfig(rank_init=50),
+        NystromConfig(rank_init=50, base_damping=0.0),
         description="Configuration for the linear system preconditioner.",
     )
     preconditioner_update_freq: int = Field(
@@ -307,7 +309,10 @@ def _build_step(
             rho * op_split.A_T @ (aux_variables_flat - dual_variables_flat + op_split.b)
         )
         lin_sys = LinSys(
-            op_split.hvp_f_ATA_linop(rho=rho), B=rhs, reg=sigma, w=variables_values_flat
+            op_split.hvp_f_ATA_linop(variable_values, rho),
+            B=rhs,
+            reg=sigma,
+            w=variables_values_flat,
         )
         # Compute preconditioner if needed
         if iter_ % preconditioner_update_freq == 0 or preconditioner is None:
@@ -319,9 +324,10 @@ def _build_step(
         # Solve the linear system using PCG
         pcg_solver = _PCG(lin_sys, preconditioner=preconditioner)
         rel_tol = (
-            min((primal_residual_norm * dual_residual_norm) ** 0.5, 1.0)
+            min((primal_residual_norm * dual_residual_norm + PCG_TOL_EPS) ** 0.5, 1.0)
             / (iter_ + 1) ** gamma
         )
+        # print((primal_residual_norm, dual_residual_norm))
         stopping_criteria = PCGStoppingCriteria(
             max_iters=lin_sys.A.shape[0],
             tol=rel_tol,
@@ -333,7 +339,8 @@ def _build_step(
                 f"Status: {pcg_solve_result.convergence_status}."
                 "Consider changing the preconditioner."
             )
-        new_variable_values_flat = pcg_solve_result.solution
+        # Need to squeeze last dimension since PCG returns 2D tensors
+        new_variable_values_flat = pcg_solve_result.solution.squeeze(-1)
         new_variable_values = variable_values.from_flat_tensor(new_variable_values_flat)
 
         # Solve z-subproblems using proximal operators

@@ -33,7 +33,7 @@ class NystromConfig(PreconditionerConfig):
     rank_init: int = Field(
         gt=0, description="Initial rank of the Nyström approximation."
     )
-    rank_max: int | None = Field(None, description="Maximum allowable rank.")
+    rank_max: int | None = Field(default=None, description="Maximum allowable rank.")
     num_power_iters: int = Field(
         default=10,
         gt=0,
