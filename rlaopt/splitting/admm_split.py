@@ -174,7 +174,6 @@ class ADMMSplit(_OperatorSplit):
         AT_A.device = hvp_op.device
         total_op = hvp_op + rho * AT_A
         total_op.device = hvp_op.device
-        total_op.supports_operator_matrix = True
         return total_op
 
 
