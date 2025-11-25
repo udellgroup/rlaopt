@@ -34,7 +34,7 @@ from rlaopt.solvers.solver_base import (
 )
 from rlaopt.splitting import ADMMSplit
 
-PCG_TOL_EPS = 1e-10
+PCG_TOL_EPS = 1e-3
 
 
 class ADMMConfig(SolverConfig):
@@ -489,10 +489,10 @@ def _solve_x_subproblem(
 
     # Solve the linear system using PCG
     pcg_solver = _PCG(lin_sys, preconditioner=preconditioner)
-    rel_tol = (
-        min((primal_residual_norm * dual_residual_norm + PCG_TOL_EPS) ** 0.5, 1.0)
-        / (iter_ + 1) ** gamma
-    )
+    rel_tol = min((primal_residual_norm * dual_residual_norm) ** 0.5, 1.0)
+    if rel_tol == 0.0:
+        rel_tol = PCG_TOL_EPS
+    rel_tol /= (iter_ + 1) ** gamma
     stopping_criteria = PCGStoppingCriteria(
         max_iters=lin_sys.A.shape[0],
         tol=rel_tol,
