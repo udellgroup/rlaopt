@@ -170,11 +170,11 @@ class ADMMSplit(_OperatorSplit):
         """
         hvp_op = _HVPLinOp(self._f, variable_values)
         AT_A = self._A_T @ self._A
-        # HACK: ensure devices match, since vstack/hstack/summation
-        # may not preserve device info
+        # HACK: add info that might not be preserved by vstack/hstack/summation
         AT_A.device = hvp_op.device
         total_op = hvp_op + rho * AT_A
         total_op.device = hvp_op.device
+        total_op.supports_operator_matrix = True
         return total_op
 
 
