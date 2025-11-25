@@ -10,6 +10,7 @@ preconditioned conjugate gradient (PCG).
 
 from dataclasses import dataclass
 from typing import Callable
+from warnings import warn
 
 import torch
 from pydantic import Field
@@ -102,10 +103,10 @@ class ADMMStoppingCriteria(StoppingCriteria):
     """Stopping criteria for the ADMM solver."""
 
     eps_abs: float = Field(
-        1e-4, description="Absolute tolerance for primal and dual residuals."
+        1e-4, description="Absolute tolerance for primal and dual residuals.", gt=0.0
     )
     eps_rel: float = Field(
-        1e-4, description="Relative tolerance for primal and dual residuals."
+        1e-4, description="Relative tolerance for primal and dual residuals.", gt=0.0
     )
 
 
@@ -334,7 +335,7 @@ def _build_step(
         )
         pcg_solve_result = pcg_solver.solve(stopping_criteria=stopping_criteria)
         if pcg_solve_result.convergence_status != ConvergenceStatus.CONVERGED:
-            print(
+            warn(
                 f"PCG for ADMM did not converge in iteration {iter_}. "
                 f"Status: {pcg_solve_result.convergence_status}."
                 "Consider changing the preconditioner."
