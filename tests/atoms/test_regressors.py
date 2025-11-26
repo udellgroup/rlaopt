@@ -5,9 +5,9 @@ import torch
 import numpy as np
 
 from rlaopt.atoms import LinearRegression, HuberRegression
-from rlaopt.atoms.linear_model._loss_factory import LossType
 from rlaopt.data import Dataset, DataLoader, BatchedDataset
 from rlaopt.expression import Variable
+from rlaopt.ext_tensordict import TensorDict
 
 from base_linear_model_test import BaseLinearModelTest
 
@@ -141,6 +141,35 @@ class TestLinearRegression(BaseLinearModelTest):
     def model(self, beta_var, dataloader, fit_intercept):
         return LinearRegression(beta_var, dataloader, fit_intercept)
     
+
+    def test_get_params(self):
+        torch.manual_seed(42)
+        X, beta_star = torch.randn(20, 5), torch.randn(5)
+        y = X @ beta_star + 0.1 * torch.randn(20)
+
+        dataset = Dataset(X,y)
+        dataloader = DataLoader(dataset)
+        random_beta = Variable(torch.randn(5), name="beta")
+
+        _model_intercept = LinearRegression(random_beta, dataloader)
+
+        beta_value = _model_intercept.variable_values
+        beta_tensor, intercept_tensor = _model_intercept._get_params(beta_value=beta_value)
+        assert isinstance(beta_tensor, torch.Tensor)
+        assert isinstance(intercept_tensor, torch.Tensor)
+
+        beta_tensor = beta_value["beta"]
+        beta_value = TensorDict({"beta": beta_tensor})
+        with pytest.raises(ValueError, match="Provided beta_value"):
+            beta_tensor, intercept_tensor = _model_intercept._get_params(beta_value=beta_value)
+        
+        _model = LinearRegression(random_beta, dataloader, fit_intercept=False)
+        beta_value = _model.variable_values
+        beta_tensor, intercept_tensor = _model._get_params(beta_value=beta_value)
+        assert isinstance(beta_tensor, torch.Tensor)
+        assert intercept_tensor is None
+
+
     def test_invalid_init(self, dataloader):
         beta_wrong = Variable((5,))
         with pytest.raises(ValueError, match="Expected beta"):

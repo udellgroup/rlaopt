@@ -132,7 +132,6 @@ def tweedie_loss(
     if reduction == "none":   return loss
     elif reduction == "mean": return loss.mean()
     elif reduction == "sum":  return loss.sum()
-    else: raise ValueError(f"Invalid reduction mode: {reduction}")
 
 
 class PoissonLoss(TweedieLoss):

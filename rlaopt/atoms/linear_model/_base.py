@@ -281,6 +281,8 @@ class BaseLinearModel(Atom, ABC):
                         "If fit_intercept is True, beta_value must have key"
                         "intercept."
                     )
+            else:
+                intercept_tensor = None
         else:
             beta_tensor = self.get_input("beta").forward()
             intercept_tensor = (
