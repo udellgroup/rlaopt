@@ -1,177 +1,159 @@
-from abc import ABC, abstractmethod
+"""Tests for regression losses"""
 
 import pytest
 import torch
+import numpy as np
 
-from rlaopt.atoms import (
-    HuberRegression,
-    LADRegression,
-    LinearRegression,
-)
-from rlaopt.atoms.linear_model_base.base_regressor import _get_central_tendency
-from rlaopt.data import BatchedDataset, DataLoader, Dataset
+from rlaopt.atoms import LinearRegression, HuberRegression
+from rlaopt.atoms.linear_model._loss_factory import LossType
+from rlaopt.data import Dataset, DataLoader, BatchedDataset
 from rlaopt.expression import Variable
 
+from base_linear_model_test import BaseLinearModelTest
 
-class MockBatchedDataset(BatchedDataset):
-    """Mock BatchedDataset for testing."""
+# =============================================================================
+# BatchedDataset Implementation for Testing
+# =============================================================================
 
-    def __init__(self):
+class BatchedRegressionDataset(BatchedDataset):
+    """BatchedDataset implementation for regression testing.
+    
+    This implementation returns individual samples and relies on DataLoader
+    for batching, making it compatible with PyTorch's standard DataLoader.
+    """
+    
+    def __init__(self, n_samples, n_features, seed=42, device=torch.device("cpu")):
         super().__init__()
-        self._num_samples = 100
-        self._feature_dim = 5
-        self._target_dim = 1
-
-        self._data = torch.randn(self.num_samples, self.feature_dimension)
-        self._labels = (
-            torch.randn(self.num_samples, self.target_dimension)
-            if self.target_dimension > 1
-            else torch.randn(self.num_samples)
-        )
-
+        self._n_samples = n_samples
+        self._n_features = n_features
+        self._seed = seed
+        self._device = device
+        
+        # Pre-generate all data with the seed
+        torch.manual_seed(seed)
+        self._true_beta = torch.randn(n_features, device=device)
+        
+        # Generate all data upfront for consistency
+        self._X = torch.randn(n_samples, n_features, device=device)
+        self._y = self._X @ self._true_beta + 0.1 * torch.randn(n_samples, device=device)
+    
     def __getitem__(self, idx):
-        if isinstance(idx, slice):
-            return self._data[idx], self._labels[idx]
-        return self._data[idx], self._labels[idx]
-
+        """Return a single sample at the given index."""
+        if isinstance(idx, int):
+            return self._X[idx], self._y[idx]
+        else:
+            raise TypeError(f"Unsupported index type: {type(idx)}")
+    
     def __len__(self):
-        return self._num_samples
-
+        """Return total number of samples."""
+        return self._n_samples
+    
     @property
     def feature_dimension(self):
-        return self._feature_dim
-
+        return self._n_features
+    
     @property
     def target_dimension(self):
-        return self._target_dim
+        return 1
+    
+    @property
+    def num_samples(self):
+        return self._n_samples
+
+
+
+# =============================================================================
+# Fixtures
+# =============================================================================
+
+@pytest.fixture(params=[True, False], ids=["with_intercept", "no_intercept"])
+def fit_intercept(request):
+    """Test both with and without intercept."""
+    return request.param
+
+
+@pytest.fixture(params=["cpu", "cuda"], ids=["cpu", "cuda"])
+def device(request):
+    """Test on both CPU and CUDA if available."""
+    if request.param == "cuda" and not torch.cuda.is_available():
+        pytest.skip("CUDA not available")
+    return torch.device(request.param)
 
 
 @pytest.fixture
-def regression_data():
-    """Create simple regression dataset with known relationship."""
+def regression_data(device):
+    """Create regression test data."""
     torch.manual_seed(42)
-    X = torch.randn(100, 5)
-    true_beta = torch.randn(5)
-    y = X @ true_beta + 0.1 * torch.randn(100)
-    dataset = Dataset(X, y)
-    return DataLoader(dataset, batch_size=32), true_beta
+    np.random.seed(42)
+    
+    n_samples, n_features = 100, 10
+    X = torch.randn(n_samples, n_features, device=device)
+    true_beta = torch.randn(n_features, device=device)
+    y = X @ true_beta + 0.1 * torch.randn(n_samples, device=device)
+    
+    return X, y
 
 
 @pytest.fixture
-def batch_regression_data():
-    torch.manual_seed(42)
-    dataset = MockBatchedDataset()
-    loader = DataLoader(dataset, batch_size=10)
-    return loader
+def in_memory_dataset(regression_data):
+    """Create in-memory Dataset."""
+    X, y = regression_data
+    return Dataset(X, y)
 
 
 @pytest.fixture
-def beta_variable():
-    """Create beta variable for regression."""
-    return Variable(torch.randn(5), name="beta")
-
-
-class TestInitLogic:
-    X, y = (
-        torch.ones(10, 5),
-        torch.ones(
-            10,
-        ),
+def batched_dataset(device):
+    """Create BatchedDataset."""
+    return BatchedRegressionDataset(
+        n_samples=100,
+        n_features=10,
+        seed=42,
+        device=device
     )
-    dataset = Dataset(X, y)
-    beta = Variable((2,), name="beta")
-    with pytest.raises(ValueError, match="Expected"):
-        model = LinearRegression(beta, DataLoader(dataset))
+
+@pytest.fixture
+def batch_size():
+    return 25
 
 
-class TestCentralTendency:
-    def test_invalid_central_tendency(self):
-        y = torch.ones(5)
-        with pytest.raises(ValueError, match="Unsupported central tendency"):
-            _get_central_tendency(y, "kurtosis")
+@pytest.fixture(params=["in_memory", "batched"], ids=["Dataset", "BatchedDataset"])
+def dataloader(request, in_memory_dataset, batched_dataset, batch_size):
+    """Create DataLoader for both dataset types."""
+    dataset = in_memory_dataset if request.param == "in_memory" else batched_dataset
+    return DataLoader(dataset, batch_size=batch_size)
 
 
-class BaseRegressorTest(ABC):
-    """Base test class for all regressor models."""
+@pytest.fixture
+def beta_var(dataloader, device):
+    """Create beta Variable."""
+    feature_dim = dataloader.dataset.feature_dimension
+    return Variable((feature_dim,), name="beta", device=device)
 
-    @abstractmethod
+
+
+# =============================================================================
+# Linear Regression Tests
+# =============================================================================
+
+class TestLinearRegression(BaseLinearModelTest):
+
     @pytest.fixture
-    def model(self, regression_data, beta_variable):
-        """Fixture to create model instance - must be implemented by subclasses."""
-        pass
+    def model(self, beta_var, dataloader, fit_intercept):
+        return LinearRegression(beta_var, dataloader, fit_intercept)
 
-    @abstractmethod
-    @pytest.fixture
-    def batched_model(self, batch_regression_data, beta_variable):
-        """Fixture to create batched model instance - must be implemented by subclasses."""
-        pass
-
-    def test_predict_training_data(self, model, batched_model):
-        """Test prediction on training data."""
-        pred = model.predict()
-        assert pred.shape == (100,)
-        assert pred.requires_grad
-
-        pred = batched_model.predict()
-        assert pred.shape == (100,)
-        assert pred.requires_grad
-
-    def test_predict_test_data(self, model, batched_model):
-        """Test prediction on new data."""
-        X_test = torch.randn(20, 5)
-        pred = model.predict(X=X_test)
-        assert pred.shape == (20,)
-        assert pred.requires_grad
-
-        pred = batched_model.predict(X=X_test)
-        assert pred.shape == (20,)
-        assert pred.requires_grad
-
-    def test_score_returns_float(self, model):
-        """Test that score returns a float."""
-        # Compute score on training data
+    def test_score_less_than_one(self, model):
         score = model.score()
-        assert isinstance(score, float)
+        assert score <= 1.0
 
-        # Test score works on test data
-        X_test = torch.randn(20, 5)
-        y_test = torch.randn(20)
-        score = model.score(X=X_test, y=y_test)
-        assert isinstance(score, float)
-
-    def test_gradient_flow(self, model, batched_model):
-        """Test gradients propagate through loss."""
-        loss = model.forward()
-        loss.backward()
-        grad_beta = model.get_input("beta").forward().grad
-        assert grad_beta is not None
-        grad_intercept = model.get_input("intercept").forward().grad
-        assert grad_intercept is not None
-
-        loss = batched_model.forward()
-        loss.backward()
-        grad_beta = batched_model.get_input("beta").forward().grad
-        assert grad_beta is not None
-        grad_intercept = batched_model.get_input("intercept").forward().grad
-        assert grad_intercept is not None
-
-
-class TestLinearRegression(BaseRegressorTest):
-    """Test suite for LinearRegression (OLS)."""
-
-    @pytest.fixture
-    def model(self, regression_data, beta_variable):
-        dataloader, _ = regression_data
-        return LinearRegression(beta_variable, dataloader)
-
-    @pytest.fixture
-    def batched_model(self, batch_regression_data, beta_variable):
-        dataloader = batch_regression_data
-        return LinearRegression(beta_variable, dataloader)
-
-    def test_score_improves_with_better_fit(self, regression_data):
+    def test_score_improves_with_better_fit(self):
         """Test that score is higher for better fitting coefficients."""
-        dataloader, true_beta = regression_data
+        torch.manual_seed(42)
+        X, beta_star = torch.randn(20, 5), torch.randn(5)
+        y = X @ beta_star + 0.1 * torch.randn(20)
+
+        dataset = Dataset(X,y)
+        dataloader = DataLoader(dataset)
+
 
         # Model with random coefficients
         random_beta = Variable(torch.randn(5), name="beta")
@@ -179,56 +161,42 @@ class TestLinearRegression(BaseRegressorTest):
         score_random = model_random.score()
 
         # Model with true coefficients
-        good_beta = Variable(true_beta.clone().requires_grad_(True), name="beta")
+        good_beta = Variable(beta_star.clone().requires_grad_(True), name="beta")
         model_good = LinearRegression(good_beta, dataloader)
         score_good = model_good.score()
 
         assert score_good > score_random
         assert score_good > 0.9  # Should be close to 1
+    
 
+# =============================================================================
+# Huber Regression Tests
+# =============================================================================
 
-class TestLADRegression(BaseRegressorTest):
-    """Test suite for LADRegression (LAD)."""
-
+class TestHuberRegression(BaseLinearModelTest):
+    
     @pytest.fixture
-    def model(self, regression_data, beta_variable):
-        dataloader, _ = regression_data
-        return LADRegression(beta_variable, dataloader)
+    def model(self, beta_var, dataloader, fit_intercept):
+        return HuberRegression(beta_var, dataloader, fit_intercept)
 
-    @pytest.fixture
-    def batched_model(self, batch_regression_data, beta_variable):
-        dataloader = batch_regression_data
-        return LADRegression(beta_variable, dataloader)
-
-
-class TestHuberRegression(BaseRegressorTest):
-    """Test suite for HuberRegression."""
-
-    @pytest.fixture
-    def model(self, regression_data, beta_variable):
-        dataloader, _ = regression_data
-        return HuberRegression(beta_variable, dataloader, delta=1.0)
-
-    @pytest.fixture
-    def batched_model(self, batch_regression_data, beta_variable):
-        dataloader = batch_regression_data
-        return HuberRegression(beta_variable, dataloader, delta=1.0)
-
-    def test_initialization_default_delta(self, regression_data, beta_variable):
-        """Test model initializes with default delta."""
-        dataloader, _ = regression_data
-        model = HuberRegression(beta_variable, dataloader)
+    def test_delta_property(self, model):
+        """Test delta property."""
+        assert model.delta is not None
         assert model.delta == 1.0
-
-    def test_initialization_custom_delta(self, regression_data, beta_variable):
+    
+    def test_initialization_custom_delta(self, beta_var, dataloader):
         """Test model initializes with custom delta."""
-        dataloader, _ = regression_data
-        model = HuberRegression(beta_variable, dataloader, delta=2.5)
+        model = HuberRegression(beta_var, dataloader, delta=2.5)
         assert model.delta == 2.5
 
-    def test_different_deltas_affect_loss(self, regression_data, beta_variable):
+    def test_different_deltas_affect_loss(self):
         """Test that delta parameter affects the loss value."""
-        dataloader, _ = regression_data
+        torch.manual_seed(42)
+        X, y = torch.randn(20, 5), torch.randn(20)
+       
+        dataset = Dataset(X,y)
+        dataloader = DataLoader(dataset)
+        beta_variable = Variable(torch.randn(5))
 
         model_small_delta = HuberRegression(beta_variable, dataloader, delta=0.5)
         model_large_delta = HuberRegression(beta_variable, dataloader, delta=5.0)
