@@ -515,8 +515,6 @@ def _get_central_tendency(y: torch.Tensor, type: str) -> torch.Tensor:
         return torch.mean(y) * torch.ones_like(y)
     elif type == "median":
         return torch.median(y) * torch.ones_like(y)
-    else:
-        raise ValueError(f"Unsupported central tendency type: {type}")
 
 
 # ===========================================================================#
