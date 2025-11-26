@@ -96,8 +96,7 @@ def tweedie_loss(
         Loss tensor (negative log-likelihood, ignoring constants)
     """
     # Input validation
-    if torch.any(target < 0):
-        raise ValueError("Target values must be non-negative")
+    if torch.any(target < 0): raise ValueError("Target values must be non-negative")
 
     # Compute negative log-likelihood based on power
     if power == 1:
@@ -130,14 +129,10 @@ def tweedie_loss(
         loss = -term1 + term2
 
     # Apply reduction
-    if reduction == "none":
-        return loss
-    elif reduction == "mean":
-        return loss.mean()
-    elif reduction == "sum":
-        return loss.sum()
-    else:
-        raise ValueError(f"Invalid reduction mode: {reduction}")
+    if reduction == "none":   return loss
+    elif reduction == "mean": return loss.mean()
+    elif reduction == "sum":  return loss.sum()
+    else: raise ValueError(f"Invalid reduction mode: {reduction}")
 
 
 class PoissonLoss(TweedieLoss):

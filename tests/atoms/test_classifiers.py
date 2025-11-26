@@ -222,6 +222,12 @@ class TestLogisticRegression(BaseClassifierTests):
     def model(self, beta_var, dataloader, fit_intercept):
         return LogisticRegression(beta_var, dataloader, fit_intercept)
     
+
+    def test_invalid_init(self, dataloader):
+        beta_wrong = Variable((5,))
+        with pytest.raises(ValueError, match="Expected beta"):
+            LogisticRegression(beta_wrong, dataloader)
+    
     
     def test_predict_returns_binary_labels(self, model):
         """Test that predict returns binary labels (0 or 1)."""
@@ -335,6 +341,11 @@ class TestMultinomialRegression(BaseClassifierTests):
             dataloader,
             fit_intercept
         )
+    
+    def test_invalid_init(self, dataloader):
+        beta_wrong = Variable((5,))
+        with pytest.raises(ValueError, match="Expected beta"):
+            MultinomialRegression(beta_wrong, dataloader)
 
     def get_test_data(self, n_samples, device=torch.device("cpu")):
         """Generate multiclass classification test data."""

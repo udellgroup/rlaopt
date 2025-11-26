@@ -4,8 +4,7 @@ import torch
 def check_and_move_to_device(
     tensor: torch.Tensor, device: torch.device
 ) -> torch.Tensor:
-    if tensor.device != device:
-        tensor = tensor.to(device)
+    if tensor.device != device: tensor = tensor.to(device)
     return tensor
 
 

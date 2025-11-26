@@ -145,8 +145,15 @@ class TweedieLossTest:
         target = torch.ones(10)
         loss_tensor = tweedie_loss(input_, target, reduction="none") 
         assert isinstance(loss_tensor, torch.Tensor)
-        assert loss_tensor.shape == (10,) 
+        assert loss_tensor.shape == (10,)
 
+    def test_loss_with_invalid_reduction(self):
+        """Test tweedie loss with invalid reduction"""
+        input_ = torch.zeros(1)
+        target = torch.ones(1)
+        with pytest.raises(ValueError, match="Invalid reduction"):
+             tweedie_loss(input_, target, reduction="median")
+         
 
 class BaseGLMTest(BaseLinearModelTest, ABC):
     """Base test class for all GLM models."""
@@ -184,12 +191,16 @@ class TestCompoundPoissonGammaRegression(BaseGLMTest):
     @pytest.fixture
     def model(self, beta_var, dataloader, fit_intercept):
         return CompoundPoissonGammaRegression(beta_var, dataloader, fit_intercept)
+    
+    def test_invalid_init(self, dataloader):
+        beta_wrong = Variable((5,))
+        with pytest.raises(ValueError, match="Expected beta"):
+            CompoundPoissonGammaRegression(beta_wrong, dataloader)
 
-    def test_invalid_init(self, beta_var, dataloader):
+    def test_invalid_power_init(self, beta_var, dataloader):
         with pytest.raises(ValueError, match="Power must be"):
             CompoundPoissonGammaRegression(beta_var, dataloader, power=4.0)
 
-    
     def test_power_property(self, model):
         power = model.power
         assert isinstance(power, float)
@@ -201,6 +212,11 @@ class TestPoissonRegression(BaseGLMTest):
     @pytest.fixture
     def model(self, beta_var, dataloader, fit_intercept):
         return PoissonRegression(beta_var, dataloader, fit_intercept)
+    
+    def test_invalid_init(self, dataloader):
+        beta_wrong = Variable((5,))
+        with pytest.raises(ValueError, match="Expected beta"):
+            PoissonRegression(beta_wrong, dataloader)
 
 
 class TestGammaRegression(BaseGLMTest):
@@ -209,6 +225,11 @@ class TestGammaRegression(BaseGLMTest):
     @pytest.fixture
     def model(self, beta_var, dataloader, fit_intercept):
         return GammaRegression(beta_var, dataloader, fit_intercept)
+    
+    def test_invalid_init(self, dataloader):
+        beta_wrong = Variable((5,))
+        with pytest.raises(ValueError, match="Expected beta"):
+            GammaRegression(beta_wrong, dataloader)
 
 
 class TestInverseGaussianRegression(BaseGLMTest):
@@ -217,4 +238,9 @@ class TestInverseGaussianRegression(BaseGLMTest):
     @pytest.fixture
     def model(self, beta_var, dataloader, fit_intercept):
         return InverseGaussianRegression(beta_var, dataloader, fit_intercept)
+    
+    def test_invalid_init(self, dataloader):
+        beta_wrong = Variable((5,))
+        with pytest.raises(ValueError, match="Expected beta"):
+            InverseGaussianRegression(beta_wrong, dataloader)
     

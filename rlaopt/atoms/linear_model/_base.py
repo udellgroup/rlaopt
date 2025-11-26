@@ -163,7 +163,7 @@ class BaseLinearModel(Atom, ABC):
 
         for X_batch, y_batch in self.dataloader:
             loss = self._get_batch_loss(
-                beta, intercept, X_batch, y_batch, normalize=False
+                beta, intercept, X_batch, y_batch
             )
             total_loss += loss
             n_samples += X_batch.shape[0]
@@ -215,9 +215,8 @@ class BaseLinearModel(Atom, ABC):
         intercept: torch.Tensor | None,
         X_batch: torch.Tensor,
         y_batch: torch.Tensor,
-        normalize: bool = True,
     ) -> torch.Tensor:
-        """Compute loss on a single batch of data.
+        """Compute total loss on a single batch of data.
 
         Args:
             beta: Model parameters tensor
@@ -233,14 +232,10 @@ class BaseLinearModel(Atom, ABC):
             beta, intercept, X_batch, y_batch
         )
 
-        # Compute loss with sum reduction for proper averaging
-        if normalize:
-            batch_loss = self._loss_fn(pred_batch, y_batch)
-        else:
-            # Temporarily set reduction to 'sum' to get total loss for the batch
-            original_reduction = _change_loss_reduction(self._loss_fn, "sum")
-            batch_loss = self._loss_fn(pred_batch, y_batch)
-            _change_loss_reduction(self._loss_fn, original_reduction)
+        # Temporarily set reduction to 'sum' to get total loss for the batch
+        original_reduction = _change_loss_reduction(self._loss_fn, "sum")
+        batch_loss = self._loss_fn(pred_batch, y_batch)
+        _change_loss_reduction(self._loss_fn, original_reduction)
         return batch_loss
 
     def _get_batch_prediction(

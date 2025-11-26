@@ -40,6 +40,10 @@ class BaseLinearModelTest(ABC):
             intercept = model.get_input("intercept")
             assert intercept.forward().grad is not None
     
+    @abstractmethod
+    def test_invalid_init(self, dataloader):
+        ...
+    
     def test_loss_on_training_data(self, model):
         """Test loss computation on training data."""
         loss = model.loss()
@@ -126,3 +130,7 @@ class BaseLinearModelTest(ABC):
             if err <= tol:
                 break
         assert err <= tol
+    
+    def test_prox(self, model):
+        with pytest.raises(NotImplementedError, match="Proximal operator"):
+            model.prox(model.variable_values, 1.0)

@@ -140,6 +140,11 @@ class TestLinearRegression(BaseLinearModelTest):
     @pytest.fixture
     def model(self, beta_var, dataloader, fit_intercept):
         return LinearRegression(beta_var, dataloader, fit_intercept)
+    
+    def test_invalid_init(self, dataloader):
+        beta_wrong = Variable((5,))
+        with pytest.raises(ValueError, match="Expected beta"):
+            LinearRegression(beta_wrong, dataloader)
 
     def test_score_less_than_one(self, model):
         score = model.score()
@@ -183,6 +188,11 @@ class TestHuberRegression(BaseLinearModelTest):
         """Test delta property."""
         assert model.delta is not None
         assert model.delta == 1.0
+    
+    def test_invalid_init(self, dataloader):
+        beta_wrong = Variable((5,))
+        with pytest.raises(ValueError, match="Expected beta"):
+            HuberRegression(beta_wrong, dataloader)
     
     def test_initialization_custom_delta(self, beta_var, dataloader):
         """Test model initializes with custom delta."""
