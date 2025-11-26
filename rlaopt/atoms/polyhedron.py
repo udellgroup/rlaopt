@@ -70,9 +70,9 @@ class Polyhedron(Atom):
 
         ## Convert float/int bounds to tensors FIRST (before using .device/.dtype)
         if isinstance(lower, (int, float)):
-            lower = torch.tensor(float(lower))
+            lower = torch.tensor(float(lower), device=x.forward().device)
         if isinstance(upper, (int, float)):
-            upper = torch.tensor(float(upper))
+            upper = torch.tensor(float(upper), device=x.forward().device)
 
         # Validate input dimensional consistency
         _validate(A, C, b, lower, upper)

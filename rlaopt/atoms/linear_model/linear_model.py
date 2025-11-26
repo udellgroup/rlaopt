@@ -5,16 +5,10 @@ classification tasks, including linear regression, logistic regression,
 and robust regression methods.
 """
 
-import torch
+from rlaopt.atoms.linear_model._base import BaseClassifier, BaseGLM, BaseRegressor
 
-from rlaopt.atoms.linear_model_base.base_classifier import BaseClassifier
-from rlaopt.atoms.linear_model_base.base_glm import BaseGLM
-from rlaopt.atoms.linear_model_base.base_regressor import BaseRegressor
-from rlaopt.atoms.linear_model_base.loss_types import LossType
-
-# ===========================================================================#
-# Regression Model Classes
-# ===========================================================================#
+from ._inv_link_function import InverseLinkType
+from ._loss_factory import LossType
 
 
 class HuberRegression(BaseRegressor):
@@ -29,41 +23,35 @@ class HuberRegression(BaseRegressor):
         L(r) = 0.5 * r^2                if |r| <= delta
         L(r) = delta * (|r| - 0.5*delta) if |r| > delta
 
-    Args:
-        dataloader: DataLoader containing the training data with features and targets.
-        beta: Model parameters variable representing regression coefficients.
-        delta: Threshold parameter that defines the point where the loss transitions
-            from quadratic to linear. Smaller values increase robustness to outliers.
-            Defaults to 1.0.
+    Attributes:
+        delta: The Huber loss threshold parameter.
     """
 
     def __init__(self, beta, dataloader, fit_intercept=True, delta: float = 1.0):
-        super().__init__(LossType.HUBER, beta, dataloader, fit_intercept, delta=delta)
+        """Initialize Huber regression model.
+
+        Args:
+            beta: Model parameters variable representing regression coefficients.
+            dataloader: DataLoader containing the training data with features and targets.
+            fit_intercept: Whether to fit an intercept term. Defaults to True.
+            delta: Threshold parameter that defines the point where the loss transitions
+                from quadratic to linear. Smaller values increase robustness to outliers.
+                Defaults to 1.0.
+        """
+        super().__init__(
+            LossType.HUBER,
+            InverseLinkType.IDENTITY,
+            beta,
+            dataloader,
+            fit_intercept,
+            delta=delta,
+        )
         self._delta = delta
 
     @property
     def delta(self):
-        """Returns Huber loss threshold parameter"""
+        """Returns Huber loss threshold parameter."""
         return self._delta
-
-
-class LADRegression(BaseRegressor):
-    """Least absolute deviation (LAD) regression model.
-
-    L1 regression minimizes the sum of absolute residuals, making it highly robust
-    to outliers. Unlike least squares regression, which can be heavily influenced
-    by extreme values, LAD regression gives equal weight to all residuals.
-
-    The L1 loss is defined as:
-        L(y, ŷ) = |y - ŷ|
-
-    Args:
-        dataloader: DataLoader containing the training data with features and targets.
-        beta: Model parameters variable representing regression coefficients.
-    """
-
-    def __init__(self, beta, dataloader, fit_intercept=True):
-        super().__init__(LossType.L1_LOSS, beta, dataloader, fit_intercept)
 
 
 class LinearRegression(BaseRegressor):
@@ -75,19 +63,32 @@ class LinearRegression(BaseRegressor):
 
     The squared error loss is defined as:
         L(y, ŷ) = (y - ŷ)^2
-
-    Args:
-        dataloader: DataLoader containing the training data with features and targets.
-        beta: Model parameters variable representing regression coefficients.
     """
 
     def __init__(self, beta, dataloader, fit_intercept=True):
-        super().__init__(LossType.LEAST_SQUARES, beta, dataloader, fit_intercept)
+        """Initialize linear regression model.
+
+        Args:
+            beta: Model parameters variable representing regression coefficients.
+            dataloader: DataLoader containing the training data with features and targets.
+            fit_intercept: Whether to fit an intercept term. Defaults to True.
+        """
+        super().__init__(
+            LossType.LEAST_SQUARES,
+            InverseLinkType.IDENTITY,
+            beta,
+            dataloader,
+            fit_intercept,
+        )
 
 
 # ===========================================================================#
 # Classification Model Classes
 # ===========================================================================#
+
+# Logistic and Multinomial get assigned the identity link as PyTorch's
+# built in losses already handle applying the inverse_link function
+# as they work with the logits.
 
 
 class LogisticRegression(BaseClassifier):
@@ -101,15 +102,20 @@ class LogisticRegression(BaseClassifier):
         L(y, p) = -[y * log(p) + (1-y) * log(1-p)]
 
     where p = sigmoid(X @ β).
-
-    Args:
-        dataloader: DataLoader containing the training data with features and binary
-            targets (0 or 1).
-        beta: Model parameters variable representing regression coefficients.
     """
 
     def __init__(self, beta, dataloader, fit_intercept=True):
-        super().__init__(LossType.LOGISTIC, beta, dataloader, fit_intercept)
+        """Initialize logistic regression model.
+
+        Args:
+            beta: Model parameters variable representing regression coefficients.
+            dataloader: DataLoader containing the training data with features and binary
+                targets (0 or 1).
+            fit_intercept: Whether to fit an intercept term. Defaults to True.
+        """
+        super().__init__(
+            LossType.LOGISTIC, InverseLinkType.IDENTITY, beta, dataloader, fit_intercept
+        )
 
 
 class MultinomialRegression(BaseClassifier):
@@ -127,16 +133,25 @@ class MultinomialRegression(BaseClassifier):
     Note:
         For multinomial regression, beta should be a matrix of shape
         (n_features, n_classes) to produce logits for each class.
-
-    Args:
-        dataloader: DataLoader containing the training data with features and class
-            labels (integers from 0 to n_classes-1).
-        beta: Model parameters variable representing regression coefficients.
-            Shape should be (n_features, n_classes) for multi-class classification.
     """
 
     def __init__(self, beta, dataloader, fit_intercept=True):
-        super().__init__(LossType.MULTINOMIAL, beta, dataloader, fit_intercept)
+        """Initialize multinomial regression model.
+
+        Args:
+            beta: Model parameters variable representing regression coefficients.
+                Shape should be (n_features, n_classes) for multi-class classification.
+            dataloader: DataLoader containing the training data with features and class
+                labels (integers from 0 to n_classes-1).
+            fit_intercept: Whether to fit an intercept term. Defaults to True.
+        """
+        super().__init__(
+            LossType.MULTINOMIAL,
+            InverseLinkType.IDENTITY,
+            beta,
+            dataloader,
+            fit_intercept,
+        )
 
 
 # ===========================================================================#
@@ -167,33 +182,35 @@ class CompoundPoissonGammaRegression(BaseGLM):
         - A Gamma distribution for the size of each event when it occurs
         - Results in a distribution with Var(Y) = φμ^p where p is in (1,2)
 
-
-    Args:
-        beta: Model parameters variable representing regression coefficients.
-        dataloader: DataLoader containing the training data with features and
-            non-negative continuous targets (may include zeros).
-        fit_intercept: boolean specifying whether to use an intercept.
-        power: float in (1,2) specifying the power used in the loss,
-        default value is 1.5
-
-
     Note:
         Unlike pure Poisson (p=1) or Gamma (p=2) regression, the Compound
         Poisson-Gamma with p in (1, 2) handles the mixed discrete-continuous nature
         of the data with a moderate mean-variance relationship.
+
+    Attributes:
+        power: The power parameter used to define the loss.
     """
 
     def __init__(self, beta, dataloader, fit_intercept=True, power: float = 1.5):
+        """Initialize Compound Poisson-Gamma regression model.
+
+        Args:
+            beta: Model parameters variable representing regression coefficients.
+            dataloader: DataLoader containing the training data with features and
+                non-negative continuous targets (may include zeros).
+            fit_intercept: Whether to fit an intercept term. Defaults to True.
+            power: Power parameter p ∈ (1, 2) defining the variance function.
+                Defaults to 1.5.
+        """
         super().__init__(
-            LossType.POISSON_GAMMA, beta, dataloader, fit_intercept, power=power
+            LossType.POISSON_GAMMA,
+            InverseLinkType.EXP,
+            beta,
+            dataloader,
+            fit_intercept,
+            power=power,
         )
         self._power = power
-
-    def link_fn(self, y_pred: torch.Tensor) -> torch.Tensor:
-        return log_link_fn(y_pred)
-
-    def inv_link_fn(self, linear_pred: torch.Tensor) -> torch.Tensor:
-        return inv_log_link_fn(linear_pred)
 
     @property
     def power(self) -> float:
@@ -213,21 +230,20 @@ class GammaRegression(BaseGLM):
         L(y, ŷ) = log(ŷ) + y/ŷ
 
     where ŷ = exp(X @ β) is the predicted mean.
-
-    Args:
-        dataloader: DataLoader containing the training data with features and
-            positive continuous targets.
-        beta: Model parameters variable representing regression coefficients.
     """
 
     def __init__(self, beta, dataloader, fit_intercept=True):
-        super().__init__(LossType.GAMMA, beta, dataloader, fit_intercept)
+        """Initialize Gamma regression model.
 
-    def link_fn(self, y_pred: torch.Tensor) -> torch.Tensor:
-        return log_link_fn(y_pred)
-
-    def inv_link_fn(self, linear_pred: torch.Tensor) -> torch.Tensor:
-        return inv_log_link_fn(linear_pred)
+        Args:
+            beta: Model parameters variable representing regression coefficients.
+            dataloader: DataLoader containing the training data with features and
+                positive continuous targets.
+            fit_intercept: Whether to fit an intercept term. Defaults to True.
+        """
+        super().__init__(
+            LossType.GAMMA, InverseLinkType.EXP, beta, dataloader, fit_intercept
+        )
 
 
 class InverseGaussianRegression(BaseGLM):
@@ -242,21 +258,20 @@ class InverseGaussianRegression(BaseGLM):
        L(y, ŷ) = (y - ŷ)^2 / (2 * y * ŷ^2)
 
     where ŷ = exp(X @ β) is the predicted mean.
-
-    Args:
-       dataloader: DataLoader containing the training data with features and
-           positive continuous targets.
-       beta: Model parameters variable representing regression coefficients.
     """
 
     def __init__(self, beta, dataloader, fit_intercept=True):
-        super().__init__(LossType.INV_GAUSS, beta, dataloader, fit_intercept)
+        """Initialize Inverse Gaussian regression model.
 
-    def link_fn(self, y_pred: torch.Tensor) -> torch.Tensor:
-        return log_link_fn(y_pred)
-
-    def inv_link_fn(self, linear_pred: torch.Tensor) -> torch.Tensor:
-        return inv_log_link_fn(linear_pred)
+        Args:
+            beta: Model parameters variable representing regression coefficients.
+            dataloader: DataLoader containing the training data with features and
+                positive continuous targets.
+            fit_intercept: Whether to fit an intercept term. Defaults to True.
+        """
+        super().__init__(
+            LossType.INV_GAUSS, InverseLinkType.EXP, beta, dataloader, fit_intercept
+        )
 
 
 class PoissonRegression(BaseGLM):
@@ -270,28 +285,17 @@ class PoissonRegression(BaseGLM):
         L(y, ŷ) = ŷ - y * log(ŷ)
 
     where ŷ = exp(X @ β) is the predicted rate parameter.
-
-    Args:
-        dataloader: DataLoader containing the training data with features and count
-            targets (must be non-negative).
-        beta: Model parameters variable representing regression coefficients.
     """
 
     def __init__(self, beta, dataloader, fit_intercept=True):
-        super().__init__(LossType.POISSON, beta, dataloader, fit_intercept)
+        """Initialize Poisson regression model.
 
-    def link_fn(self, y_pred: torch.Tensor) -> torch.Tensor:
-        return log_link_fn(y_pred)
-
-    def inv_link_fn(self, linear_pred: torch.Tensor) -> torch.Tensor:
-        return inv_log_link_fn(linear_pred)
-
-
-def log_link_fn(y_pred: torch.Tensor) -> torch.Tensor:
-    """Compute log of the link function (i.e., linear predictor)."""
-    return torch.log(y_pred)
-
-
-def inv_log_link_fn(linear_pred: torch.Tensor) -> torch.Tensor:
-    """Compute inverse of the log link function (i.e., predicted mean)."""
-    return torch.exp(linear_pred)
+        Args:
+            beta: Model parameters variable representing regression coefficients.
+            dataloader: DataLoader containing the training data with features and count
+                targets (must be non-negative).
+            fit_intercept: Whether to fit an intercept term. Defaults to True.
+        """
+        super().__init__(
+            LossType.POISSON, InverseLinkType.EXP, beta, dataloader, fit_intercept
+        )

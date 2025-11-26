@@ -7,19 +7,24 @@ from rlaopt.atoms.elastic_net import ElasticNet as ElasticNet
 from rlaopt.atoms.halfspace import Halfspace as Halfspace
 from rlaopt.atoms.l1_norm import L1Norm as L1Norm
 from rlaopt.atoms.linear_equality import LinearEquality as LinearEquality
-from rlaopt.atoms.linear_model import (
+from rlaopt.atoms.linear_model.linear_model import (
     CompoundPoissonGammaRegression as CompoundPoissonGammaRegression,
 )
-from rlaopt.atoms.linear_model import GammaRegression as GammaRegression
-from rlaopt.atoms.linear_model import HuberRegression as HuberRegression
-from rlaopt.atoms.linear_model import (
+from rlaopt.atoms.linear_model.linear_model import GammaRegression as GammaRegression
+from rlaopt.atoms.linear_model.linear_model import HuberRegression as HuberRegression
+from rlaopt.atoms.linear_model.linear_model import (
     InverseGaussianRegression as InverseGaussianRegression,
 )
-from rlaopt.atoms.linear_model import LADRegression as LADRegression
-from rlaopt.atoms.linear_model import LinearRegression as LinearRegression
-from rlaopt.atoms.linear_model import LogisticRegression as LogisticRegression
-from rlaopt.atoms.linear_model import MultinomialRegression as MultinomialRegression
-from rlaopt.atoms.linear_model import PoissonRegression as PoissonRegression
+from rlaopt.atoms.linear_model.linear_model import LinearRegression as LinearRegression
+from rlaopt.atoms.linear_model.linear_model import (
+    LogisticRegression as LogisticRegression,
+)
+from rlaopt.atoms.linear_model.linear_model import (
+    MultinomialRegression as MultinomialRegression,
+)
+from rlaopt.atoms.linear_model.linear_model import (
+    PoissonRegression as PoissonRegression,
+)
 from rlaopt.atoms.non_negative import NonNegative as NonNegative
 from rlaopt.atoms.nuc_norm import NucNorm as NucNorm
 from rlaopt.atoms.polyhedron import Polyhedron as Polyhedron
