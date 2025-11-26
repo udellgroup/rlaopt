@@ -8,6 +8,7 @@ problems by solving the ADMM linear system approximately using
 preconditioned conjugate gradient (PCG).
 """
 
+import time
 from dataclasses import dataclass
 from typing import Callable
 from warnings import warn
@@ -139,6 +140,7 @@ class ADMMResult(OptimResult):
         variable_values: Optimized variable values.
         convergence_status: Status indicating how the solver terminated.
         num_iters: Number of iterations performed.
+        solver_time: Time taken by the solver in seconds.
         primal_residual_norm: Norm of the primal residual.
         dual_residual_norm: Norm of the dual residual.
     """
@@ -411,6 +413,8 @@ def _build_solve(
 
     def solve(var_vals: TensorDict | None = None) -> ADMMResult:
         """Solve the optimization problem using ADMM."""
+        ts = time.time()
+
         if var_vals is None:
             var_vals = op_split.f_and_affine_variable_values
 
@@ -448,10 +452,13 @@ def _build_solve(
             # Max iterations reached without convergence
             convergence_status = ConvergenceStatus.NOT_CONVERGED
 
+        total_time = time.time() - ts
+
         return ADMMResult(
             variable_values=var_vals,
             convergence_status=convergence_status,
             num_iters=state.iter_,
+            solver_time=total_time,
             primal_residual_norm=state.primal_residual_norm,
             dual_residual_norm=state.dual_residual_norm,
         )

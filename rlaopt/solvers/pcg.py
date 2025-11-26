@@ -1,5 +1,6 @@
 """Preconditioned Conjugate Gradient solver implementation."""
 
+import time
 from dataclasses import dataclass, replace
 from typing import Callable
 
@@ -77,6 +78,7 @@ class PCGResult(LinSysResult):
         solution: Converged solution parameters.
         convergence_status: Status indicating how the solver terminated.
         num_iters: Number of iterations performed.
+        solver_time: Time taken by the solver in seconds.
         residual_norm: Final residual norm per component.
     """
 
@@ -398,6 +400,8 @@ def _build_solve(
         Returns:
             PCGResult containing the solution and convergence information.
         """
+        ts = time.time()
+
         if params is None:
             params = lin_sys.w.clone()
 
@@ -417,10 +421,13 @@ def _build_solve(
         else:
             convergence_status = ConvergenceStatus.NOT_CONVERGED
 
+        total_time = time.time() - ts
+
         return PCGResult(
             solution=params,
             convergence_status=convergence_status,
             num_iters=state.iter_,
+            solver_time=total_time,
             residual_norm=state.res_norm,
         )
 

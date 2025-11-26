@@ -1,5 +1,6 @@
 """Proximal gradient solver implementation."""
 
+import time
 from dataclasses import dataclass, replace
 from typing import Callable
 
@@ -69,6 +70,7 @@ class ProxGradResult(OptimResult):
         variable_values: Optimized variable values.
         convergence_status: Status indicating how the solver terminated.
         num_iters: Number of iterations performed.
+        solver_time: Time taken by the solver in seconds.
         err: Final error metric upon termination.
     """
 
@@ -281,6 +283,8 @@ def _build_solve(
 
     def solve(var_vals: TensorDict | None = None) -> ProxGradResult:
         """Solve the optimization problem."""
+        ts = time.time()
+
         if var_vals is None:
             var_vals = op_split.variable_values
 
@@ -297,10 +301,13 @@ def _build_solve(
         else:
             convergence_status = ConvergenceStatus.NOT_CONVERGED
 
+        total_time = time.time() - ts
+
         return ProxGradResult(
             variable_values=var_vals,
             convergence_status=convergence_status,
             num_iters=state.iter_,
+            solver_time=total_time,
             err=state.err.item(),
         )
 

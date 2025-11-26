@@ -46,11 +46,13 @@ class OptimResult:
         variable_values: Optimized variable values.
         convergence_status: Status indicating how the solver terminated.
         num_iters: Number of iterations performed.
+        solver_time: Time taken by the solver in seconds.
     """
 
     variable_values: TensorDict
     convergence_status: ConvergenceStatus
     num_iters: int
+    solver_time: float
 
 
 @dataclass(frozen=True)
@@ -64,11 +66,13 @@ class LinSysResult:
         solution: Solution to the linear system.
         convergence_status: Status indicating how the solver terminated.
         num_iters: Number of iterations performed.
+        solver_time: Time taken by the solver in seconds.
     """
 
     solution: torch.Tensor
     convergence_status: ConvergenceStatus
     num_iters: int
+    solver_time: float
 
 
 class OptimSolver(ABC):
