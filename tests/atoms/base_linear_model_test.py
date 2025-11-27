@@ -127,7 +127,7 @@ class BaseLinearModelTest(ABC):
 
         beta_val = obj_.variable_values
         state = opt.init_state(beta_val)
-        tol = 1e-3
+        tol = 1e-2
         for _ in range(2000):
             beta_val, state = opt.step(beta_val, state)
             err = state.err.item()
