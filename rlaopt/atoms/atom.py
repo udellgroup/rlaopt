@@ -1,12 +1,26 @@
 """Base class for optimization atoms."""
 
 from abc import ABC, abstractmethod
+from dataclasses import dataclass
 
 import torch
 from typing_extensions import Self
 
 from rlaopt.expression import Expression, ExprTree, Variable
 from rlaopt.ext_tensordict import TensorDict
+
+
+@dataclass(kw_only=True, frozen=True)
+class AtomDecomposition:
+    """Result of decomposing an atom r(Ax - b) into r(z) and Ax - b.
+
+    Attributes:
+        atom: The decomposed atom r(z) with a new variable z.
+        affine_expr: The affine expression Ax - b that was replaced by z.
+    """
+
+    atom: "Atom"
+    affine_expr: Expression
 
 
 class Atom(Expression, ABC):
@@ -79,6 +93,12 @@ class Atom(Expression, ABC):
         Raises:
             NotImplementedError: If the atom is not proxable.
         """
+        if not self.is_proxable():
+            raise NotImplementedError(
+                f"Proximal operator for {self.__class__.__name__} with given inputs "
+                "is not implemented."
+            )
+
         relevant_vars = self.select_relevant_variables(variable_values)
         prox_result = self._prox(relevant_vars, prox_scaling)
         return prox_result
@@ -105,6 +125,27 @@ class Atom(Expression, ABC):
         if not hasattr(self, name):
             raise KeyError(f"No input expression named '{name}' found.")
         return getattr(self, name)
+
+    def decompose(self) -> list[AtomDecomposition] | None:
+        """Decompose the atom r(Ax - b) into r(z) and Ax - b.
+
+        This method is useful for splitting methods like ADMM, where we want to
+        introduce an auxiliary variable z and constraint z = Ax - b, then optimize
+        over r(z) separately.
+
+        The method checks if the atom's input is an affine expression (not just a
+        Variable). If so, it creates a new variable z with the same shape as the
+        input, constructs a new atom r(z), and returns both the new atom and the
+        original affine expression.
+
+        The decomposition is returned as a list of AtomDecomposition instances,
+        each containing the new atom and the corresponding affine expression.
+
+        Returns:
+            list[AtomDecomposition] | None: Decomposition containing the new atom r(z)
+                and affine expression if decomposable, None otherwise.
+        """
+        return None
 
     def _register_atom_buffer(self, name: str, buffer):
         """Register a buffer (non-trainable constant) with the atom.

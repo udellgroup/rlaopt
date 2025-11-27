@@ -1,26 +1,25 @@
 """Elastic net regularization atom."""
 
 import torch
-from typing_extensions import Self
 
-from rlaopt.atoms.atom import Atom
-from rlaopt.expression import Variable
+from rlaopt.atoms.nonsmooth_regularizer import NonsmoothRegularizer
+from rlaopt.expression import Expression
 from rlaopt.ext_tensordict import TensorDict
 
 
-class ElasticNet(Atom):
+class ElasticNet(NonsmoothRegularizer):
     """Elastic net regularization combining L1 and L2 penalties.
 
     The elastic net penalty is defined as:
         l1_scaling * ||x||₁ + (l2_scaling / 2) * ||x||₂²
 
     Args:
-        x: Variable to apply the elastic net penalty to.
+        x: Expression to apply the elastic net penalty to.
         l1_scaling: Scaling factor for the L1-norm penalty. Defaults to 1.0.
         l2_scaling: Scaling factor for the L2-norm penalty. Defaults to 1.0.
 
     Raises:
-        TypeError: If x is not a Variable.
+        TypeError: If x is not an Expression.
 
     Examples:
         >>> x = Variable((100,), name='weights')
@@ -37,33 +36,21 @@ class ElasticNet(Atom):
 
     def __init__(
         self,
-        x: Variable,
+        x: Expression,
         l1_scaling: float | torch.Tensor = 1.0,
         l2_scaling: float | torch.Tensor = 1.0,
     ):
         """Initialize the elastic net atom.
 
         Args:
-            x: Variable to apply the elastic net penalty to.
+            x: Expression to apply the elastic net penalty to.
             l1_scaling: Scaling factor for the L1-norm penalty. Defaults to 1.0.
             l2_scaling: Scaling factor for the L2-norm penalty. Defaults to 1.0.
-
-        Raises:
-            TypeError: If x is not a Variable.
         """
         super().__init__(
-            exprs={"x": x},
-            buffers={"l1_scaling": l1_scaling, "l2_scaling": l2_scaling},
-            variable_names=["x"],
+            x,
+            scaling_params={"l1_scaling": l1_scaling, "l2_scaling": l2_scaling},
         )
-
-    def is_smooth(self) -> bool:
-        """Check if the elastic net is smooth.
-
-        Returns:
-            bool: Always False, as the L1 component is non-smooth at zero.
-        """
-        return False
 
     def forward(self) -> torch.Tensor:
         """Evaluate the elastic net penalty at the current variable value.
@@ -81,15 +68,6 @@ class ElasticNet(Atom):
             self.get_buffer("l1_scaling") * l1_norm
             + (self.get_buffer("l2_scaling") / 2) * l2_norm
         )
-
-    def is_proxable(self) -> bool:
-        """Check if the elastic net has a computable proximal operator.
-
-        Returns:
-            bool: Always True, as the elastic net proximal operator
-                has a closed-form solution (soft-thresholding with scaling).
-        """
-        return True
 
     def _prox(
         self, relevant_variable_values: TensorDict, prox_scaling: float
@@ -109,9 +87,3 @@ class ElasticNet(Atom):
             ) / l2_term
 
         return relevant_variable_values.apply(soft_threshold_with_scaling)
-
-    def _scale(self, scaling: float) -> Self:
-        """Scale the elastic net regularization atom."""
-        new_l1 = self.get_buffer("l1_scaling") * scaling
-        new_l2 = self.get_buffer("l2_scaling") * scaling
-        return ElasticNet(self.get_input("x"), l1_scaling=new_l1, l2_scaling=new_l2)

@@ -228,3 +228,46 @@ class TestProductExpression:
             is_commutative=False,
         )
         assert prod.tree() == expected
+
+    # ----------------------
+    # Tests for is_affine
+    # ----------------------
+
+    def test_is_affine_constants_only(self):
+        """Test that ProductExpression of constants is affine."""
+        a = Constant(torch.tensor([1.0, 2.0]))
+        b = Constant(torch.tensor([3.0, 4.0]))
+
+        # Product of constants is affine
+        result = a * b
+
+        assert result.is_affine() is True
+
+    def test_is_affine_scalar_times_affine(self):
+        """Test that scalar * (affine expression) is affine."""
+        x = Variable(torch.tensor([1.0, 2.0, 3.0]), name="x")
+        y = Variable(torch.tensor([4.0, 5.0, 6.0]), name="y")
+
+        # Scalar times affine expression (x + y) is affine
+        result = 2.0 * (x + y)
+
+        assert result.is_affine() is True
+
+    def test_is_affine_affine_times_affine(self):
+        """Test that product of affine expressions is not affine."""
+        x = Variable(torch.tensor([1.0, 2.0, 3.0]), name="x")
+        y = Variable(torch.tensor([4.0, 5.0, 6.0]), name="y")
+
+        # x * y is not affine (it's quadratic)
+        result = x * y
+
+        assert result.is_affine() is False
+
+    def test_is_affine_affine_times_nonaffine(self):
+        """Test that product of affine and non-affine expression is not affine."""
+        x = Variable(torch.tensor([1.0, 2.0, 3.0]), name="x")
+        y = Variable(torch.tensor([4.0, 5.0, 6.0]), name="y")
+
+        result = x * (y**2)
+
+        assert result.is_affine() is False

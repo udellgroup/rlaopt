@@ -73,6 +73,14 @@ class TestConstant:
         assert scalar_const.tree() == ExprTree("Constant")
 
     # ----------------------
+    # is_affine tests
+    # ----------------------
+
+    def test_is_affine_returns_true(self, scalar_const):
+        """Test is_affine() returns True for constant."""
+        assert scalar_const.is_affine() is True
+
+    # ----------------------
     # Forward evaluation tests
     # ----------------------
 

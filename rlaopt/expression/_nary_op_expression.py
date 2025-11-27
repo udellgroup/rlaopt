@@ -48,6 +48,18 @@ class _NAryOpExpression(Expression, ABC):
         """
         pass
 
+    @abstractmethod
+    def is_commutative_operation(self) -> bool:
+        """Check if this operation is commutative.
+
+        Subclasses must implement this to indicate whether the operation
+        is commutative (e.g., addition, multiplication) or not.
+
+        Returns:
+            bool: True if the operation is commutative, False otherwise.
+        """
+        pass
+
     def is_smooth(self) -> bool:
         """Check if all sub-expressions are smooth.
 
@@ -71,18 +83,6 @@ class _NAryOpExpression(Expression, ABC):
     def n_exprs(self):
         """The number of expressions being operated on."""
         return len(self.exprs)
-
-    @abstractmethod
-    def is_commutative_operation(self) -> bool:
-        """Check if this operation is commutative.
-
-        Subclasses must implement this to indicate whether the operation
-        is commutative (e.g., addition, multiplication) or not.
-
-        Returns:
-            bool: True if the operation is commutative, False otherwise.
-        """
-        pass
 
     def tree(self) -> ExprTree:
         """Return tree representation for n-ary operation.
