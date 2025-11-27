@@ -194,6 +194,71 @@ class TestExpression:
         assert torch.equal(concrete_expression.y.value, expected_y)
 
     # ----------------------
+    # Tests for is_affine
+    # ----------------------
+
+    def test_is_affine_returns_false_for_nonaffine(self):
+        """Test that is_affine returns False for non-affine expressions."""
+        x = expr_types.variable()(torch.tensor([1.0, 2.0, 3.0]), name="x")
+
+        # Power is non-affine
+        result = x**2
+
+        assert result.is_affine() is False
+
+    # ----------------------
+    # Tests for transpose, .T, and sum
+    # ----------------------
+
+    def test_transpose_creates_correct_tree_and_value(self):
+        """Test that transpose() creates correct expression tree and forward value."""
+        x = expr_types.variable()(torch.tensor([[1.0, 2.0], [3.0, 4.0]]), name="x")
+
+        result = x.transpose()
+
+        _assert_expression_equals(
+            result,
+            ExprTree("transpose", ExprTree("Variable(x)")),
+            torch.tensor([[1.0, 3.0], [2.0, 4.0]]),
+        )
+
+    def test_T_property_creates_correct_tree_and_value(self):
+        """Test that .T property creates correct expression tree and forward value."""
+        x = expr_types.variable()(torch.tensor([[1.0, 2.0], [3.0, 4.0]]), name="x")
+
+        result = x.T
+
+        _assert_expression_equals(
+            result,
+            ExprTree("transpose", ExprTree("Variable(x)")),
+            torch.tensor([[1.0, 3.0], [2.0, 4.0]]),
+        )
+
+    def test_sum_no_dim_creates_correct_tree_and_value(self):
+        """Test sum() with no dim creates correct tree and forward value."""
+        x = expr_types.variable()(torch.tensor([[1.0, 2.0], [3.0, 4.0]]), name="x")
+
+        result = x.sum()
+
+        _assert_expression_equals(
+            result,
+            ExprTree("sum", ExprTree("Variable(x)")),
+            torch.tensor(10.0),
+        )
+
+    def test_sum_with_dim_creates_correct_tree_and_value(self):
+        """Test that sum(dim=...) creates correct expression tree and forward value."""
+        x = expr_types.variable()(torch.tensor([[1.0, 2.0], [3.0, 4.0]]), name="x")
+
+        result = x.sum(dim=0)
+
+        _assert_expression_equals(
+            result,
+            ExprTree("sum_0", ExprTree("Variable(x)")),
+            torch.tensor([4.0, 6.0]),
+        )
+
+    # ----------------------
     # Operator overload tests - verify structure and values
     # ----------------------
 

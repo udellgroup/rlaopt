@@ -8,9 +8,9 @@ from pydantic import Field
 
 from rlaopt.expression import Expression
 from rlaopt.ext_tensordict import TensorDict
-from rlaopt.operator_split import OperatorSplit
 from rlaopt.solvers.configs_base import SolverConfig, StoppingCriteria
 from rlaopt.solvers.solver_base import OptimSolver, SolverState
+from rlaopt.splitting import ProxGradSplit
 
 
 class ProxGradConfig(SolverConfig):
@@ -84,7 +84,7 @@ class ProxGrad(OptimSolver):
             raise ValueError("ProxGrad solver requires a ProxGradConfig configuration.")
         super().__init__(obj, config)
 
-        op_split = OperatorSplit(obj)
+        op_split = ProxGradSplit(obj)
 
         self._init_state = _build_init_state(config.eta, config.use_acceleration)
         self._step = _build_step(
@@ -159,7 +159,7 @@ def _build_init_state(
 
 
 def _build_step(
-    op_split: OperatorSplit,
+    op_split: ProxGradSplit,
     use_acceleration: bool,
     use_linesearch: bool,
 ) -> Callable[
@@ -225,7 +225,7 @@ def _build_step(
 
 
 def _build_solve(
-    op_split: OperatorSplit,
+    op_split: ProxGradSplit,
     init_state_fn: Callable,
     step_fn: Callable,
     tol: float,

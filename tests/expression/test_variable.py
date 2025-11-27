@@ -4,7 +4,6 @@ import pytest
 import torch
 
 from rlaopt.expression import ExprTree
-from rlaopt.expression._unary_op_expression import _UnaryOpExpression
 from rlaopt.expression.variable import Variable
 
 
@@ -60,6 +59,35 @@ class TestVariable:
             Variable([5, 10], name="invalid")
 
     # ----------------------
+    # Classmethod tests
+    # ----------------------
+
+    def test_like_creates_variable_with_same_shape(self, vector_var):
+        """Test Variable.like() creates variable with same shape as expression."""
+        new_var = Variable.like(vector_var)
+        assert new_var.value.shape == vector_var.value.shape
+
+    def test_like_creates_variable_with_same_dtype(self):
+        """Test Variable.like() creates variable with same dtype as expression."""
+        original = Variable((3, 3), dtype=torch.float64, name="original")
+        new_var = Variable.like(original)
+        assert new_var.value.dtype == original.value.dtype
+
+    def test_like_creates_variable_with_same_device(self):
+        """Test Variable.like() creates variable with same device as expression."""
+        original = Variable((3, 3), device=torch.device("cpu"), name="original")
+        new_var = Variable.like(original)
+        assert new_var.value.device == original.value.device
+
+    def test_like_works_with_expression(self):
+        """Test Variable.like() works with any expression, not just Variable."""
+        x = Variable((5,), name="x", dtype=torch.float64)
+        y = Variable((5,), name="y", dtype=torch.float64)
+        new_var = Variable.like(x + y)
+        assert new_var.value.shape == torch.Size([5])
+        assert new_var.value.dtype == torch.float64
+
+    # ----------------------
     # ID and name tests
     # ----------------------
 
@@ -109,6 +137,14 @@ class TestVariable:
         assert vector_var.tree() == ExprTree("Variable(vector)")
 
     # ----------------------
+    # is_affine tests
+    # ----------------------
+
+    def test_is_affine(self, vector_var):
+        """Test variables are affine."""
+        assert vector_var.is_affine() is True
+
+    # ----------------------
     # Forward evaluation tests
     # ----------------------
 
@@ -130,39 +166,6 @@ class TestVariable:
 
         assert "vector" in repr_str and "shape=(5,)" in repr_str
         assert "vector" in str_str and "torch.Size([5])" in str_str
-
-    # ----------------------
-    # Operation method tests
-    # ----------------------
-
-    def test_sum_operations(self, matrix_var):
-        """Test sum() over all dimensions and specific dimension."""
-        matrix_var.value.data = torch.ones(3, 4)
-
-        all_sum = matrix_var.sum()
-        assert isinstance(all_sum, _UnaryOpExpression)
-        assert torch.allclose(all_sum.forward(), torch.tensor(12.0))
-        assert all_sum.tree() == ExprTree("sum", ExprTree("Variable(matrix)"))
-
-        dim_sum = matrix_var.sum(dim=0)
-        assert dim_sum.forward().shape == torch.Size([4])
-        assert torch.allclose(dim_sum.forward(), torch.ones(4) * 3)
-        assert dim_sum.tree() == ExprTree("sum_0", ExprTree("Variable(matrix)"))
-
-    def test_transpose_operations(self, vector_var, matrix_var):
-        """Test transpose() on 1D and 2D variables, and .T property."""
-        # 1D returns self
-        assert vector_var.transpose() is vector_var
-
-        # 2D transposes correctly
-        matrix_var.value.data = torch.randn(3, 4)
-        transposed = matrix_var.transpose()
-        assert isinstance(transposed, _UnaryOpExpression)
-        assert transposed.forward().shape == torch.Size([4, 3])
-        assert transposed.tree() == ExprTree("transpose", ExprTree("Variable(matrix)"))
-
-        # .T property works
-        assert torch.equal(matrix_var.T.forward(), matrix_var.transpose().forward())
 
     # ----------------------
     # State dict tests

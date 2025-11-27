@@ -4,6 +4,7 @@ import pytest
 import torch
 from tensordict import assert_allclose_td
 
+from rlaopt.atoms import SumSquares
 from rlaopt.atoms.elastic_net import ElasticNet
 from rlaopt.expression import ExprTree, Variable
 from rlaopt.ext_tensordict import TensorDict
@@ -131,3 +132,63 @@ class TestElasticNetScaling:
         assert isinstance(scaled, ElasticNet)
         assert scaled.tree() == ExprTree("ElasticNet", ExprTree("Variable(x)"))
         assert torch.allclose(scaled.forward(), torch.tensor(26.0))
+
+
+class TestElasticNetDecompose:
+    """Tests for ElasticNet decompose method."""
+
+    def test_decompose_with_variable_input(self, simple_variable):
+        """Test decompose with a Variable input."""
+        atom = ElasticNet(simple_variable, l1_scaling=0.5, l2_scaling=2.0)
+        decompositions = atom.decompose()
+
+        # Should return a list with one decomposition
+        assert len(decompositions) == 1
+        decomp = decompositions[0]
+
+        # Check that the decomposed atom is an ElasticNet
+        assert isinstance(decomp.atom, ElasticNet)
+
+        # Check that the new atom has the same scaling parameters
+        assert torch.allclose(decomp.atom.get_buffer("l1_scaling"), torch.tensor(0.5))
+        assert torch.allclose(decomp.atom.get_buffer("l2_scaling"), torch.tensor(2.0))
+
+        # The new atom should have a different variable
+        new_var = decomp.atom.get_input("x")
+        assert new_var is not simple_variable
+        assert isinstance(new_var, Variable)
+
+    def test_decompose_with_affine_expression(self):
+        """Test decompose with an affine expression input."""
+        x = Variable((3,), name="x")
+        A = torch.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]])
+        b = torch.tensor([1.0, 2.0])
+        affine_expr = A @ x + b
+
+        atom = ElasticNet(affine_expr, l1_scaling=1.0, l2_scaling=0.5)
+        decompositions = atom.decompose()
+
+        # Should return a list with one decomposition
+        assert len(decompositions) == 1
+        decomp = decompositions[0]
+
+        # Check that the decomposed atom is an ElasticNet
+        assert isinstance(decomp.atom, ElasticNet)
+
+        # Check that the affine expression is preserved
+        assert decomp.affine_expr is affine_expr
+
+        # Check that the new atom has the same scaling parameters
+        assert torch.allclose(decomp.atom.get_buffer("l1_scaling"), torch.tensor(1.0))
+        assert torch.allclose(decomp.atom.get_buffer("l2_scaling"), torch.tensor(0.5))
+
+    def test_decompose_with_non_affine_expression(self):
+        """Test decompose with a non-affine expression returns None."""
+        x = Variable((3,), name="x")
+        non_affine_expr = SumSquares(x)
+
+        atom = ElasticNet(non_affine_expr, l1_scaling=1.0, l2_scaling=1.0)
+        decompositions = atom.decompose()
+
+        # Should return None for non-affine input
+        assert decompositions is None

@@ -4,6 +4,7 @@ import pytest
 import torch
 from tensordict import assert_allclose_td
 
+from rlaopt.atoms import SumSquares
 from rlaopt.atoms.nuc_norm import NucNorm
 from rlaopt.expression import ExprTree, Variable
 from rlaopt.ext_tensordict import TensorDict
@@ -49,12 +50,6 @@ class TestNucNorm:
         scaling = torch.tensor(2.0)
         nuc = NucNorm(matrix_var, scaling=scaling)
         assert torch.equal(nuc.get_buffer("scaling"), scaling)
-
-    def test_init_raises_error_for_non_2d_variable(self):
-        """Test initialization raises ValueError for non-2D variables."""
-        vector_var = Variable((10,), name="x")
-        with pytest.raises(ValueError, match="must be 2D Tensor"):
-            NucNorm(vector_var)
 
     # ----------------------
     # Forward evaluation tests
@@ -216,3 +211,62 @@ class TestNucNormScaling:
         assert isinstance(scaled, NucNorm)
         assert scaled.tree() == ExprTree("NucNorm", ExprTree("Variable(X)"))
         assert torch.allclose(scaled.forward(), torch.tensor(24.0))
+
+
+class TestNucNormDecompose:
+    """Tests for NucNorm decompose method."""
+
+    def test_decompose_with_variable_input(self, matrix_var):
+        """Test decompose with a Variable input."""
+        nuc = NucNorm(matrix_var, scaling=2.0)
+        decompositions = nuc.decompose()
+
+        # Should return a list with one decomposition
+        assert len(decompositions) == 1
+        decomp = decompositions[0]
+
+        # Check that the decomposed atom is a NucNorm
+        assert isinstance(decomp.atom, NucNorm)
+
+        # Check that the new atom has the same scaling
+        assert torch.allclose(decomp.atom.get_buffer("scaling"), torch.tensor(2.0))
+
+        # The new atom should have a different variable
+        new_var = decomp.atom.get_input("x")
+        assert new_var is not matrix_var
+        assert isinstance(new_var, Variable)
+
+    def test_decompose_with_affine_expression(self):
+        """Test decompose with an affine expression input."""
+        X = Variable((4, 3), name="X")
+        A = torch.randn(4, 4)
+        b = torch.randn(4, 3)
+        affine_expr = A @ X + b
+
+        nuc = NucNorm(affine_expr, scaling=1.5)
+        decompositions = nuc.decompose()
+
+        # Should return a list with one decomposition
+        assert decompositions is not None
+        assert len(decompositions) == 1
+        decomp = decompositions[0]
+
+        # Check that the decomposed atom is a NucNorm
+        assert isinstance(decomp.atom, NucNorm)
+
+        # Check that the affine expression is preserved
+        assert decomp.affine_expr is affine_expr
+
+        # Check that the new atom has the same scaling
+        assert torch.allclose(decomp.atom.get_buffer("scaling"), torch.tensor(1.5))
+
+    def test_decompose_with_non_affine_expression(self):
+        """Test decompose with a non-affine expression returns None."""
+        X = Variable((4, 3), name="X")
+        non_affine_expr = SumSquares(X)
+
+        nuc = NucNorm(non_affine_expr, scaling=1.0)
+        decompositions = nuc.decompose()
+
+        # Should return None for non-affine input
+        assert decompositions is None

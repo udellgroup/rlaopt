@@ -1,8 +1,8 @@
 """Module for Variable class."""
 
 import torch
+from typing_extensions import Self
 
-from rlaopt.expression._unary_op_expression import _UnaryOpExpression
 from rlaopt.expression.expression import Expression
 from rlaopt.expression.tree import ExprTree
 from rlaopt.settings import VAR_PREFIX
@@ -97,6 +97,22 @@ class Variable(Expression):
             self._name = name
         else:
             raise TypeError(f"Expected name to be a string, got {type(name)} instead.")
+
+    @classmethod
+    def like(cls, expr: Expression) -> Self:
+        """Create a new Variable with same shape, dtype, and device as an expression.
+
+        This is useful for creating auxiliary variables in decomposition methods
+        that match the properties of an existing expression.
+
+        Args:
+            expr: Expression to match properties from.
+
+        Returns:
+            Self: New variable with same shape, dtype, and device as expr's value.
+        """
+        value = expr.forward()
+        return cls(value.shape, dtype=value.dtype, device=value.device)
 
     @property
     def value(self) -> torch.nn.Parameter:
@@ -205,60 +221,10 @@ class Variable(Expression):
         """
         return ExprTree(f"Variable({self._name})")
 
-    def sum(self, dim=None):
-        """Create a sum operation over this variable.
-
-        Args:
-            dim: Dimension to sum over (None for all dimensions).
+    def is_affine(self) -> bool:
+        """Variables are affine expressions.
 
         Returns:
-            UnaryOpExpression: Expression computing the sum.
-
-        Examples:
-            >>> x = Variable((3, 4,), name='matrix')
-            >>> x.value.data = torch.ones(3, 4)
-            >>> x.sum().forward()
-            tensor(12., grad_fn=<SumBackward0>)
-            >>> x.sum(dim=0).forward().shape
-            torch.Size([4])
+            bool: Always True.
         """
-        name = f"sum_{dim}" if dim is not None else "sum"
-        return _UnaryOpExpression(self, lambda t: torch.sum(t, dim=dim), name=name)
-
-    def transpose(self):
-        """Create a transpose operation (for 2D variables).
-
-        For 1D variables, returns self. For higher-dimensional variables,
-        transposes the last two dimensions.
-
-        Returns:
-            Variable or UnaryOpExpression: Transposed variable.
-
-        Examples:
-            >>> A = Variable((3, 4), name='A')
-            >>> A_T = A.transpose()
-            >>> A.value.data = torch.randn(3, 4)
-            >>> A_T.forward().shape
-            torch.Size([4, 3])
-
-            >>> x = Variable((5,) name='x')
-            >>> x.transpose() is x
-            True
-        """
-        if self.value.ndim == 1:
-            return self
-        return _UnaryOpExpression(self, lambda t: t.transpose(-2, -1), name="transpose")
-
-    @property
-    def T(self):
-        """Transpose property (shorthand for transpose()).
-
-        Returns:
-            Variable or UnaryOpExpression: Transposed variable.
-
-        Examples:
-            >>> A = Variable((3, 4), name='A')
-            >>> A.T.forward().shape
-            torch.Size([4, 3])
-        """
-        return self.transpose()
+        return True

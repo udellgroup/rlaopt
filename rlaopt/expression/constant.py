@@ -73,6 +73,14 @@ class Constant(Expression):
         """
         return ExprTree("Constant")
 
+    def is_affine(self) -> bool:
+        """Constants are affine expressions.
+
+        Returns:
+            bool: Always True.
+        """
+        return True
+
     def __neg__(self):
         """Negate the constant (keeps it as a constant).
 

@@ -1,12 +1,12 @@
-"""Test OperatorSplit class."""
+"""Test ProxGradSplit class."""
 
 import pytest
 import torch
 
-from rlaopt.atoms import Affine, L1Norm, NonNegative, SumSquares
+from rlaopt.atoms import L1Norm, NonNegative, SumSquares
 from rlaopt.expression import Variable
 from rlaopt.ext_tensordict import TensorDict
-from rlaopt.operator_split import OperatorSplit
+from rlaopt.splitting.prox_grad_split import ProxGradSplit
 
 
 @pytest.fixture
@@ -21,14 +21,14 @@ def least_squares():
 
 
 class TestAllSmoothExpression:
-    """Tests for OperatorSplit with all smooth terms."""
+    """Tests for ProxGradSplit with all smooth terms."""
 
     @pytest.fixture
     def single_var_smooth(self):
         """Single variable smooth problem."""
         x = Variable(torch.tensor([1.0, 2.0, 3.0, 4.0, 5.0]), name="x")
         expr = SumSquares(x)
-        obj = OperatorSplit(expr)
+        obj = ProxGradSplit(expr)
         return obj, x
 
     @pytest.fixture
@@ -36,11 +36,11 @@ class TestAllSmoothExpression:
         """Least squares smooth problem."""
         A, b, x = least_squares
         expr = 0.5 * SumSquares(A @ x - b)
-        obj = OperatorSplit(expr)
+        obj = ProxGradSplit(expr)
         return obj, A, b, x
 
     def test_initialization(self, single_var_smooth):
-        """Test OperatorSplit initializes correctly with all smooth terms."""
+        """Test ProxGradSplit initializes correctly with all smooth terms."""
         obj, _ = single_var_smooth
         assert obj._f is not None
         assert obj._r is not None
@@ -99,14 +99,14 @@ class TestAllSmoothExpression:
 
 
 class TestAllNonsmoothExpression:
-    """Tests for OperatorSplit with all non-smooth terms."""
+    """Tests for ProxGradSplit with all non-smooth terms."""
 
     @pytest.fixture
     def single_nonsmooth(self):
         """Single non-smooth term."""
         x = Variable(torch.ones(5), name="x")
         expr = L1Norm(x)
-        obj = OperatorSplit(expr)
+        obj = ProxGradSplit(expr)
         return obj, x
 
     def test_initialization(self, single_nonsmooth):
@@ -157,7 +157,7 @@ class TestAllNonsmoothExpression:
 
 
 class TestMixedSameVariable:
-    """Tests for OperatorSplit with mixed smooth/non-smooth on same variable."""
+    """Tests for ProxGradSplit with mixed smooth/non-smooth on same variable."""
 
     @pytest.fixture
     def lasso_problem(self, least_squares):
@@ -166,7 +166,7 @@ class TestMixedSameVariable:
         f = 0.5 * SumSquares(A @ x - b)
         r = L1Norm(x)
         expr = f + r
-        obj = OperatorSplit(expr)
+        obj = ProxGradSplit(expr)
         return obj, A, b, x, r
 
     def test_initialization(self, lasso_problem):
@@ -232,7 +232,7 @@ class TestMixedSameVariable:
 
 
 class TestMixedDisjointVariables:
-    """Tests for OperatorSplit with mixed smooth/non-smooth on disjoint variables."""
+    """Tests for ProxGradSplit with mixed smooth/non-smooth on disjoint variables."""
 
     @pytest.fixture
     def disjoint_problem(self):
@@ -240,7 +240,7 @@ class TestMixedDisjointVariables:
         x = Variable(torch.ones(5), name="x")
         y = Variable(torch.zeros(3), name="y")
         expr = SumSquares(x) + L1Norm(y)
-        obj = OperatorSplit(expr)
+        obj = ProxGradSplit(expr)
         return obj, x, y
 
     def test_initialization(self, disjoint_problem):
@@ -318,7 +318,7 @@ class TestMixedDisjointVariables:
 
 
 class TestMixedOverlappingVariables:
-    """Tests for OperatorSplit with mixed smooth/non-smooth on overlapping variables."""
+    """Tests for ProxGradSplit with mixed smooth/non-smooth on overlapping variables."""
 
     @pytest.fixture
     def overlapping_problem(self):
@@ -328,7 +328,7 @@ class TestMixedOverlappingVariables:
         z = Variable(torch.ones(4), name="z")
         # Smooth: x, y; Non-smooth: y, z
         expr = SumSquares(x) + SumSquares(y) + NonNegative(y) + L1Norm(z)
-        obj = OperatorSplit(expr)
+        obj = ProxGradSplit(expr)
         return obj, x, y, z
 
     def test_initialization(self, overlapping_problem):
@@ -421,12 +421,11 @@ class TestErrorConditions:
         """Test that non-proxable non-smooth term raises ValueError."""
         x = Variable(torch.ones(5), name="x")
         f = SumSquares(x)
-        r = L1Norm(x)
-        non_proxable = Affine(r, torch.tensor(1.0), torch.tensor(0.0))
+        non_proxable = L1Norm(x) ** 2
         expr = f + non_proxable
 
         with pytest.raises(ValueError, match="proxable atoms"):
-            OperatorSplit(expr)
+            ProxGradSplit(expr)
 
     def test_overlapping_nonsmooth_variables_raises_error(self):
         """Test that overlapping variables in non-smooth terms raises error."""
@@ -435,4 +434,4 @@ class TestErrorConditions:
         expr = SumSquares(y) + L1Norm(x) + NonNegative(x)
 
         with pytest.raises(ValueError, match="disjoint sets of variables"):
-            OperatorSplit(expr)
+            ProxGradSplit(expr)
