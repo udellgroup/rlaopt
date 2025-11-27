@@ -6,6 +6,8 @@ and robust regression methods.
 """
 
 from rlaopt.atoms.linear_model._base import BaseClassifier, BaseGLM, BaseRegressor
+from rlaopt.data import DataLoader
+from rlaopt.expression import Variable
 
 from ._inv_link_function import InverseLinkType
 from ._loss_factory import LossType
@@ -27,7 +29,13 @@ class HuberRegression(BaseRegressor):
         delta: The Huber loss threshold parameter.
     """
 
-    def __init__(self, beta, dataloader, fit_intercept=True, delta: float = 1.0):
+    def __init__(
+        self,
+        beta: Variable,
+        dataloader: DataLoader,
+        fit_intercept=True,
+        delta: float = 1.0,
+    ):
         """Initialize Huber regression model.
 
         Args:
@@ -65,7 +73,9 @@ class LinearRegression(BaseRegressor):
         L(y, ŷ) = (y - ŷ)^2
     """
 
-    def __init__(self, beta, dataloader, fit_intercept=True):
+    def __init__(
+        self, beta: Variable, dataloader: DataLoader, fit_intercept: bool = True
+    ):
         """Initialize linear regression model.
 
         Args:
@@ -104,7 +114,9 @@ class LogisticRegression(BaseClassifier):
     where p = sigmoid(X @ β).
     """
 
-    def __init__(self, beta, dataloader, fit_intercept=True):
+    def __init__(
+        self, beta: Variable, dataloader: DataLoader, fit_intercept: bool = True
+    ):
         """Initialize logistic regression model.
 
         Args:
@@ -135,7 +147,9 @@ class MultinomialRegression(BaseClassifier):
         (n_features, n_classes) to produce logits for each class.
     """
 
-    def __init__(self, beta, dataloader, fit_intercept=True):
+    def __init__(
+        self, beta: Variable, dataloader: DataLoader, fit_intercept: bool = True
+    ):
         """Initialize multinomial regression model.
 
         Args:
@@ -191,7 +205,13 @@ class CompoundPoissonGammaRegression(BaseGLM):
         power: The power parameter used to define the loss.
     """
 
-    def __init__(self, beta, dataloader, fit_intercept=True, power: float = 1.5):
+    def __init__(
+        self,
+        beta: Variable,
+        dataloader: DataLoader,
+        fit_intercept: bool = True,
+        power: float = 1.5,
+    ):
         """Initialize Compound Poisson-Gamma regression model.
 
         Args:
@@ -232,7 +252,9 @@ class GammaRegression(BaseGLM):
     where ŷ = exp(X @ β) is the predicted mean.
     """
 
-    def __init__(self, beta, dataloader, fit_intercept=True):
+    def __init__(
+        self, beta: Variable, dataloader: DataLoader, fit_intercept: bool = True
+    ):
         """Initialize Gamma regression model.
 
         Args:
@@ -260,7 +282,9 @@ class InverseGaussianRegression(BaseGLM):
     where ŷ = exp(X @ β) is the predicted mean.
     """
 
-    def __init__(self, beta, dataloader, fit_intercept=True):
+    def __init__(
+        self, beta: Variable, dataloader: DataLoader, fit_intercept: bool = True
+    ):
         """Initialize Inverse Gaussian regression model.
 
         Args:
@@ -287,7 +311,9 @@ class PoissonRegression(BaseGLM):
     where ŷ = exp(X @ β) is the predicted rate parameter.
     """
 
-    def __init__(self, beta, dataloader, fit_intercept=True):
+    def __init__(
+        self, beta: Variable, dataloader: DataLoader, fit_intercept: bool = True
+    ):
         """Initialize Poisson regression model.
 
         Args:

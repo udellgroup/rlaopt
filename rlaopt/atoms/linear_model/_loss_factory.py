@@ -36,7 +36,7 @@ LOSSES = {
 }
 
 
-def _get_loss_function(loss_type: LossType) -> _Loss:
+def get_loss_function(loss_type: LossType) -> _Loss:
     """Internal Factory function to get the appropriate loss function based on the loss type.
 
     Args:

@@ -30,7 +30,7 @@ class InverseLinkFunction(ABC):
         Returns:
             Mean parameter μ = g⁻¹(η)
         """
-        ...
+        pass
 
 
 class IdentityInverseLink(InverseLinkFunction):
@@ -96,7 +96,7 @@ INVERSE_LINK_FNS = {
 }
 
 
-def _get_inverse_link_function(
+def get_inverse_link_function(
     inverse_link_type: InverseLinkType,
 ) -> InverseLinkFunction:
     """Factory function to instantiate an inverse link function from its type.

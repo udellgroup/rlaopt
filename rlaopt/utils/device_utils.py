@@ -1,10 +1,14 @@
+"""Helper module for managing device placement."""
+
 import torch
 
 
 def check_and_move_to_device(
     tensor: torch.Tensor, device: torch.device
 ) -> torch.Tensor:
-    if tensor.device != device: tensor = tensor.to(device)
+    """Checks if tensor is on device, and moves it to device if isn't."""
+    if tensor.device != device:
+        tensor = tensor.to(device)
     return tensor
 
 

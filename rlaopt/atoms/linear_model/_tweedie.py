@@ -92,7 +92,8 @@ def tweedie_loss(
         Loss tensor (negative log-likelihood, ignoring constants)
     """
     # Input validation
-    if torch.any(target < 0): raise ValueError("Target values must be non-negative")
+    if torch.any(target < 0):
+        raise ValueError("Target values must be non-negative")
 
     # Compute negative log-likelihood based on power
     if power == 1:
@@ -125,9 +126,12 @@ def tweedie_loss(
         loss = -term1 + term2
 
     # Apply reduction
-    if reduction == "none":   return loss
-    elif reduction == "mean": return loss.mean()
-    elif reduction == "sum":  return loss.sum()
+    if reduction == "none":
+        return loss
+    elif reduction == "mean":
+        return loss.mean()
+    elif reduction == "sum":
+        return loss.sum()
 
 
 class PoissonLoss(TweedieLoss):
@@ -206,7 +210,6 @@ class InverseGaussianLoss(TweedieLoss):
         The Inverse Gaussian has heavier right tail than Gamma.
     """
 
-
     def __init__(self, reduction: str = "mean"):
         # Inverse Gaussian is Tweedie with power=3
         super().__init__(power=3.0, reduction=reduction)
@@ -237,5 +240,4 @@ class CompoundPoissonGammaLoss(TweedieLoss):
     """
 
     def __init__(self, power: float, reduction: str = "mean"):
-        # Compound Poisson-Gamma uses power=1.5 (standard default)
         super().__init__(power=power, reduction=reduction)

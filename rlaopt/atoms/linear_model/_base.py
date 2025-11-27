@@ -10,8 +10,8 @@ from rlaopt.expression import Variable
 from rlaopt.ext_tensordict import TensorDict
 from rlaopt.utils.device_utils import move_to_source_device
 
-from ._inv_link_function import InverseLinkType, _get_inverse_link_function
-from ._loss_factory import LossType, _get_loss_function
+from ._inv_link_function import InverseLinkType, get_inverse_link_function
+from ._loss_factory import LossType, get_loss_function
 
 
 class BaseLinearModel(Atom, ABC):
@@ -55,6 +55,8 @@ class BaseLinearModel(Atom, ABC):
 
         # Add weights to exprs dict
         exprs = {"beta": beta}
+        # For checking beta is indeed a variable.
+        variable_names = ["beta"]
 
         # Add intercept if specified
         if fit_intercept:
@@ -65,15 +67,16 @@ class BaseLinearModel(Atom, ABC):
                 dtype=beta_value.dtype,
             )
             exprs["intercept"] = intercept_
+            variable_names.append("intercept")
 
-        super().__init__(exprs, {}, None)
+        super().__init__(exprs, {}, variable_names)
 
-        _loss_fn = _get_loss_function(loss_type)
+        _loss_fn = get_loss_function(loss_type)
         if loss_type == LossType.POISSON_GAMMA:
             self._loss_fn = _loss_fn(loss_kwargs["power"], reduction="mean")
         else:
             self._loss_fn = _loss_fn(reduction="mean", **loss_kwargs)
-        self._inv_link_fn = _get_inverse_link_function(inv_link_type)
+        self._inv_link_fn = get_inverse_link_function(inv_link_type)
         self.dataloader = dataloader
         self.fit_intercept = fit_intercept
 
@@ -83,7 +86,8 @@ class BaseLinearModel(Atom, ABC):
         beta_value: TensorDict | None = None,
         X: torch.Tensor | None = None,
         y: torch.Tensor | None = None,
-    ) -> float: ...
+    ) -> float:
+        pass
 
     def predict(
         self,
@@ -162,9 +166,7 @@ class BaseLinearModel(Atom, ABC):
         n_samples = 0
 
         for X_batch, y_batch in self.dataloader:
-            loss = self._get_batch_loss(
-                beta, intercept, X_batch, y_batch
-            )
+            loss = self._get_batch_loss(beta, intercept, X_batch, y_batch)
             total_loss += loss
             n_samples += X_batch.shape[0]
 
@@ -223,7 +225,6 @@ class BaseLinearModel(Atom, ABC):
             intercept: Intercept tensor (can be None if fit_intercept=False)
             X_batch: input features for the batch
             y_batch: target values for the batch
-            normalize: if True, normalize loss by batch size
 
         Returns:
             Loss for the batch
@@ -552,37 +553,32 @@ class BaseGLM(BaseLinearModel):
         """Compute deviance between predictions and true values."""
         return 2 * (self._loss_fn(y_pred, y_true) - self._loss_fn(y_true, y_true))
 
-    def score(self, beta_value=None, X=None, y=None):
+    def score(
+        self,
+        beta_value: TensorDict | None = None,
+        X: torch.Tensor | None = None,
+        y: torch.Tensor | None = None,
+    ) -> float:
         """Compute the pseudo R-squared score based on deviance.
-    
+
         Calculates a measure of model fit analogous to R-squared for linear models,
         defined as the proportion of deviance explained by the model:
-            
+
             pseudo-R² = 1 - (model_deviance / null_deviance)
-        
+
         where the null deviance is computed using a constant prediction (the mean
         of y_true), and the model deviance uses the fitted predictions. Values
         range from -∞ to 1, with 1 indicating perfect fit and 0 indicating the
         model performs no better than the null model.
-        
-        Parameters
-        ----------
-        beta_value : torch.Tensor, optional
-            Coefficient values to use for prediction. If None, uses the fitted
-            coefficients stored in the model.
-        X : torch.Tensor, optional
-            Feature matrix for computing predictions. If None, uses the data
-            from the model's dataloader.
-        y : torch.Tensor, optional
-            True target values. If None, uses the targets from the model's
-            dataloader.
-            
-        Returns
-        -------
-        float or torch.Tensor
+
+        Args:
+            beta_value: TensorDict storing value of model weights
+            X: Optional input data. If None, uses training dataset.
+            y: Optional target values. Required if X is provided.
+
+        Returns:
             The pseudo R-squared score. Higher values indicate better fit.
         """
-
         y_model = self.predict(beta_value, X)
         y_true = self._get_target_values(X, y)
         y_null = _get_central_tendency(y_true, type="mean")
