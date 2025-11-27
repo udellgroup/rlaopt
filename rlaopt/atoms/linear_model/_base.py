@@ -553,6 +553,36 @@ class BaseGLM(BaseLinearModel):
         return 2 * (self._loss_fn(y_pred, y_true) - self._loss_fn(y_true, y_true))
 
     def score(self, beta_value=None, X=None, y=None):
+        """Compute the pseudo R-squared score based on deviance.
+    
+        Calculates a measure of model fit analogous to R-squared for linear models,
+        defined as the proportion of deviance explained by the model:
+            
+            pseudo-R² = 1 - (model_deviance / null_deviance)
+        
+        where the null deviance is computed using a constant prediction (the mean
+        of y_true), and the model deviance uses the fitted predictions. Values
+        range from -∞ to 1, with 1 indicating perfect fit and 0 indicating the
+        model performs no better than the null model.
+        
+        Parameters
+        ----------
+        beta_value : torch.Tensor, optional
+            Coefficient values to use for prediction. If None, uses the fitted
+            coefficients stored in the model.
+        X : torch.Tensor, optional
+            Feature matrix for computing predictions. If None, uses the data
+            from the model's dataloader.
+        y : torch.Tensor, optional
+            True target values. If None, uses the targets from the model's
+            dataloader.
+            
+        Returns
+        -------
+        float or torch.Tensor
+            The pseudo R-squared score. Higher values indicate better fit.
+        """
+
         y_model = self.predict(beta_value, X)
         y_true = self._get_target_values(X, y)
         y_null = _get_central_tendency(y_true, type="mean")

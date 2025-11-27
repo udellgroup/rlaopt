@@ -47,10 +47,6 @@ class TweedieLoss(_Loss):
         Target values must be non-negative.
     """
 
-    # __constants__ tells TorchScript that these attributes won't change after __init__,
-    # allowing for compile-time optimizations when using torch.jit.script().
-    __constants__ = ["power", "reduction"]
-
     def __init__(self, power: float = 1.5, reduction: str = "mean"):
         super().__init__(reduction=reduction)
         # Allow common discrete values or continuous range (1, 2)
@@ -156,10 +152,6 @@ class PoissonLoss(TweedieLoss):
         For targets, zeros are handled correctly.
     """
 
-    # __constants__ tells TorchScript that these attributes won't change after __init__,
-    # allowing for compile-time optimizations when using torch.jit.script().
-    __constants__ = ["reduction"]
-
     def __init__(self, reduction: str = "mean"):
         # Poisson is Tweedie with power=1
         super().__init__(power=1.0, reduction=reduction)
@@ -185,10 +177,6 @@ class GammaLoss(TweedieLoss):
     Note:
         Both predictions and targets must be strictly positive.
     """
-
-    # __constants__ tells TorchScript that these attributes won't change after __init__,
-    # allowing for compile-time optimizations when using torch.jit.script().
-    __constants__ = ["reduction"]
 
     def __init__(self, reduction: str = "mean"):
         # Gamma is Tweedie with power=2
@@ -218,9 +206,6 @@ class InverseGaussianLoss(TweedieLoss):
         The Inverse Gaussian has heavier right tail than Gamma.
     """
 
-    # __constants__ tells TorchScript that these attributes won't change after __init__,
-    # allowing for compile-time optimizations when using torch.jit.script().
-    __constants__ = ["reduction"]
 
     def __init__(self, reduction: str = "mean"):
         # Inverse Gaussian is Tweedie with power=3
@@ -250,10 +235,6 @@ class CompoundPoissonGammaLoss(TweedieLoss):
         Predictions must be positive, targets can be zero or positive.
         Power=1.5 is a common default, but any value in (1, 2) is valid.
     """
-
-    # __constants__ tells TorchScript that these attributes won't change after __init__,
-    # allowing for compile-time optimizations when using torch.jit.script().
-    __constants__ = ["reduction"]
 
     def __init__(self, power: float, reduction: str = "mean"):
         # Compound Poisson-Gamma uses power=1.5 (standard default)
