@@ -2,6 +2,7 @@
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
+from enum import Enum
 
 import torch
 
@@ -9,6 +10,18 @@ from rlaopt.expression import Expression
 from rlaopt.ext_tensordict import TensorDict
 from rlaopt.linalg import LinSys
 from rlaopt.solvers.configs_base import SolverConfig, StoppingCriteria
+
+
+class ConvergenceStatus(Enum):
+    """Enumeration of possible solver convergence statuses.
+
+    Attributes:
+        CONVERGED: Solver converged to within specified tolerance.
+        NOT_CONVERGED: Solver did not converge within the maximum iterations.
+    """
+
+    CONVERGED = "converged"
+    NOT_CONVERGED = "not_converged"
 
 
 @dataclass(frozen=True)
@@ -22,6 +35,46 @@ class SolverState:
     iter_: int  # Current iteration count
 
 
+@dataclass(frozen=True)
+class OptimResult:
+    """Base class for optimization solver results.
+
+    This class can be extended to include specific result variables
+    returned by different optimization solvers.
+
+    Attributes:
+        variable_values: Optimized variable values.
+        convergence_status: Status indicating how the solver terminated.
+        num_iters: Number of iterations performed.
+        solver_time: Time taken by the solver in seconds.
+    """
+
+    variable_values: TensorDict
+    convergence_status: ConvergenceStatus
+    num_iters: int
+    solver_time: float
+
+
+@dataclass(frozen=True)
+class LinSysResult:
+    """Base class for linear system solver results.
+
+    This class can be extended to include specific result variables
+    returned by different linear system solvers.
+
+    Attributes:
+        solution: Solution to the linear system.
+        convergence_status: Status indicating how the solver terminated.
+        num_iters: Number of iterations performed.
+        solver_time: Time taken by the solver in seconds.
+    """
+
+    solution: torch.Tensor
+    convergence_status: ConvergenceStatus
+    num_iters: int
+    solver_time: float
+
+
 class OptimSolver(ABC):
     """Abstract base class for optimization solvers.
 
@@ -29,16 +82,17 @@ class OptimSolver(ABC):
     Each solver must implement the `solve` method to perform optimization.
     """
 
-    @abstractmethod
-    def __init__(self, obj: Expression, config: SolverConfig):
+    def __init__(self, obj: Expression, config: SolverConfig, detach: bool = True):
         """Initialize the solver with an objective function.
 
         Args:
             obj (Expression): The objective function
                 to optimize.
             config (SolverConfig): Configuration for the solver.
+            detach (bool): Whether to detach params and state from computation graph
+                between iterations. Set to False only if you need to differentiate
+                through the entire solver. Default: True.
         """
-        pass
 
     @abstractmethod
     def init_state(self, variable_values: TensorDict) -> SolverState:
@@ -69,8 +123,8 @@ class OptimSolver(ABC):
 
     @abstractmethod
     def solve(
-        self, variable_values: TensorDict, stopping_criteria: StoppingCriteria
-    ) -> tuple[TensorDict, torch.Tensor]:
+        self, variable_values: TensorDict | None, stopping_criteria: StoppingCriteria
+    ) -> OptimResult:
         """Solve the optimization problem.
 
         Args:
@@ -79,7 +133,8 @@ class OptimSolver(ABC):
             stopping_criteria (StoppingCriteria): Criteria to stop the optimization.
 
         Returns:
-            tuple[TensorDict, torch.Tensor]: Optimized variable values and final error.
+            OptimResult: Result of the optimization containing optimized variable
+                values among other metrics.
         """
         pass
 
@@ -95,15 +150,16 @@ class LinSysSolver(ABC):
     that progressively refine a solution until convergence criteria are met.
     """
 
-    @abstractmethod
-    def __init__(self, lin_sys: LinSys, config: SolverConfig):
+    def __init__(self, lin_sys: LinSys, config: SolverConfig, detach: bool = True):
         """Initialize the solver.
 
         Args:
             lin_sys (LinSys): The linear system to solve.
             config (SolverConfig): Configuration object for the solver.
+            detach (bool): Whether to detach params and state from computation graph
+                between iterations. Set to False only if you need to differentiate
+                through the entire solver. Default: True.
         """
-        pass
 
     @abstractmethod
     def init_state(self, params: torch.Tensor) -> SolverState:
@@ -137,7 +193,7 @@ class LinSysSolver(ABC):
     @abstractmethod
     def solve(
         self, params: torch.Tensor, stopping_criteria: StoppingCriteria
-    ) -> tuple[torch.Tensor, torch.Tensor]:
+    ) -> LinSysResult:
         """Solve the linear system AW = B.
 
         Args:
@@ -145,7 +201,6 @@ class LinSysSolver(ABC):
             stopping_criteria (StoppingCriteria): Criteria to stop the solver.
 
         Returns:
-            tuple[torch.Tensor, torch.Tensor]: Optimized parameters and
-                final residual norm.
+            LinSysResult: Result containing the solution and convergence information.
         """
         pass

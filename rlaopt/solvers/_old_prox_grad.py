@@ -85,10 +85,12 @@ class ProxGrad(OptimSolver):
         super().__init__(obj, config)
 
         op_split = ProxGradSplit(obj)
+        # Extract the function, gradient, and prox operator
+        f, grad_f, prox = op_split.func_f, op_split.grad_f, op_split.prox
 
         self._init_state = _build_init_state(config.eta, config.use_acceleration)
         self._step = _build_step(
-            op_split, config.use_acceleration, config.use_linesearch
+            f, grad_f, prox, config.use_acceleration, config.use_linesearch
         )
         self._solve = lambda tol, max_iters: _build_solve(
             op_split, self._init_state, self._step, tol, max_iters
@@ -159,7 +161,9 @@ def _build_init_state(
 
 
 def _build_step(
-    op_split: ProxGradSplit,
+    f: Callable[[TensorDict], torch.Tensor],
+    grad_f: Callable[[TensorDict], torch.Tensor],
+    prox: Callable[[TensorDict, float], TensorDict],
     use_acceleration: bool,
     use_linesearch: bool,
 ) -> Callable[
@@ -167,14 +171,12 @@ def _build_step(
     tuple[TensorDict, ProxGradState],
 ]:
     """Build the step function based on configuration."""
-    # Extract the function, gradient, and prox operator
-    f, grad_f, prox = op_split.func_f, op_split.grad_f, op_split.prox
 
     # Setup function computing stopping criteria
     def err_fn(var_vals: TensorDict, state: ProxGradState) -> torch.Tensor:
-        grads = op_split.grad_f(var_vals)
+        grads = grad_f(var_vals)
         updated_var_vals = var_vals - state.eta * grads
-        prox_var_vals = op_split.prox(updated_var_vals, state.eta)
+        prox_var_vals = prox(updated_var_vals, state.eta)
 
         return (var_vals - prox_var_vals).flat_norm() / state.eta
 
