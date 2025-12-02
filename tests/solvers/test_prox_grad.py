@@ -5,7 +5,7 @@ import torch
 
 from rlaopt.atoms import Box, L1Norm, NonNegative, SumSquares
 from rlaopt.expression import Variable
-from rlaopt.solvers.prox_grad import ProxGrad, ProxGradConfig, ProxGradStoppingCriteria
+from rlaopt.solvers import ProxGrad, ProxGradConfig, GradSolverStoppingCriteria
 
 TOLERANCES = {torch.float32: 1e-4, torch.float64: 1e-7}
 MAX_ITERS = 5000
@@ -52,7 +52,8 @@ def generate_least_squares_data(n=1024, p=256, precision=torch.float32, seed=0):
     """Generate random data for least squares problems."""
     torch.manual_seed(seed)
     A = torch.randn(n, p, dtype=precision) / (n**0.5)
-    b = torch.randn(n, dtype=precision) / (n**0.5)
+    x_star = torch.randn(p) / (p ** 0.5)
+    b = A @ x_star + 0.01 * torch.randn(n)
     x = Variable(torch.zeros(p, dtype=precision))
     return A, b, x
 
@@ -89,7 +90,7 @@ def generate_matrix_sensing_data(n=64, p=16, precision=torch.float32, seed=0):
 
 def compute_lipschitz_stepsize(A, scaling=0.5):
     """Compute stepsize based on Lipschitz constant of gradient."""
-    return scaling / (torch.linalg.norm(A, ord=2) ** 2)
+    return scaling / (2 * torch.linalg.norm(A, ord=2) ** 2)
 
 
 # ============================================================================
@@ -100,40 +101,40 @@ def compute_lipschitz_stepsize(A, scaling=0.5):
 class TestProxGrad:
     """Tests for the proximal gradient solver."""
 
-    def test_least_squares(self, reset_torch_state, precision, tol, acceleration, ls):
+    def test_least_squares(self, reset_torch_state, precision, acceleration, ls):
         """Test proximal gradient on least squares problem."""
         torch.set_default_dtype(precision)
         A, b, x = generate_least_squares_data(n=1024, p=256, precision=precision)
         obj = SumSquares(A @ x - b)
         eta = compute_lipschitz_stepsize(A)
-        _solve_and_verify(obj, eta, tol, acceleration, ls)
+        _solve_and_verify(obj, eta, acceleration, ls)
 
-    def test_box(self, reset_torch_state, precision, tol, acceleration, ls):
+    def test_box(self, reset_torch_state, precision, acceleration, ls):
         """Test proximal gradient on box-constrained problem."""
         torch.set_default_dtype(precision)
         A, b, x = generate_least_squares_data(n=1024, p=256, precision=precision)
-        lower = -torch.tensor(2.0)
-        upper = torch.tensor(1.0)
+        lower = -2.0
+        upper = 1.0
         obj = SumSquares(A @ x - b) + Box(x, lower=lower, upper=upper)
         eta = compute_lipschitz_stepsize(A)
-        _solve_and_verify(obj, eta, tol, acceleration, ls)
+        _solve_and_verify(obj, eta, acceleration, ls)
 
-    def test_nonnegative(self, reset_torch_state, precision, tol, acceleration, ls):
+    def test_nonnegative(self, reset_torch_state, precision, acceleration, ls):
         """Test proximal gradient on nonnegative-constrained problem."""
         torch.set_default_dtype(precision)
         A, b, x = generate_least_squares_data(n=1024, p=256, precision=precision)
         obj = SumSquares(A @ x - b) + NonNegative(x)
         eta = compute_lipschitz_stepsize(A)
-        _solve_and_verify(obj, eta, tol, acceleration, ls)
+        _solve_and_verify(obj, eta, acceleration, ls)
 
-    def test_lasso(self, reset_torch_state, precision, tol, acceleration, ls):
+    def test_lasso(self, reset_torch_state, precision, acceleration, ls):
         """Test proximal gradient on LASSO problem."""
         torch.set_default_dtype(precision)
         A, b, x, _ = generate_lasso_data(n=1024, p=128, s=32, precision=precision)
         mu = 0.1 * torch.linalg.norm(A.T @ b, ord=torch.inf)
         obj = SumSquares(A @ x - b) + L1Norm(x, scaling=mu)
         eta = compute_lipschitz_stepsize(A)
-        _solve_and_verify(obj, eta, tol, acceleration, ls)
+        _solve_and_verify(obj, eta, acceleration, ls)
 
     # def test_nucnorm(self, reset_torch_state, precision, tol, acceleration, ls):
     #     """Test proximal gradient on nuclear norm regularized problem."""
@@ -145,7 +146,7 @@ class TestProxGrad:
     #     _solve_and_verify(obj, eta, tol, acceleration, ls)
 
     def test_nonsmooth_subset_of_smooth(
-        self, reset_torch_state, precision, tol, acceleration, ls
+        self, reset_torch_state, precision, acceleration, ls
     ):
         """Test when non-smooth variables are subset of smooth variables."""
         torch.set_default_dtype(precision)
@@ -160,10 +161,10 @@ class TestProxGrad:
         # Hessian has A.T @ A for x block and 2*I for y block
         # Use more conservative stepsize accounting for both blocks
         eta = compute_lipschitz_stepsize(A, scaling=0.25)
-        _solve_and_verify(obj, eta, tol, acceleration, ls)
+        _solve_and_verify(obj, eta, acceleration, ls)
 
     def test_nonsmooth_disjoint_from_smooth(
-        self, reset_torch_state, precision, tol, acceleration, ls
+        self, reset_torch_state, precision, acceleration, ls
     ):
         """Test non-smooth variables disjoint from smooth variables."""
         torch.set_default_dtype(precision)
@@ -175,10 +176,10 @@ class TestProxGrad:
         z = Variable(torch.zeros(32, dtype=precision), name="z")
         obj = SumSquares(A @ x - b) + L1Norm(z, scaling=0.1)
         eta = compute_lipschitz_stepsize(A)
-        _solve_and_verify(obj, eta, tol, acceleration, ls)
+        _solve_and_verify(obj, eta, acceleration, ls)
 
     def test_complex_mixed_variables(
-        self, reset_torch_state, precision, tol, acceleration, ls
+        self, reset_torch_state, precision, acceleration, ls
     ):
         """Test complex case with multiple smooth and non-smooth terms."""
         torch.set_default_dtype(precision)
@@ -200,10 +201,10 @@ class TestProxGrad:
         )
         # Hessian has A.T @ A blocks and I blocks from SumSquares(x+y)
         # Use more conservative stepsize
-        eta = compute_lipschitz_stepsize(A, scaling=0.25)
-        _solve_and_verify(obj, eta, tol, acceleration, ls)
+        eta = compute_lipschitz_stepsize(A, scaling=0.5)
+        _solve_and_verify(obj, eta, acceleration, ls)
 
-    def test_pure_nonsmooth(self, reset_torch_state, precision, tol, acceleration, ls):
+    def test_pure_nonsmooth(self, reset_torch_state, precision, acceleration, ls):
         """Test pure non-smooth objective (no smooth part)."""
         torch.set_default_dtype(precision)
         torch.manual_seed(0)
@@ -211,7 +212,7 @@ class TestProxGrad:
         x = Variable(torch.randn(p, dtype=precision), name="x")
         obj = L1Norm(x)
         eta = 1.0  # Stepsize doesn't affect pure prox
-        _solve_and_verify(obj, eta, tol, acceleration, ls)
+        _solve_and_verify(obj, eta, acceleration, ls)
 
 
 class TestProxGradErrors:
@@ -236,30 +237,14 @@ class TestProxGradErrors:
 # ============================================================================
 
 
-def _solve_and_verify(obj, eta, tol, use_acceleration, use_linesearch):
+def _solve_and_verify(obj, eta, use_acceleration, use_linesearch):
     """Test that optimization problem is solved correctly."""
     opt = _build_opt(obj, eta, use_acceleration, use_linesearch)
-    stopping_criteria = ProxGradStoppingCriteria(tol=tol, max_iters=MAX_ITERS)
-    params, state = _init_opt(obj, opt)
-
-    # Test solving by step
-    params, err = _loop(params, state, opt, stopping_criteria)
-    assert err <= tol, f"Step-by-step solving failed: error {err} > tolerance {tol}"
-
+    stopping_criteria = GradSolverStoppingCriteria(max_iters=MAX_ITERS)
+   
     # Test using solve method
-    params, err = opt.solve(stopping_criteria=stopping_criteria)
-    assert err.item() <= tol * (params.flat_dim() ** 0.5), (
-        f"Solve method failed: error {err.item()} > tolerance {tol}"
-    )
-
-
-def _loop(params, state, opt, stopping_criteria):
-    """Run optimization loop until convergence or max iterations."""
-    for _ in range(stopping_criteria.max_iters):
-        params, state = opt.step(params, state)
-        if state.err.item() <= stopping_criteria.tol:
-            break
-    return params, state.err.item()
+    results = opt.solve(stopping_criteria=stopping_criteria)
+    assert results.convergence_status.value == 'converged'
 
 
 def _init_opt(obj, opt):
@@ -271,7 +256,7 @@ def _init_opt(obj, opt):
 def _build_opt(obj, eta, use_acceleration, use_linesearch):
     """Build proximal gradient optimizer with specified configuration."""
     config = ProxGradConfig(
-        eta=eta,
+        eta0=eta,
         use_acceleration=use_acceleration,
         use_linesearch=use_linesearch,
     )

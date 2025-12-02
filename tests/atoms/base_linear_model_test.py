@@ -6,7 +6,7 @@ import torch
 from rlaopt.atoms import Box
 from rlaopt.data import DataLoader, Dataset
 from rlaopt.expression import Variable
-from rlaopt.solvers.prox_grad import ProxGrad, ProxGradConfig
+from rlaopt.solvers import ProxGrad, ProxGradConfig
 
 
 def _generate_test_data(
