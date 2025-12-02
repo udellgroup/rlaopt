@@ -28,4 +28,5 @@ from rlaopt.atoms.linear_model.linear_model import (
 from rlaopt.atoms.non_negative import NonNegative as NonNegative
 from rlaopt.atoms.nuc_norm import NucNorm as NucNorm
 from rlaopt.atoms.polyhedron import Polyhedron as Polyhedron
+from rlaopt.atoms.quad_form import QuadForm as QuadForm
 from rlaopt.atoms.sum_squares import SumSquares as SumSquares

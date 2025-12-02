@@ -80,6 +80,8 @@ class AddExpression(_NAryOpExpression):
         smooth_exprs = [e for e in self.exprs if e.is_smooth()]
         if not smooth_exprs:
             return Constant(0.0)
+        elif len(smooth_exprs) == 1:
+            return smooth_exprs[0]
         return AddExpression(*smooth_exprs)
 
     def _build_op(self) -> Callable[[list[torch.Tensor]], torch.Tensor]:

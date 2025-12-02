@@ -11,6 +11,8 @@ import torch
 
 from rlaopt.data.datasets import BatchedDataset, Dataset
 
+from .collate import IndexTrackingCollate
+
 
 class DataLoader(torch.utils.data.DataLoader):
     """Extended PyTorch DataLoader with support for custom Dataset types and lazy label access.
@@ -81,6 +83,10 @@ class DataLoader(torch.utils.data.DataLoader):
                 f"Dataset must be of type Dataset or BatchedDataset but received {type(dataset).__name__}"
             )
 
+        # 1. Index Tracking Injection Logic"
+        # Inject the custom collate function
+        collate_fn = IndexTrackingCollate()
+
         super().__init__(
             dataset,
             batch_size,
@@ -101,26 +107,20 @@ class DataLoader(torch.utils.data.DataLoader):
             in_order=in_order,
         )
 
+        # 3. Setup label access (_y property)
         if isinstance(dataset, Dataset):
+            # Assumes _get_training_labels is defined and handles the logic for in-memory data
             self._y = partial(_get_training_labels, loader=self, in_memory=True)
         else:
+            # Assumes _get_training_labels is defined and handles the logic for iterating batched data
             self._y = partial(_get_training_labels, loader=self, in_memory=False)
 
         self.data_iter = iter(self)
         self._shuffle = shuffle
 
-    def get_batch(self) -> tuple[tuple[torch.Tensor], torch.Tensor]:
+    def get_batch(self) -> tuple[torch.Tensor, ...]:
         """Fetch the next batch from the DataLoader.
-
-        This method sequentially iterates through all batches in the DataLoader.
-        When all batches have been consumed, it automatically resets the iterator
-        to the beginning, enabling continuous iteration across epochs.
-
-        Returns:
-                - Batch data (tuple of tensors)
-
-        Note:
-            If shuffle=True, each reset creates a new random ordering of the data.
+        Automatically resets the iterator upon consumption (end of epoch).
         """
         try:
             # Attempt to get the next batch from the current iterator
@@ -132,13 +132,7 @@ class DataLoader(torch.utils.data.DataLoader):
 
     @property
     def y(self):
-        """Get all training labels from the dataset.
-
-        Returns:
-            torch.Tensor: A tensor containing all training labels. For Dataset instances,
-                         labels are retrieved directly from memory. For BatchedDataset
-                         instances, labels are collected by iterating through all batches.
-        """
+        """Get all training labels from the dataset."""
         return self._y()
 
 
@@ -165,6 +159,6 @@ def _get_training_labels(loader: DataLoader, in_memory: bool):
         return loader.dataset.y
     else:
         training_labels = []
-        for _, y_batch in loader:
+        for _, y_batch, _ in loader:
             training_labels.append(y_batch)
         return torch.cat(training_labels, dim=0)

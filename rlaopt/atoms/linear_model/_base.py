@@ -111,6 +111,17 @@ class BaseLinearModel(Atom, ABC):
 
         return self._get_loss(beta_tensor, intercept_tensor)
 
+    def evaluate(self, variable_values):
+        if self.dataloader._shuffle:
+            self.dataloader.data_iter = iter(self.dataloader)
+
+        variable_values_selected = self.select_relevant_variables(variable_values)
+        params = self._variable_values_to_params_dict(variable_values_selected)
+        result = torch.func.functional_call(
+            self, params, args=None, kwargs=None, tie_weights=False
+        )
+        return result
+
     def loss(
         self,
         beta_value: TensorDict | None = None,
@@ -153,6 +164,7 @@ class BaseLinearModel(Atom, ABC):
         # Case 1: Test data provided
         if _has_test_data(X, y):
             predictions = self._get_prediction(beta, intercept, X=X)
+            y = move_to_source_device(y, beta)
             return self._loss_fn(predictions, y)
 
         # Case 2: Training data - in-memory Dataset
@@ -190,7 +202,7 @@ class BaseLinearModel(Atom, ABC):
         """
         # Case 1: Inference on new data
         if X is not None:
-            move_to_source_device(X, beta)
+            X = move_to_source_device(X, beta)
             linear_pred = X @ beta
             if self.fit_intercept:
                 linear_pred = linear_pred + intercept

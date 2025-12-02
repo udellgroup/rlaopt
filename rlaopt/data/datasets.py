@@ -88,7 +88,7 @@ class BatchedDataset(BaseDataset, ABC):
             idx (int or slice): Index or slice of samples to retrieve.
 
         Returns:
-            tuple: (X, y) where X is features and y is target(s).
+            tuple: (X, y, idx) where X is features and y is target(s).
         """
         pass
 
@@ -213,6 +213,15 @@ class Dataset(BaseDataset, torch.utils.data.TensorDataset):
             )
 
         super().__init__(X, y)
+
+    def __getitem__(self, index):
+        """Retrieve a sample and its index."""
+        # Call the parent's __getitem__ to get (X, y)
+        X, y = super().__getitem__(index)
+
+        # Return the data, target, and the index
+        # The index is returned as a single-element tensor for consistency with collation
+        return X, y, torch.as_tensor(index, dtype=torch.long)
 
     @classmethod
     def from_numpy(

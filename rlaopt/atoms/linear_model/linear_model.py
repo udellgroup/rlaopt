@@ -5,6 +5,8 @@ classification tasks, including linear regression, logistic regression,
 and robust regression methods.
 """
 
+from typing import Union
+
 from rlaopt.atoms.linear_model._base import BaseClassifier, BaseGLM, BaseRegressor
 from rlaopt.data import DataLoader
 from rlaopt.expression import Variable
@@ -325,3 +327,15 @@ class PoissonRegression(BaseGLM):
         super().__init__(
             LossType.POISSON, InverseLinkType.EXP, beta, dataloader, fit_intercept
         )
+
+
+LinearModel = Union[
+    HuberRegression,
+    LinearRegression,
+    LogisticRegression,
+    MultinomialRegression,
+    CompoundPoissonGammaRegression,
+    GammaRegression,
+    InverseGaussianRegression,
+    PoissonRegression,
+]
