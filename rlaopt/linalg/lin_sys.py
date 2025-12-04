@@ -7,7 +7,7 @@ from linops import LinearOperator, aslinearoperator
 
 
 class LinSys(torch.nn.Module):
-    """Module for positive-definite linear systems (A + reg * I)w = B."""
+    """Module for regularized linear systems (A + reg * I)w = B."""
 
     def __init__(
         self,
@@ -101,7 +101,7 @@ class LinSys(torch.nn.Module):
         Returns:
             torch.device: Device where the module's tensors are located.
         """
-        return self.A.device
+        return self.B.device
 
     @property
     def dtype(self) -> torch.dtype:
