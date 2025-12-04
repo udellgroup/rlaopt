@@ -10,6 +10,7 @@ Base Classes
    :members:
    :undoc-members:
    :show-inheritance:
+   :exclude-members: prox, get_input, decompose
 
 Regularizers
 ------------
@@ -61,6 +62,7 @@ Constraints
    :members:
    :undoc-members:
    :show-inheritance:
+   :exclude-members: decompose
 
 Regression Models
 -----------------

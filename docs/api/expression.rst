@@ -15,6 +15,7 @@ Core Classes
    :members:
    :undoc-members:
    :show-inheritance:
+   :exclude-members: like
 
 .. autoclass:: rlaopt.expression.Constant
    :members:
