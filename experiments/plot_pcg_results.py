@@ -151,7 +151,7 @@ def create_comparison_plot(
     ax.grid(axis="y", alpha=0.3, linestyle="--")
 
     # Set y-axis to log scale
-    ax.set_yscale("log")
+    # ax.set_yscale("log")
 
     # Adjust layout to prevent label cutoff
     plt.tight_layout()
