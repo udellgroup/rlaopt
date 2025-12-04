@@ -1,4 +1,4 @@
-"""__init__ file for expression module."""
+"""Expressions for modeling optimization problems."""
 
 from rlaopt.expression.constant import Constant as Constant
 from rlaopt.expression.expression import Expression as Expression

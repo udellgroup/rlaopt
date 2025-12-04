@@ -1,4 +1,4 @@
-"""__init__.py file for atoms module."""
+"""Atoms for modeling optimization problems."""
 
 from rlaopt.atoms.atom import Atom as Atom
 from rlaopt.atoms.atom import AtomDecomposition as AtomDecomposition
