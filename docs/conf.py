@@ -29,7 +29,8 @@ extensions = [
     'sphinx.ext.napoleon',
     'sphinx.ext.intersphinx',
     'sphinx.ext.mathjax',
-    'myst_parser',  
+    'myst_parser',
+    'sphinxcontrib.autodoc_pydantic',
 ]
 
 templates_path = ['_templates']
@@ -117,3 +118,15 @@ myst_enable_extensions = [
     'dollarmath',
     'amsmath',
 ]
+
+# -- Options for autodoc_pydantic -------------------------------------------
+# Prevent field duplication and provide clean documentation for Pydantic models
+autodoc_pydantic_model_show_json = False
+autodoc_pydantic_model_show_config_summary = False
+autodoc_pydantic_model_show_validator_members = False
+autodoc_pydantic_model_show_field_summary = True
+autodoc_pydantic_model_hide_paramlist = True
+autodoc_pydantic_field_doc_policy = 'both'
+autodoc_pydantic_field_show_constraints = True
+autodoc_pydantic_field_show_default = True
+autodoc_pydantic_field_show_required = True

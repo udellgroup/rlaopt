@@ -4,6 +4,7 @@
 sphinx>=7.0.0
 sphinx-book-theme>=1.0.0
 myst-parser>=2.0.0
+autodoc-pydantic>=2.0.0
 
 # Dependencies needed for autodoc to import the package
 numpy>=2.2.6
