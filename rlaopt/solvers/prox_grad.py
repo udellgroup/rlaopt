@@ -20,28 +20,27 @@ from rlaopt.splitting import ProxGradSplit
 
 
 class ProxGradConfig(SolverConfig):
-    """Configuration for the proximal gradient solver.
+    """Configuration for the proximal gradient solver."""
 
-    Attributes:
-        eta: Step size for the gradient update.
-        use_acceleration: Whether to use acceleration techniques.
-        use_linesearch: Whether to use line search for step size selection.
-    """
-
-    eta: float = Field(default=1.0, gt=0.0)
-    use_acceleration: bool = False
-    use_linesearch: bool = True
+    eta: float = Field(
+        default=1.0, gt=0.0, description="Step size for the gradient update."
+    )
+    use_acceleration: bool = Field(
+        default=False, description="Whether to use acceleration techniques."
+    )
+    use_linesearch: bool = Field(
+        default=True, description="Whether to use line search for step size selection."
+    )
 
 
 class ProxGradStoppingCriteria(StoppingCriteria):
-    """Stopping criteria specific to the Proximal Gradient solver.
+    """Stopping criteria specific to the Proximal Gradient solver."""
 
-    Attributes:
-        max_iters: Maximum number of iterations.
-        tol: Tolerance for convergence based on the error metric.
-    """
-
-    tol: float = Field(default=1e-4, gt=0.0)
+    tol: float = Field(
+        default=1e-4,
+        gt=0.0,
+        description="Tolerance for convergence based on the error metric.",
+    )
 
 
 @dataclass(frozen=True)
