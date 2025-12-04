@@ -71,7 +71,7 @@ class TestAllNonsmoothExpression:
 
     def test_A_matches_affine_expr(self, lasso_constraint):
         """Test A matches the matrix in affine expression."""
-        obj, x, A_matrix, b_vec = lasso_constraint
+        obj, _, A_matrix, _ = lasso_constraint
         # The decomposition is L1Norm(z) with z = A @ x - b
         # So obj.A should match A_matrix
         v = torch.randn(10)
@@ -81,7 +81,7 @@ class TestAllNonsmoothExpression:
 
     def test_b_matches_affine_expr(self, lasso_constraint):
         """Test b matches the bias in affine expression."""
-        obj, x, A_matrix, b_vec = lasso_constraint
+        obj, _, _, b_vec = lasso_constraint
         # Note: ADMMSplit negates b internally
         assert torch.allclose(obj.b, b_vec)
 
@@ -109,19 +109,18 @@ class TestAllNonsmoothExpression:
 
     def test_hvp_f_ATA_linop(self, lasso_constraint):
         """Test hvp_f_ATA_linop with only non-smooth terms."""
-        obj, x, A_matrix, _ = lasso_constraint
+        obj, _, A_matrix, _ = lasso_constraint
         new_vals = TensorDict({"x": torch.ones(10)})
         rho = 2.0
-        sigma = 0.5
 
-        linop = obj.hvp_f_ATA_linop(new_vals, rho, sigma)
+        linop = obj.hvp_f_ATA_linop(new_vals, rho)
 
         # Test on a vector
         v = torch.randn(10)
         result = linop @ v
 
-        # Expected: rho * A^T A @ v + sigma * v (no Hessian for all-nonsmooth)
-        expected = rho * (A_matrix.T @ (A_matrix @ v)) + sigma * v
+        # Expected: rho * A^T A @ v (no Hessian for all-nonsmooth)
+        expected = rho * (A_matrix.T @ (A_matrix @ v))
         assert torch.allclose(result, expected)
 
     def test_r_variable_values(self, single_nonsmooth):
@@ -165,7 +164,7 @@ class TestMixedSameVariable:
 
     def test_A_shape(self, elastic_net_problem):
         """Test A has correct shape."""
-        obj, _, _, x = elastic_net_problem
+        obj, _, _, _ = elastic_net_problem
         # A maps from x to auxiliary variable z (same dimension)
         assert obj.A.shape == (16, 16)
 
@@ -209,16 +208,15 @@ class TestMixedSameVariable:
         p = A.shape[1]
         new_vals = TensorDict({"x": torch.zeros(p)})
         rho = 1.5
-        sigma = 0.2
 
-        linop = obj.hvp_f_ATA_linop(new_vals, rho, sigma)
+        linop = obj.hvp_f_ATA_linop(new_vals, rho)
         v = torch.randn(p)
         result = linop @ v
 
-        # Expected: H @ v + rho * I @ v + sigma * v
+        # Expected: H @ v + rho * I @ v
         # (A is identity for this decomposition)
         hessian_v = A.T @ (A @ v)
-        expected = hessian_v + rho * v + sigma * v
+        expected = hessian_v + rho * v
         assert torch.allclose(result, expected)
 
     def test_variable_values(self, elastic_net_problem):
@@ -264,7 +262,7 @@ class TestMixedDisjointVariables:
 
     def test_f_and_affine_variable_values_smooth_extra(self, smooth_has_extra_var):
         """Test f_and_affine_variable_values includes both variables."""
-        obj, x, y = smooth_has_extra_var
+        obj, _, _ = smooth_has_extra_var
         vals = obj.f_and_affine_variable_values
         # Should include both x (from f) and y (from affine expr)
         assert "x" in vals
@@ -298,7 +296,7 @@ class TestMixedDisjointVariables:
         self, nonsmooth_has_extra_var
     ):
         """Test f_and_affine_variable_values includes affine variables."""
-        obj, x, y, _ = nonsmooth_has_extra_var
+        obj, _, _, _ = nonsmooth_has_extra_var
         vals = obj.f_and_affine_variable_values
         # Should include both x (from f and affine) and y (from affine)
         assert "x" in vals
@@ -306,7 +304,7 @@ class TestMixedDisjointVariables:
 
     def test_A_shape_nonsmooth_extra(self, nonsmooth_has_extra_var):
         """Test A shape when affine expr has extra variable."""
-        obj, _, _, A_matrix = nonsmooth_has_extra_var
+        obj, _, _, _ = nonsmooth_has_extra_var
         # Input: (x, y) = 5 + 3 = 8
         # Output: z has dimension 3
         assert obj.A.shape == (3, 8)
@@ -324,7 +322,7 @@ class TestMixedDisjointVariables:
 
     def test_grad_f_nonsmooth_extra(self, nonsmooth_has_extra_var):
         """Test grad_f only affects smooth variables."""
-        obj, x, y, _ = nonsmooth_has_extra_var
+        obj, _, _, _ = nonsmooth_has_extra_var
         new_vals = TensorDict({"x": torch.ones(5), "y": torch.zeros(3)})
         grads = obj.grad_f(new_vals)
 
