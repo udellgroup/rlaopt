@@ -30,26 +30,10 @@ Expression Base Class
    :undoc-members:
    :show-inheritance:
 
-Operation Expressions
----------------------
-
-.. automodule:: rlaopt.expression.op_expressions
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
 Expression Tree
 ---------------
 
 .. automodule:: rlaopt.expression.tree
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-Expression Types
-----------------
-
-.. automodule:: rlaopt.expression.expr_types
    :members:
    :undoc-members:
    :show-inheritance:
