@@ -19,7 +19,7 @@ Available Atoms
 L1 Norm
 ~~~~~~~
 
-The :class:`~rlaopt.atoms.l1_norm.L1Norm` atom represents the L1 (Manhattan) norm: :math:`\|x\|_1 = \sum_i |x_i|`.
+The :class:`~rlaopt.atoms.L1Norm` atom represents the L1 (Manhattan) norm: :math:`\|x\|_1 = \sum_i |x_i|`.
 
 .. code-block:: python
 
@@ -32,7 +32,7 @@ The :class:`~rlaopt.atoms.l1_norm.L1Norm` atom represents the L1 (Manhattan) nor
 Sum of Squares
 ~~~~~~~~~~~~~~
 
-The :class:`~rlaopt.atoms.sum_squares.SumSquares` atom represents the squared L2 norm: :math:`\|x\|_2^2 = \sum_i x_i^2`.
+The :class:`~rlaopt.atoms.SumSquares` atom represents the squared L2 norm: :math:`\|x\|_2^2 = \sum_i x_i^2`.
 
 .. code-block:: python
 
@@ -45,7 +45,7 @@ The :class:`~rlaopt.atoms.sum_squares.SumSquares` atom represents the squared L2
 Elastic Net
 ~~~~~~~~~~~
 
-The :class:`~rlaopt.atoms.elastic_net.ElasticNet` atom combines L1 and L2 regularization:
+The :class:`~rlaopt.atoms.ElasticNet` atom combines L1 and L2 regularization:
 :math:`\lambda_1 \|x\|_1 + \lambda_2 \|x\|_2^2`.
 
 .. code-block:: python
@@ -61,13 +61,12 @@ Other Atoms
 
 rlaopt provides many other atoms:
 
-* :class:`~rlaopt.atoms.box.Box`: Box constraints
-* :class:`~rlaopt.atoms.non_negative.NonNegative`: Non-negativity constraints
-* :class:`~rlaopt.atoms.linear_equality.LinearEquality`: Linear equality constraints
-* :class:`~rlaopt.atoms.halfspace.Halfspace`: Halfspace constraints
-* :class:`~rlaopt.atoms.polyhedron.Polyhedron`: Polyhedral constraints
-* :class:`~rlaopt.atoms.nuc_norm.NucNorm`: Nuclear norm
-* :class:`~rlaopt.atoms.affine.Affine`: Affine transformations
+* :class:`~rlaopt.atoms.Box`: Box constraints
+* :class:`~rlaopt.atoms.NonNegative`: Non-negativity constraints
+* :class:`~rlaopt.atoms.LinearEquality`: Linear equality constraints
+* :class:`~rlaopt.atoms.Halfspace`: Halfspace constraints
+* :class:`~rlaopt.atoms.Polyhedron`: Polyhedral constraints
+* :class:`~rlaopt.atoms.NucNorm`: Nuclear norm
 
 See the :doc:`../api/atoms` section for a complete list.
 

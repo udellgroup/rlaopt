@@ -9,7 +9,7 @@ Available Solvers
 Proximal Gradient (ProxGrad)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-The :class:`~rlaopt.solvers.prox_grad.ProxGrad` solver is designed for problems of the form:
+The :class:`~rlaopt.solvers.ProxGrad` solver is designed for problems of the form:
 
 .. math::
 
@@ -37,7 +37,7 @@ Features:
 PCG (Preconditioned Conjugate Gradient)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-The :class:`~rlaopt.solvers.pcg.PCG` solver is a preconditioned conjugate gradient method for solving linear systems.
+The :class:`~rlaopt.solvers.PCG` solver is a preconditioned conjugate gradient method for solving linear systems.
 
 .. code-block:: python
 
@@ -65,8 +65,8 @@ Solver Configuration
 
 Each solver has a configuration class that controls its behavior:
 
-* :class:`~rlaopt.solvers.prox_grad.ProxGradConfig`: Step size, line search, acceleration
-* :class:`~rlaopt.solvers.pcg.PCGConfig`: Iteration limits, tolerance, preconditioner
+* :class:`~rlaopt.solvers.ProxGradConfig`: Step size, line search, acceleration
+* :class:`~rlaopt.solvers.PCGConfig`: Iteration limits, tolerance, preconditioner
 
 .. code-block:: python
 

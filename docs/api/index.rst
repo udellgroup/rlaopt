@@ -10,6 +10,7 @@ This section contains the complete API reference for rlaopt, automatically gener
    atoms
    solvers
    linalg
+   data
 
 Expression Module
 -----------------
@@ -30,3 +31,8 @@ Linear Algebra Module
 ---------------------
 
 The :doc:`linalg` module contains linear algebra utilities and preconditioners.
+
+Data Module
+-----------
+
+The :doc:`data` module provides dataset and dataloader classes for handling machine learning data.

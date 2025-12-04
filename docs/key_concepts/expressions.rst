@@ -9,7 +9,7 @@ Core Expression Types
 Variable
 ~~~~~~~~
 
-A :class:`~rlaopt.expression.variable.Variable` represents an optimization variable - a parameter that will be optimized. Variables wrap PyTorch parameters and support automatic differentiation.
+A :class:`~rlaopt.expression.Variable` represents an optimization variable - a parameter that will be optimized. Variables wrap PyTorch parameters and support automatic differentiation.
 
 .. code-block:: python
 
@@ -24,7 +24,7 @@ A :class:`~rlaopt.expression.variable.Variable` represents an optimization varia
 Constant
 ~~~~~~~~
 
-A :class:`~rlaopt.expression.constant.Constant` represents a fixed value that doesn't change during optimization.
+A :class:`~rlaopt.expression.Constant` represents a fixed value that doesn't change during optimization.
 
 .. code-block:: python
 
@@ -66,9 +66,9 @@ Expression Properties
 
 All expressions have several important properties:
 
-* :meth:`~rlaopt.expression.expression.Expression.is_smooth`: Whether the expression is differentiable everywhere
-* :meth:`~rlaopt.expression.expression.Expression.forward`: Evaluate the expression
-* :meth:`~rlaopt.expression.expression.Expression.tree`: Get a tree representation of the expression structure
+* :meth:`~rlaopt.expression.Expression.is_smooth`: Whether the expression is differentiable everywhere
+* :meth:`~rlaopt.expression.Expression.forward`: Evaluate the expression
+* :meth:`~rlaopt.expression.Expression.tree`: Get a tree representation of the expression structure
 
 .. code-block:: python
 
