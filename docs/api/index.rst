@@ -10,7 +10,6 @@ This section contains the complete API reference for rlaopt, automatically gener
    atoms
    solvers
    linalg
-   utils
 
 Expression Module
 -----------------
@@ -31,8 +30,3 @@ Linear Algebra Module
 ---------------------
 
 The :doc:`linalg` module contains linear algebra utilities and preconditioners.
-
-Utilities Module
-----------------
-
-The :doc:`utils` module contains utility functions and helpers.
