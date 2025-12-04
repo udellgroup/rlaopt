@@ -3,6 +3,7 @@
 import pytest
 import torch
 
+from rlaopt.atoms.box import Box
 from rlaopt.atoms.polyhedron import Polyhedron
 from rlaopt.expression import Variable
 
@@ -230,3 +231,104 @@ class TestPolyhedronScaling:
 
         # Should still return the same instance
         assert scaled_poly is poly
+
+
+class TestPolyhedronDecompose:
+    """Test Polyhedron decompose method."""
+
+    def test_decompose_inequality_only(self, vector_var, inequality_only_data):
+        """Test decompose with inequality constraints only."""
+        poly = Polyhedron(vector_var, **inequality_only_data)
+        decompositions = poly.decompose()
+
+        # Should return a list with one decomposition
+        assert len(decompositions) == 1
+        decomp = decompositions[0]
+
+        # Check that the decomposed atom is a Box
+        assert isinstance(decomp.atom, Box)
+
+        # Check that the new atom has correct bounds
+        expected_lower = inequality_only_data["lower"]
+        expected_upper = inequality_only_data["upper"]
+        assert torch.allclose(decomp.atom.get_buffer("lower"), expected_lower)
+        assert torch.allclose(decomp.atom.get_buffer("upper"), expected_upper)
+
+    def test_decompose_equality_only(self, vector_var):
+        """Test decompose with equality constraints only."""
+        A = torch.tensor([[1.0, 2.0, 3.0, 4.0, 5.0], [0.0, 1.0, 0.0, 1.0, 0.0]])
+        b = torch.tensor([15.0, 2.0])
+        poly = Polyhedron(vector_var, A=A, b=b)
+        decompositions = poly.decompose()
+
+        # Should return a list with one decomposition
+        assert len(decompositions) == 1
+        decomp = decompositions[0]
+
+        # Check that the decomposed atom is a Box with zero bounds
+        assert isinstance(decomp.atom, Box)
+
+        # The bounds should be zero (equality constraint)
+        vector_var.value = torch.ones(5)
+        expected_value = A @ vector_var.value - b
+        assert torch.allclose(
+            decomp.atom.get_buffer("lower"), torch.zeros_like(expected_value)
+        )
+        assert torch.allclose(
+            decomp.atom.get_buffer("upper"), torch.zeros_like(expected_value)
+        )
+
+    def test_decompose_mixed_constraints(self, vector_var, full_constraint_data):
+        """Test decompose with both equality and inequality constraints."""
+        poly = Polyhedron(vector_var, **full_constraint_data)
+        decompositions = poly.decompose()
+
+        # Should return a list with two decompositions
+        assert len(decompositions) == 2
+
+        # Both should be Box atoms
+        assert isinstance(decompositions[0].atom, Box)
+        assert isinstance(decompositions[1].atom, Box)
+
+        # Identify which is equality and which is inequality by checking bounds
+        # Equality has zero bounds, inequality has actual bounds
+        eq_decomp = None
+        ineq_decomp = None
+
+        for decomp in decompositions:
+            lower = decomp.atom.get_buffer("lower")
+            upper = decomp.atom.get_buffer("upper")
+
+            # Check if this is the equality constraint (zero bounds)
+            if torch.allclose(lower, torch.zeros_like(lower)) and torch.allclose(
+                upper, torch.zeros_like(upper)
+            ):
+                eq_decomp = decomp
+            else:
+                ineq_decomp = decomp
+
+        # Both decompositions should be identified
+        assert eq_decomp is not None, "Equality decomposition not found"
+        assert ineq_decomp is not None, "Inequality decomposition not found"
+
+        # Check inequality decomposition bounds
+        expected_lower = full_constraint_data["lower"]
+        expected_upper = full_constraint_data["upper"]
+        assert torch.allclose(ineq_decomp.atom.get_buffer("lower"), expected_lower)
+        assert torch.allclose(ineq_decomp.atom.get_buffer("upper"), expected_upper)
+
+    def test_decompose_with_C_matrix(self, vector_var):
+        """Test decompose with non-identity C matrix."""
+        C = torch.tensor([[1.0, 0.0, 0.0, 0.0, 0.0], [0.0, 1.0, 0.0, 0.0, 0.0]])
+        lower = torch.tensor([-1.0, -2.0])
+        upper = torch.tensor([5.0, 3.0])
+        poly = Polyhedron(vector_var, C=C, lower=lower, upper=upper)
+        decompositions = poly.decompose()
+
+        # Should return a list with one decomposition
+        assert len(decompositions) == 1
+        decomp = decompositions[0]
+
+        # Check that the decomposed atom has correct bounds
+        assert torch.allclose(decomp.atom.get_buffer("lower"), lower)
+        assert torch.allclose(decomp.atom.get_buffer("upper"), upper)

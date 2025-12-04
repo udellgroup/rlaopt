@@ -231,3 +231,32 @@ class TestAddExpression:
             is_commutative=True,
         )
         assert add_expr.tree() == expected
+
+    # ----------------------
+    # Tests for is_affine
+    # ----------------------
+
+    def test_is_affine_with_affine_operands(self):
+        """Test that AddExpression is affine when all operands are affine."""
+        from rlaopt.expression import expr_types
+
+        x = expr_types.variable()(torch.tensor([1.0, 2.0, 3.0]), name="x")
+        y = expr_types.variable()(torch.tensor([4.0, 5.0, 6.0]), name="y")
+        c = expr_types.constant()(torch.tensor([7.0, 8.0, 9.0]))
+
+        # Sum of variables and constants is affine
+        result = x + y + c
+
+        assert result.is_affine() is True
+
+    def test_is_affine_with_nonaffine_operand(self):
+        """Test that AddExpression is not affine when any operand is non-affine."""
+        from rlaopt.expression import expr_types
+
+        x = expr_types.variable()(torch.tensor([1.0, 2.0, 3.0]), name="x")
+        y = expr_types.variable()(torch.tensor([4.0, 5.0, 6.0]), name="y")
+
+        # x + y**2 is not affine because y**2 is not affine
+        result = x + y**2
+
+        assert result.is_affine() is False

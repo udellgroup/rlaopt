@@ -3,14 +3,13 @@
 from typing import Any
 
 import torch
-from typing_extensions import Self
 
-from rlaopt.atoms.atom import Atom
-from rlaopt.expression import Variable
+from rlaopt.atoms.nonsmooth_regularizer import NonsmoothRegularizer
+from rlaopt.expression import Expression
 from rlaopt.ext_tensordict import TensorDict
 
 
-class NucNorm(Atom):
+class NucNorm(NonsmoothRegularizer):
     """Nuclear norm (sum of singular values) of a matrix variable.
 
     The nuclear norm is defined as the sum of the singular values of a matrix.
@@ -21,12 +20,11 @@ class NucNorm(Atom):
     where σᵢ(X) are the singular values of X.
 
     Args:
-        x: 2D matrix variable to apply the nuclear norm to.
+        x: Expression to apply the nuclear norm to.
         scaling: Scaling factor for the nuclear norm. Defaults to 1.0.
 
     Raises:
-        TypeError: If x is not a Variable.
-        ValueError: If x is not a 2D matrix.
+        TypeError: If x is not an Expression.
 
     Examples:
         >>> X = Variable((10, 5), name='X')
@@ -34,33 +32,14 @@ class NucNorm(Atom):
         >>> loss = nuc_norm.forward()
     """
 
-    def __init__(self, x: Variable, scaling: float | torch.Tensor = 1.0):
+    def __init__(self, x: Expression, scaling: float | torch.Tensor = 1.0):
         """Initialize the nuclear norm atom.
 
         Args:
-            x: 2D matrix variable to apply the nuclear norm to.
+            x: 2D matrix expression to apply the nuclear norm to.
             scaling: Scaling factor for the nuclear norm. Defaults to 1.0.
-
-        Raises:
-            TypeError: If x is not a Variable.
-            ValueError: If x is not a 2D matrix.
         """
-        if x.value.dim() != 2:
-            raise ValueError(
-                f"Variable value must be 2D Tensor, but got {x.value.dim()}D Tensor."
-            )
-
-        super().__init__(
-            exprs={"x": x}, buffers={"scaling": scaling}, variable_names=["x"]
-        )
-
-    def is_smooth(self) -> bool:
-        """Check if the nuclear norm is smooth.
-
-        Returns:
-            bool: Always False, as the nuclear norm is non-smooth.
-        """
-        return False
+        super().__init__(x, scaling_params={"scaling": scaling})
 
     def forward(self) -> torch.Tensor:
         """Evaluate the nuclear norm at the registered variable value.
@@ -71,14 +50,6 @@ class NucNorm(Atom):
         value = self.get_input("x").forward()
         S = torch.linalg.svdvals(value)
         return self.get_buffer("scaling") * torch.sum(S)
-
-    def is_proxable(self) -> bool:
-        """Check if the nuclear norm has a computable proximal operator.
-
-        Returns:
-            bool: Always True, as the nuclear norm is proxable.
-        """
-        return True
 
     def _prox(
         self, relevant_variable_values: TensorDict, prox_scaling: float
@@ -96,11 +67,6 @@ class NucNorm(Atom):
                 return _prox_nuc_norm.apply(location.T, scale).T
 
         return relevant_variable_values.apply(prox_func)
-
-    def _scale(self, scaling: float) -> Self:
-        """Scale the nuclear norm atom."""
-        new_scaling = self.get_buffer("scaling") * scaling
-        return NucNorm(self.get_input("x"), scaling=new_scaling)
 
 
 class _prox_nuc_norm(torch.autograd.Function):

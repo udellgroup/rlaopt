@@ -47,6 +47,22 @@ class AddExpression(_NAryOpExpression):
         """
         return self._op(values)
 
+    def is_commutative_operation(self) -> bool:
+        """Addition is commutative.
+
+        Returns:
+            bool: Always True.
+        """
+        return True
+
+    def is_affine(self) -> bool:
+        """Check if the sum expression is affine.
+
+        Returns:
+            bool: True if all summed expressions are affine, False otherwise.
+        """
+        return all(e.is_affine() for e in self.exprs)
+
     def get_non_smooth_exprs(self) -> list[Expression]:
         """Get the non-smooth part of the sum expression as a list of expressions.
 
@@ -81,14 +97,6 @@ class AddExpression(_NAryOpExpression):
                 return values[0]
 
         return add_op
-
-    def is_commutative_operation(self) -> bool:
-        """Addition is commutative.
-
-        Returns:
-            bool: Always True.
-        """
-        return True
 
 
 class ProductExpression(_NAryOpExpression):
@@ -181,6 +189,20 @@ class ProductExpression(_NAryOpExpression):
             bool: True if elementwise, False if matrix multiplication.
         """
         return not self.matmul
+
+    def is_affine(self) -> bool:
+        """Check if the product expression is affine.
+
+        Returns:
+            bool: True if at most one expression is non-constant and
+                that expression is affine.
+        """
+        if all(isinstance(e, Constant) for e in self.exprs):
+            return True
+        non_const_exprs = [e for e in self.exprs if not isinstance(e, Constant)]
+        if len(non_const_exprs) == 1:
+            return non_const_exprs[0].is_affine()
+        return False
 
     def _build_op(self) -> Callable[[list[torch.Tensor]], torch.Tensor]:
         if self.matmul:

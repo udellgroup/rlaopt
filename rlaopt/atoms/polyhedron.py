@@ -1,5 +1,6 @@
 """Polyhedron constraint atom for optimization."""
 
+from enum import Enum, auto
 from functools import partial
 from math import isclose
 from typing import Callable
@@ -8,9 +9,17 @@ from warnings import warn
 import torch
 from typing_extensions import Self
 
-from rlaopt.atoms.atom import Atom
+from rlaopt.atoms.atom import Atom, AtomDecomposition
 from rlaopt.expression import Variable
 from rlaopt.ext_tensordict import TensorDict
+
+
+class _PolyhedronType(Enum):
+    """Type of constraints in a Polyhedron atom."""
+
+    EQUALITY_ONLY = auto()  # Only A @ x = b
+    INEQUALITY_ONLY = auto()  # Only lower <= C @ x <= upper
+    MIXED = auto()  # Both equality and inequality constraints
 
 
 class Polyhedron(Atom):
@@ -70,9 +79,9 @@ class Polyhedron(Atom):
 
         ## Convert float/int bounds to tensors FIRST (before using .device/.dtype)
         if isinstance(lower, (int, float)):
-            lower = torch.tensor(float(lower))
+            lower = torch.tensor(float(lower), device=x.forward().device)
         if isinstance(upper, (int, float)):
-            upper = torch.tensor(float(upper))
+            upper = torch.tensor(float(upper), device=x.forward().device)
 
         # Validate input dimensional consistency
         _validate(A, C, b, lower, upper)
@@ -83,6 +92,17 @@ class Polyhedron(Atom):
         # if lower is provided but not upper, set upper to infinity
         elif (lower is not None) and (upper is None):
             upper = torch.tensor(torch.inf, device=lower.device, dtype=lower.dtype)
+
+        # Determine constraint type (validation ensures at least one exists)
+        has_equality = A is not None and b is not None
+        has_inequality = lower is not None  # implies upper is not None
+
+        if has_equality and has_inequality:
+            self._constraint_type = _PolyhedronType.MIXED
+        elif has_equality:
+            self._constraint_type = _PolyhedronType.EQUALITY_ONLY
+        else:  # has_inequality must be True
+            self._constraint_type = _PolyhedronType.INEQUALITY_ONLY
 
         super().__init__(
             exprs={"x": x},
@@ -128,6 +148,55 @@ class Polyhedron(Atom):
     ) -> TensorDict:
         """Polyhedral constraint does not have a prox operator in general."""
         raise NotImplementedError("Polyhedron is not proxable")
+
+    def decompose(self) -> list[AtomDecomposition]:
+        """Decompose the Polyhedron atom.
+
+        Returns:
+            list[AtomDecomposition]: Decomposition containing the new atom r(z)
+                and affine expression if decomposable.
+        """
+        if self._constraint_type == _PolyhedronType.EQUALITY_ONLY:
+            return [self._decompose_equality(self.get_input("x"))]
+        elif self._constraint_type == _PolyhedronType.INEQUALITY_ONLY:
+            return [self._decompose_inequality(self.get_input("x"))]
+        else:  # MIXED
+            eq_decomp = self._decompose_equality(self.get_input("x"))
+            ineq_decomp = self._decompose_inequality(self.get_input("x"))
+            return [eq_decomp, ineq_decomp]
+
+    def _decompose_equality(self, input_var: Variable) -> AtomDecomposition:
+        """Decompose equality constraint."""
+        input_expr = self.get_buffer("A") @ input_var - self.get_buffer("b")
+        new_var = Variable.like(input_expr)
+
+        from rlaopt.atoms.box import Box
+
+        input_value = input_expr.forward()
+        new_atom = Box(
+            new_var,
+            lower=torch.zeros_like(input_value),
+            upper=torch.zeros_like(input_value),
+        )
+        return AtomDecomposition(atom=new_atom, affine_expr=input_expr)
+
+    def _decompose_inequality(self, input_var: Variable) -> AtomDecomposition:
+        """Decompose inequality constraint."""
+        C = self.get_buffer("C")
+        lower = self.get_buffer("lower")
+        upper = self.get_buffer("upper")
+        # C could be None (identity)
+        input_expr = C @ input_var if C is not None else input_var
+        new_var = Variable.like(input_expr)
+
+        from rlaopt.atoms.box import Box
+
+        new_atom = Box(
+            new_var,
+            lower=lower,
+            upper=upper,
+        )
+        return AtomDecomposition(atom=new_atom, affine_expr=input_expr)
 
     def _scale(self, scaling: float) -> Self:
         """Scale the polyhedral constraint."""
