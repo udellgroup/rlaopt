@@ -14,17 +14,7 @@ from rlaopt.linalg.preconditioners.preconditioner import (
 
 
 class NystromConfig(PreconditionerConfig):
-    """Configuration for the Nyström preconditioner.
-
-    Attributes:
-        rank_init: Initial rank of the Nyström approximation.
-        rank_max: Maximum allowable rank.
-        num_power_iters: Number of power iterations for error estimation
-            in rank adaptation.
-        error_tolerance: Error tolerance for rank adaptation.
-        base_damping: Base damping parameter.
-        damping_mode: Damping mode, either 'adaptive' or 'non_adaptive'.
-    """
+    """Configuration for the Nyström preconditioner."""
 
     # TODO(pratik): add option for sketching method
 

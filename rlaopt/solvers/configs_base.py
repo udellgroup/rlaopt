@@ -10,14 +10,9 @@ class SolverConfig(BaseModel):
 
 
 class StoppingCriteria(BaseModel):
-    """Configuration for stopping criteria in iterative solvers.
-
-    Attributes:
-        max_iters: Maximum number of iterations.
-        tol: Tolerance for convergence.
-    """
+    """Configuration for stopping criteria in iterative solvers."""
 
     model_config = ConfigDict(extra="forbid")
 
-    max_iters: int = Field(default=1000, gt=0)
-    tol: float = Field(default=1e-6, gt=0)
+    max_iters: int = Field(default=1000, gt=0, description="Maximum number of iterations.")
+    tol: float = Field(default=1e-6, gt=0, description="Tolerance for convergence.")

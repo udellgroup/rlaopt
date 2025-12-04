@@ -1,4 +1,4 @@
-"""Module for linear algebra."""
+"""Linear systems and preconditioners."""
 
 from rlaopt.linalg.lin_sys import LinSys as LinSys
 from rlaopt.linalg.preconditioners import IdentityConfig as IdentityConfig

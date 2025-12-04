@@ -1,0 +1,14 @@
+# Sphinx build directory
+_build/
+
+# Sphinx cache
+.cache/
+
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints/
+
+# Python cache
+__pycache__/
+*.pyc
+
+
