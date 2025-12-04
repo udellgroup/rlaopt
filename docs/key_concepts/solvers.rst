@@ -13,7 +13,7 @@ The :class:`~rlaopt.solvers.ProxGrad` solver is designed for problems of the for
 
 .. math::
 
-   \minimize_x f(x) + g(x)
+   \operatorname{minimize}_x f(x) + g(x)
 
 where :math:`f` is smooth (differentiable) and :math:`g` is proxable (has an efficient proximal operator).
 
@@ -30,9 +30,9 @@ where :math:`f` is smooth (differentiable) and :math:`g` is proxable (has an eff
    variable_values, final_error = solver.solve()
 
 Features:
+
 * Supports backtracking line search
 * Optional Nesterov acceleration
-* Works with any combination of smooth and proxable atoms
 
 PCG (Preconditioned Conjugate Gradient)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -51,14 +51,14 @@ Choosing a Solver
 -----------------
 
 **Use ProxGrad when:**
-* Your objective has both smooth and non-smooth components
+
+* Your objective has both smooth and/or non-smooth components
 * You have L1 regularization or other proxable penalties
 * You need to solve problems like Lasso, Elastic Net, etc.
 
 **Use PCG when:**
-* You need to solve linear systems
-* Your problem is purely quadratic
-* You need efficient preconditioning
+
+* You need to solve large positive-definite linear systems
 
 Solver Configuration
 --------------------
