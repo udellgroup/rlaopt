@@ -5,7 +5,7 @@ This example demonstrates how to solve a Lasso regression problem using rlaopt. 
 
 .. math::
 
-   \minimize_{\beta} \frac{1}{2}\|X\beta - y\|_2^2 + \lambda \|\beta\|_1
+   \operatorname{minimize}_{\beta} \frac{1}{2}\|X\beta - y\|_2^2 + \lambda \|\beta\|_1
 
 where :math:`X` is the design matrix, :math:`y` is the target vector, and :math:`\lambda` is the regularization parameter.
 
@@ -86,10 +86,10 @@ Configure and run the solver:
    # Create and run the solver
    solver = ProxGrad(objective, config)
    # solver.solve() returns (variable_values, final_error)
-   variable_values, final_error = solver.solve()
+   result = solver.solve()
 
    # Get the solution
-   beta_opt = beta.value.data
+   beta_opt = result.variable_values['beta']
 
 Results
 -------
@@ -121,7 +121,7 @@ Let's compare the solution with the true coefficients:
 
    plt.subplot(1, 2, 2)
    plt.scatter(beta_true.numpy(), beta_opt.numpy(), alpha=0.6)
-   plt.plot([beta_true.min(), beta_true.max()], 
+   plt.plot([beta_true.min(), beta_true.max()],
             [beta_true.min(), beta_true.max()], 'r--', alpha=0.5)
    plt.xlabel('True coefficients')
    plt.ylabel('Estimated coefficients')
@@ -149,6 +149,3 @@ Notes
 * The line search helps adapt the step size automatically
 * The regularization parameter :math:`\lambda` controls the sparsity of the solution
 * Larger :math:`\lambda` values lead to sparser solutions
-
-
-

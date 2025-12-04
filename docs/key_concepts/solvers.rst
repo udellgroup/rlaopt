@@ -27,7 +27,7 @@ where :math:`f` is smooth (differentiable) and :math:`g` is proxable (has an eff
        use_acceleration=False # Use Nesterov acceleration
    )
    solver = ProxGrad(objective, config)
-   variable_values, final_error = solver.solve()
+   result = solver.solve()
 
 Features:
 
@@ -45,7 +45,7 @@ The :class:`~rlaopt.solvers.PCG` solver is a preconditioned conjugate gradient m
 
    config = PCGConfig(max_iters=1000, tol=1e-6)
    solver = PCG(linear_system, config)
-   solution, final_residual = solver.solve()
+   result = solver.solve()
 
 Choosing a Solver
 -----------------
@@ -86,5 +86,3 @@ All solvers support stopping criteria:
 * ``tol``: Convergence tolerance
 
 The solver will stop when either criterion is met.
-
-
