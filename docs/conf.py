@@ -12,8 +12,8 @@ sys.path.insert(0, os.path.abspath('..'))
 # -- Project information -----------------------------------------------------
 
 project = 'rlaopt'
-copyright = '2025, Stanford University'
-author = 'Pratik Rathore, Parth Nobel, Zachary Frangella'
+copyright = '2025'
+author = 'Pratik Rathore, Zachary Frangella, Parth Nobel'
 
 
 release = '0.1.0'
