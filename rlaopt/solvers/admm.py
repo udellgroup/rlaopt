@@ -8,6 +8,7 @@ problems by solving the ADMM linear system approximately using
 preconditioned conjugate gradient (PCG).
 """
 
+import math
 import time
 from dataclasses import dataclass
 from typing import Callable
@@ -510,7 +511,7 @@ def _solve_x_subproblem(
     # Solve the linear system using PCG
     pcg_solver = _PCG(lin_sys, preconditioner=preconditioner, detach=detach)
     rel_tol = min((primal_residual_norm * dual_residual_norm) ** 0.5, 1.0)
-    if rel_tol == 0.0:
+    if math.isclose(rel_tol, 0.0):
         rel_tol = PCG_TOL_EPS
     rel_tol /= (iter_ + 1) ** gamma
     stopping_criteria = PCGStoppingCriteria(
