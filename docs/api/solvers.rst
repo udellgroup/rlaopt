@@ -11,15 +11,11 @@ Proximal Gradient
    :undoc-members:
    :show-inheritance:
 
-.. autoclass:: rlaopt.solvers.ProxGradConfig
-   :members:
-   :undoc-members:
-   :show-inheritance:
+.. autopydantic_model:: rlaopt.solvers.ProxGradConfig
+   :inherited-members: BaseModel
 
-.. autoclass:: rlaopt.solvers.ProxGradStoppingCriteria
-   :members:
-   :undoc-members:
-   :show-inheritance:
+.. autopydantic_model:: rlaopt.solvers.ProxGradStoppingCriteria
+   :inherited-members: BaseModel
 
 Preconditioned Conjugate Gradient
 ----------------------------------
@@ -29,15 +25,11 @@ Preconditioned Conjugate Gradient
    :undoc-members:
    :show-inheritance:
 
-.. autoclass:: rlaopt.solvers.PCGConfig
-   :members:
-   :undoc-members:
-   :show-inheritance:
+.. autopydantic_model:: rlaopt.solvers.PCGConfig
+   :inherited-members: BaseModel
 
-.. autoclass:: rlaopt.solvers.PCGStoppingCriteria
-   :members:
-   :undoc-members:
-   :show-inheritance:
+.. autopydantic_model:: rlaopt.solvers.PCGStoppingCriteria
+   :inherited-members: BaseModel
 
 
 

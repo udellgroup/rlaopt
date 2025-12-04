@@ -17,11 +17,7 @@ from rlaopt.solvers.solver_base import LinSysSolver, SolverState
 
 
 class PCGConfig(SolverConfig):
-    """Configuration for the Preconditioned Conjugate Gradient solver.
-
-    Attributes:
-        preconditioner_config: Configuration for the preconditioner to use.
-    """
+    """Configuration for the Preconditioned Conjugate Gradient solver."""
 
     preconditioner_config: PreconditionerConfig = IdentityConfig()
 

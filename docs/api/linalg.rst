@@ -14,18 +14,12 @@ Linear System Solver
 Preconditioner Configuration
 -----------------------------
 
-.. autoclass:: rlaopt.linalg.PreconditionerConfig
-   :members:
-   :undoc-members:
-   :show-inheritance:
+.. autopydantic_model:: rlaopt.linalg.PreconditionerConfig
+   :inherited-members: BaseModel
 
-.. autoclass:: rlaopt.linalg.IdentityConfig
-   :members:
-   :undoc-members:
-   :show-inheritance:
+.. autopydantic_model:: rlaopt.linalg.IdentityConfig
+   :inherited-members: BaseModel
 
-.. autoclass:: rlaopt.linalg.NystromConfig
-   :members:
-   :undoc-members:
-   :show-inheritance:
+.. autopydantic_model:: rlaopt.linalg.NystromConfig
+   :inherited-members: BaseModel
 
