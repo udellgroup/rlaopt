@@ -85,11 +85,3 @@ Nuclear Norm
    :members:
    :undoc-members:
    :show-inheritance:
-
-Affine Transformations
-----------------------
-
-.. automodule:: rlaopt.atoms.affine
-   :members:
-   :undoc-members:
-   :show-inheritance:
