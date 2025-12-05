@@ -120,3 +120,5 @@ All solvers support stopping criteria:
 * :class:`~rlaopt.solvers.PCGStoppingCriteria`: Maximum iterations, convergence tolerance
 
 The solver will stop when either criterion is met.
+
+.. bibliography::
