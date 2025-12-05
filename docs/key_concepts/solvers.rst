@@ -6,6 +6,43 @@ Solvers are algorithms that find solutions to optimization problems. rlaopt prov
 Available Solvers
 -----------------
 
+Alternating Direction Method of Multipliers (ADMM)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The :class:`~rlaopt.solvers.ADMM` solver is designed for problems of the form
+
+.. math::
+
+   \operatorname{minimize}_x f(x) + \sum_{i = 1}^k g_i(A_i x - b_i),
+
+where :math:`f` is smooth (differentiable) and :math:`g` is proxable.
+
+Our implementation internally decomposes the problem into the form
+
+.. math::
+
+   \operatorname{minimize}_{x, z_1, \ldots, z_k} f(x) + \sum_{i = 1}^k g_i(z_i) \\
+   \text{subject to } A_i x - z_i - b_i = 0, \quad i = 1, \ldots, k
+
+before applying the ADMM algorithm.
+
+Our implementation is based on the implementation from [TODO: Add Reference].
+
+.. code-block:: python
+
+   from rlaopt.solvers import ADMM, ADMMConfig
+
+   config = ADMMConfig(
+       rho=1.0,               # Augmented Lagrangian parameter
+   )
+   solver = ADMM(objective, config)
+   result = solver.solve()
+
+Features:
+
+* Supports multiple proxable terms for the same variable
+* Allows for over-relaxation and primal-dual residual balancing
+
 Proximal Gradient (ProxGrad)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -50,11 +87,15 @@ The :class:`~rlaopt.solvers.PCG` solver is a preconditioned conjugate gradient m
 Choosing a Solver
 -----------------
 
+**Use ADMM when:**
+
+* Your objective can be written in the form :math:`f(x) + \sum_{i = 1}^k g_i(A_i x - b_i)` where :math:`f` is smooth and :math:`g_i` are proxable
+* If there are no non-smooth components, use ProxGrad instead
+
 **Use ProxGrad when:**
 
-* Your objective has both smooth and/or non-smooth components
-* You have L1 regularization or other proxable penalties
-* You need to solve problems like Lasso, Elastic Net, etc.
+* Your objective can be written in the form :math:`f(x) + g(x)` where :math:`f` is smooth and :math:`g` is proxable
+* Examples include Lasso regression, Elastic Net, and other regularized regression problems
 
 **Use PCG when:**
 
@@ -65,24 +106,17 @@ Solver Configuration
 
 Each solver has a configuration class that controls its behavior:
 
+* :class:`~rlaopt.solvers.ADMMConfig`: Augmented Lagrangian parameter, over-relaxation, residual balancing, etc.
 * :class:`~rlaopt.solvers.ProxGradConfig`: Step size, line search, acceleration
 * :class:`~rlaopt.solvers.PCGConfig`: Iteration limits, tolerance, preconditioner
-
-.. code-block:: python
-
-   config = ProxGradConfig(
-       eta=0.01,
-       use_linesearch=True,
-       max_iters=1000,
-       tol=1e-4
-   )
 
 Stopping Criteria
 -----------------
 
 All solvers support stopping criteria:
 
-* ``max_iters``: Maximum number of iterations
-* ``tol``: Convergence tolerance
+* :class:`~rlaopt.solvers.ADMMStoppingCriteria`: Maximum iterations, Primal and dual residual tolerance
+* :class:`~rlaopt.solvers.ProxGradStoppingCriteria`: Maximum iterations, convergence tolerance
+* :class:`~rlaopt.solvers.PCGStoppingCriteria`: Maximum iterations, convergence tolerance
 
 The solver will stop when either criterion is met.

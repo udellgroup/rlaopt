@@ -3,6 +3,25 @@ Solvers Module
 
 .. automodule:: rlaopt.solvers
 
+ADMM
+----
+
+.. autoclass:: rlaopt.solvers.ADMM
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+.. autopydantic_model:: rlaopt.solvers.ADMMConfig
+   :inherited-members: BaseModel
+
+.. autopydantic_model:: rlaopt.solvers.ADMMStoppingCriteria
+   :inherited-members: BaseModel
+
+.. autoclass:: rlaopt.solvers.ADMMResult
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 Proximal Gradient
 -----------------
 
@@ -23,7 +42,7 @@ Proximal Gradient
    :show-inheritance:
 
 Preconditioned Conjugate Gradient
-----------------------------------
+---------------------------------
 
 .. autoclass:: rlaopt.solvers.PCG
    :members:
