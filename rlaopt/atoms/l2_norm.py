@@ -52,7 +52,7 @@ class L2Norm(NonsmoothRegularizer):
         lam = scaling * prox_scaling 
 
         def prox_l2(x: torch.Tensor) -> torch.Tensor:
-            norm = torch.linalg.norm(x, p=2)
+            norm = torch.linalg.norm(x, ord=2)
             if norm == 0:
                 return torch.zeros_like(x)
             factor = torch.clamp(1.0 - lam / norm, min=0.0)
