@@ -51,11 +51,11 @@ class L2Norm(NonsmoothRegularizer):
         scaling = self.get_buffer("scaling")
         lam = scaling * prox_scaling 
 
-        def soft_threshold(x: torch.Tensor) -> torch.Tensor:
-            norm = x.norm(p=2)
+        def prox_l2(x: torch.Tensor) -> torch.Tensor:
+            norm = torch.linalg.norm(x, p=2)
             if norm == 0:
                 return torch.zeros_like(x)
             factor = torch.clamp(1.0 - lam / norm, min=0.0)
             return factor * x
 
-        return relevant_variable_values.apply(soft_threshold)
+        return relevant_variable_values.apply(prox_l2)
