@@ -14,7 +14,6 @@ from abc import ABC, abstractmethod
 import torch
 
 from rlaopt.atoms import Atom
-from rlaopt.atoms.linear_model.linear_model import LinearModel
 from rlaopt.expression import Expression
 from rlaopt.ext_tensordict import TensorDict
 from rlaopt.splitting.linops import _HVPLinOp
@@ -41,7 +40,7 @@ class _OperatorSplit(ABC):
         self._r = r
 
     @property
-    def f(self) -> Expression | LinearModel:
+    def f(self) -> Expression:
         """Returns the smooth component of the composite function."""
         return self._f
 
