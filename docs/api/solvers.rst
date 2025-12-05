@@ -21,6 +21,7 @@ ADMM
    :members:
    :undoc-members:
    :show-inheritance:
+   :exclude-members: __init__
 
 Proximal Gradient
 -----------------
@@ -40,6 +41,7 @@ Proximal Gradient
    :members:
    :undoc-members:
    :show-inheritance:
+   :exclude-members: __init__
 
 Preconditioned Conjugate Gradient
 ---------------------------------
@@ -59,3 +61,4 @@ Preconditioned Conjugate Gradient
    :members:
    :undoc-members:
    :show-inheritance:
+   :exclude-members: __init__
