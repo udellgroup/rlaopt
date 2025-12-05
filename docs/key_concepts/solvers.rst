@@ -115,7 +115,7 @@ Stopping Criteria
 
 All solvers support stopping criteria:
 
-* :class:`~rlaopt.solvers.ADMMStoppingCriteria`: Maximum iterations, Primal and dual residual tolerance
+* :class:`~rlaopt.solvers.ADMMStoppingCriteria`: Maximum iterations, primal and dual residual tolerance
 * :class:`~rlaopt.solvers.ProxGradStoppingCriteria`: Maximum iterations, convergence tolerance
 * :class:`~rlaopt.solvers.PCGStoppingCriteria`: Maximum iterations, convergence tolerance
 
