@@ -32,6 +32,8 @@ extensions = [
     "sphinxcontrib.bibtex",
 ]
 
+bibtex_bibfiles = ["refs.bib"]
+
 templates_path = ["_templates"]
 
 # List of patternsto ignore when looking for source files
