@@ -40,19 +40,7 @@ PCG_TOL_EPS = 1e-3
 
 
 class ADMMConfig(SolverConfig):
-    """Configuration for the ADMM solver.
-
-    Attributes:
-        rho: Augmented Lagrangian penalty at initialization.
-        rho_update_factor: Factor to update rho in primal-dual balancing.
-        rho_update_threshold: Threshold for updating rho in primal-dual balancing.
-        alpha: Over-relaxation parameter.
-        sigma: Regularization parameter for the inexact ADMM linear system.
-        gamma: Exponent for the linear system solve tolerance.
-        preconditioner_config: Configuration for the preconditioner.
-        preconditioner_update_freq: Frequency (in iterations) for
-            updating the preconditioner.
-    """
+    """Configuration for the ADMM solver."""
 
     rho: float = Field(
         1.0,
