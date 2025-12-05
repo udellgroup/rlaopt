@@ -3,12 +3,11 @@ Solvers Module
 
 .. automodule:: rlaopt.solvers
 
-ADMM
-----
+Alternating Direction Method of Multipliers
+-------------------------------------------
 
 .. autoclass:: rlaopt.solvers.ADMM
    :members:
-   :undoc-members:
    :show-inheritance:
 
 .. autopydantic_model:: rlaopt.solvers.ADMMConfig
@@ -19,7 +18,6 @@ ADMM
 
 .. autoclass:: rlaopt.solvers.ADMMResult
    :members:
-   :undoc-members:
    :show-inheritance:
    :exclude-members: __init__
 
@@ -28,7 +26,6 @@ Proximal Gradient
 
 .. autoclass:: rlaopt.solvers.ProxGrad
    :members:
-   :undoc-members:
    :show-inheritance:
 
 .. autopydantic_model:: rlaopt.solvers.ProxGradConfig
@@ -39,7 +36,6 @@ Proximal Gradient
 
 .. autoclass:: rlaopt.solvers.ProxGradResult
    :members:
-   :undoc-members:
    :show-inheritance:
    :exclude-members: __init__
 
@@ -48,7 +44,6 @@ Preconditioned Conjugate Gradient
 
 .. autoclass:: rlaopt.solvers.PCG
    :members:
-   :undoc-members:
    :show-inheritance:
 
 .. autopydantic_model:: rlaopt.solvers.PCGConfig
@@ -59,6 +54,5 @@ Preconditioned Conjugate Gradient
 
 .. autoclass:: rlaopt.solvers.PCGResult
    :members:
-   :undoc-members:
    :show-inheritance:
    :exclude-members: __init__

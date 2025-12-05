@@ -71,7 +71,7 @@ Features:
 * Supports backtracking line search
 * Optional Nesterov acceleration
 
-PCG (Preconditioned Conjugate Gradient)
+Preconditioned Conjugate Gradient (PCG)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 The :class:`~rlaopt.solvers.PCG` solver is a preconditioned conjugate gradient method for solving linear systems.
