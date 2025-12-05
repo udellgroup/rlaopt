@@ -297,7 +297,31 @@ def _solve_and_verify(obj, tol):
         eps_abs=tol, eps_rel=tol, max_iters=MAX_ITERS
     )
 
-    # Test using solve method
+    # Test solving step-by-step for a few iterations (only for float64)
+    precision = obj.variable_values.to_flat_tensor().dtype
+    if precision == torch.float64:
+        num_test_iters = 50
+        params = obj.variable_values
+        state = solver.init_state(params)
+        for _ in range(num_test_iters):
+            params, state = solver.step(params, state)
+
+        # Test using solve method with same number of iterations
+        # Make tolerances very tight to ensure it runs full number of iterations
+        solve_stopping_criteria = ADMMStoppingCriteria(
+            eps_abs=1e-30, eps_rel=1e-30, max_iters=num_test_iters
+        )
+        result = solver.solve(stopping_criteria=solve_stopping_criteria)
+
+        # Check that both approaches produce similar parameters
+        assert torch.allclose(
+            params.to_flat_tensor(),
+            result.variable_values.to_flat_tensor(),
+            rtol=1e-5,
+            atol=1e-8,
+        ), "Step-by-step and solve methods produce different trajectories"
+
+    # Now test full solve for convergence
     result = solver.solve(stopping_criteria=stopping_criteria)
 
     # Verify result has expected attributes
