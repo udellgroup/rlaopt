@@ -19,7 +19,7 @@ class LinSys(torch.nn.Module):
         """Initialize LinSys module.
 
         Args:
-            A (torch.Tensor | LinearOperator): Positive-definite matrix defining
+            A (torch.Tensor | LinearOperator): Square matrix defining
                 the linear system.
             B (torch.Tensor): Right-hand side of the linear system. Must be 1D or 2D.
                 If 1D with shape (N,), it is automatically resized
