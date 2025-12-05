@@ -26,7 +26,7 @@ Our implementation internally decomposes the problem into the form
 
 before applying the ADMM algorithm.
 
-Our implementation is based on the implementation from [TODO: Add Reference].
+Our implementation is based on the implementation from :cite:t:`diamandis2023genios`.
 
 .. code-block:: python
 
@@ -41,7 +41,7 @@ Our implementation is based on the implementation from [TODO: Add Reference].
 Features:
 
 * Supports multiple proxable terms for the same variable
-* Allows for over-relaxation and primal-dual residual balancing
+* Allows for over-relaxation and primal-dual residual balancing :cite:p:`boyd2011distributed`
 
 Proximal Gradient (ProxGrad)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
