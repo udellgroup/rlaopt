@@ -3,13 +3,6 @@ Solvers Module
 
 .. automodule:: rlaopt.solvers
 
-Convergence Status
-------------------
-
-.. autoclass:: rlaopt.solvers.ConvergenceStatus
-   :members:
-   :undoc-members:
-
 Alternating Direction Method of Multipliers
 -------------------------------------------
 
@@ -23,6 +16,7 @@ Alternating Direction Method of Multipliers
    :inherited-members: BaseModel
 
 .. autoclass:: rlaopt.solvers.ADMMResult
+   :exclude-members: __init__
 
 Proximal Gradient
 -----------------
@@ -37,6 +31,7 @@ Proximal Gradient
    :inherited-members: BaseModel
 
 .. autoclass:: rlaopt.solvers.ProxGradResult
+   :exclude-members: __init__
 
 Preconditioned Conjugate Gradient
 ---------------------------------
@@ -51,3 +46,11 @@ Preconditioned Conjugate Gradient
    :inherited-members: BaseModel
 
 .. autoclass:: rlaopt.solvers.PCGResult
+   :exclude-members: __init__
+
+Convergence Status
+------------------
+
+.. autoclass:: rlaopt.solvers.ConvergenceStatus
+   :members:
+   :undoc-members:
