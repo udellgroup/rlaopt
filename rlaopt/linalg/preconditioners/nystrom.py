@@ -80,6 +80,7 @@ class Nystrom(Preconditioner):
         self.S = None
         self.L = None
         self.current_damping = None
+        self.norm = None
         self.using_low_precision = False
 
     def _update(self, A: torch.Tensor | LinearOperator, dtype: torch.dtype):
@@ -157,13 +158,15 @@ class Nystrom(Preconditioner):
 
         self.U = U
         self.S = S
-        self.norm = S[0]
 
         # Recalculate damping
         if damping_mode == "adaptive":
             self.current_damping = base_damping + self.S[-1]
         else:
             self.current_damping = base_damping
+
+        # Get norm of preconditioner
+        self.norm = S[0] + self.current_damping
 
         # Reset L for inverse computations
         self.L = None
