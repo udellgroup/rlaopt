@@ -10,17 +10,24 @@ jobs:
   # Stage 1: Pre-commit checks (formatting, linting)
   pre-commit:
     uses: ./.github/workflows/pre-commit.yml
+    with:
+      python-version: '3.10'
 
   # Stage 2: CPU-only tests
   cpu-tests:
     needs: pre-commit
     uses: ./.github/workflows/cpu-tests.yml
+    with:
+      python-versions: ['3.10', '3.11', '3.12']
 
   # Stage 3: CUDA-enabled tests
   cuda-tests:
     needs: cpu-tests
     uses: ./.github/workflows/cuda-tests.yml
-    secrets: inherit  # Pass secrets to the reusable workflow for SonarQube
+    with:
+      python-versions: ['3.10', '3.11', '3.12']
+      coverage-python-version: '3.10'
+      sonar-token: ${{ secrets.SONAR_TOKEN }}
 
   # Final check
   final-check:

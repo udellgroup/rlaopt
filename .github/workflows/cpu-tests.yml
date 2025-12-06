@@ -2,6 +2,10 @@ name: CPU Tests
 
 on:
   workflow_call:
+    inputs:
+      python-versions:
+        required: true
+        type: string
 
 jobs:
   cpu-tests:
@@ -9,7 +13,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version: ['3.10', '3.11', '3.12']
+        python-version: ${{ fromJSON(inputs.python-versions) }}
     steps:
       - uses: actions/checkout@v5
         with:
