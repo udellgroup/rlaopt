@@ -6,14 +6,41 @@ on:
   pull_request:
     types: [opened, synchronize, reopened]
 jobs:
+  # Stage 1: Pre-commit checks (formatting, linting)
+  pre-commit:
+    name: Pre-commit checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Install pre-commit
+        run: pip install pre-commit
+
+      - name: Run pre-commit on changed files
+        run: |
+          if [ "${{ github.event_name }}" == "pull_request" ]; then
+            pre-commit run --from-ref origin/${{ github.base_ref }} --to-ref HEAD
+          else
+            pre-commit run --from-ref ${{ github.event.before }} --to-ref ${{ github.sha }}
+          fi
+
+  # Stage 2: CPU-only tests
   cpu-tests:
     name: CPU-only Tests
     runs-on: ubuntu-latest
+    needs: pre-commit  # Only run if pre-commit checks pass
     strategy:
       matrix:
         python-version: ['3.10', '3.11', '3.12']
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
@@ -28,6 +55,7 @@ jobs:
           RLAOPT_CPU_ONLY=1 pip install -e ".[test]"
           pytest -x
 
+  # Stage 3: CUDA-enabled tests
   cuda-tests:
     name: CUDA-enabled Tests
     runs-on: ubuntu-latest
@@ -36,7 +64,7 @@ jobs:
       matrix:
         python-version: ['3.10', '3.11', '3.12']
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
