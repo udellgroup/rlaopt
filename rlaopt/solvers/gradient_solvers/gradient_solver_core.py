@@ -11,9 +11,9 @@ from functools import partial
 from typing import Any, Callable
 
 import torch
+from torch.nn.modules.loss import _Loss
 
 from rlaopt.ext_tensordict import TensorDict
-from rlaopt.splitting.prox_grad_split import ProxGradSplit
 from rlaopt.splitting.sapphire_split import SapphireSplit
 
 from .gradient_solver_states import (
@@ -25,24 +25,7 @@ from .gradient_solver_states import (
     SVRGState,
 )
 
-
 ##### Gradient Oracles #####
-def full_gradient(
-    var_vals: TensorDict, op_split: ProxGradSplit | SapphireSplit
-) -> TensorDict:
-    """Compute the full gradient over the entire dataset.
-
-    Args:
-        var_vals: Current variable values.
-        op_split: Operator splitting object containing the gradient function.
-
-    Returns:
-        Full gradient as a TensorDict.
-    """
-    if isinstance(op_split, ProxGradSplit):
-        return op_split.grad_f(var_vals)
-    else:
-        return op_split.gradient(var_vals)
 
 
 class StochasticGradientOracle(ABC):
@@ -54,21 +37,20 @@ class StochasticGradientOracle(ABC):
 
     @classmethod
     def build_gradient_fn(
-        cls, op_split: SapphireSplit, **kwargs: Any
+        cls, **kwargs: Any
     ) -> Callable[
         [TensorDict, SapphireState, tuple[torch.Tensor, torch.Tensor, torch.Tensor]],
         tuple[TensorDict, SapphireState],
     ]:
-        """Build a gradient function with pre-bound splitting and parameters.
+        """Build a gradient function with pre-bound parameters.
 
         Args:
-            op_split: SAPPHIRE operator splitting object.
             **kwargs: Additional keyword arguments to pass to the gradient method.
 
         Returns:
             Partial function that computes gradients given var_vals, state, and batch.
         """
-        return partial(cls.gradient, op_split=op_split, **kwargs)
+        return partial(cls.gradient, **kwargs)
 
     @staticmethod
     @abstractmethod
@@ -102,7 +84,9 @@ class SGDOracle(StochasticGradientOracle):
         var_vals: TensorDict,
         state: SGDState,
         batch: tuple[torch.Tensor, torch.Tensor, torch.Tensor],
-        op_split: SapphireSplit,
+        batch_gradient_fn: Callable[
+            [TensorDict, torch.Tensor, torch.Tensor], TensorDict
+        ],
     ):
         """Compute standard SGD mini-batch gradient.
 
@@ -110,13 +94,13 @@ class SGDOracle(StochasticGradientOracle):
             var_vals: Current variable values.
             state: SGD optimizer state.
             batch: Tuple of (X_batch, y_batch, batch_indices).
-            op_split: SAPPHIRE operator splitting object.
+            batch_gradient_fn: Function to compute batch gradients.
 
         Returns:
             Tuple of (gradient, unchanged_state).
         """
         X_batch, y_batch, _ = batch
-        return op_split.batch_loss_grad(var_vals, X_batch, y_batch), state
+        return batch_gradient_fn(var_vals, X_batch, y_batch), state
 
 
 class SVRGOracle(StochasticGradientOracle):
@@ -132,7 +116,10 @@ class SVRGOracle(StochasticGradientOracle):
         var_vals: TensorDict,
         state: SVRGState,
         batch: tuple[torch.Tensor, torch.Tensor, torch.Tensor],
-        op_split: SapphireSplit,
+        batch_gradient_fn: Callable[
+            [TensorDict, torch.Tensor, torch.Tensor], TensorDict
+        ],
+        full_gradient_fn: Callable[[TensorDict], TensorDict],
         update_threshold: int,
     ):
         """Compute SVRG variance-reduced gradient estimate.
@@ -141,7 +128,8 @@ class SVRGOracle(StochasticGradientOracle):
             var_vals: Current variable values.
             state: SVRG optimizer state containing snapshot and snapshot gradient.
             batch: Tuple of (X_batch, y_batch, batch_indices).
-            op_split: SAPPHIRE operator splitting object.
+            batch_gradient_fn: Function to compute batch gradients.
+            full_gradient_fn: Function to compute full dataset gradient.
             update_threshold: Number of iterations between snapshot updates.
 
         Returns:
@@ -150,13 +138,13 @@ class SVRGOracle(StochasticGradientOracle):
         X_batch, y_batch, _ = batch
         # Update snapshot if needed
         if state.iter_ % update_threshold == 0:
-            grad_snapshot = op_split.gradient(var_vals)
+            grad_snapshot = full_gradient_fn(var_vals)
             state = replace(state, snapshot=var_vals, snapshot_grad=grad_snapshot)
 
         # Compute SVRG gradient
         v = (
-            op_split.batch_loss_grad(var_vals, X_batch, y_batch)
-            - op_split.batch_loss_grad(state.snapshot, X_batch, y_batch)
+            batch_gradient_fn(var_vals, X_batch, y_batch)
+            - batch_gradient_fn(state.snapshot, X_batch, y_batch)
             + state.snapshot_grad
         )
         return v, state
@@ -175,7 +163,10 @@ class SAGAOracle(StochasticGradientOracle):
         var_vals: TensorDict,
         state: SAGAState,
         batch: tuple[torch.Tensor, torch.Tensor, torch.Tensor],
-        op_split: SapphireSplit,
+        loss_fn: _Loss,
+        prediction_fn: Callable[
+            [torch.Tensor, torch.Tensor, torch.Tensor], torch.Tensor
+        ],
         n: int,
         has_intercept: bool,
     ):
@@ -185,7 +176,8 @@ class SAGAOracle(StochasticGradientOracle):
             var_vals: Current variable values.
             state: SAGA optimizer state containing gradient table and average.
             batch: Tuple of (X_batch, y_batch, batch_indices).
-            op_split: SAPPHIRE operator splitting object.
+            loss_fn: Loss function for computing gradients.
+            prediction_fn: Function to compute model predictions.
             n: Total number of samples in the dataset.
             has_intercept: Whether the model includes an intercept term.
 
@@ -205,14 +197,12 @@ class SAGAOracle(StochasticGradientOracle):
         else:
             intercept_tensor = None
 
-        y_pre = op_split.model._get_prediction(
-            var_vals["beta"], intercept_tensor, X_batch
-        )
+        y_pre = prediction_fn(var_vals["beta"], intercept_tensor, X_batch)
 
         # Compute new table weights
-        op_split.model._loss_fn.reduction = "sum"
-        new_weights = torch.func.grad(op_split.model._loss_fn)(y_pre, y_batch)
-        op_split.model._loss_fn.reduction = "mean"
+        loss_fn.reduction = "sum"
+        new_weights = torch.func.grad(loss_fn)(y_pre, y_batch)
+        loss_fn.reduction = "mean"
 
         # Get aux tensor for beta coefficients
         aux_beta = X_batch.T @ (new_weights - tbl_weights)
@@ -292,51 +282,44 @@ def prox_update(
     var_vals: TensorDict,
     updates: TensorDict,
     state: ProxGradState,
-    op_split: ProxGradSplit,
+    prox_fn: Callable[[TensorDict, float], TensorDict],
 ):
     """Apply proximal update step.
 
-    Computes
-
-    `prox_g(x - eta * updates)`,
-
-    where g is the non-smooth part of the
+    Computes prox_g(x - eta * updates), where g is the non-smooth part of the
     objective and eta is the step size.
 
     Args:
         var_vals: Current variable values.
         updates: Update direction (typically gradients).
         state: Proximal gradient state containing step size eta.
-        op_split: Operator splitting object with proximal operator.
+        prox_fn: Proximal operator function.
 
     Returns:
         Tuple of (updated variables, unchanged state).
     """
-    return op_split.prox(var_vals - state.eta * updates, state.eta), state
+    return prox_fn(var_vals - state.eta * updates, state.eta), state
 
 
 def prox_update_P(
     var_vals: TensorDict,
     grads: TensorDict,
     state: SapphireState,
-    op_split: SapphireSplit,
     subproblem_iters: int,
+    prox_fn: Callable[[TensorDict, float], TensorDict],
 ):
-    """Computes scaled proximal operator in SAPPHIRE via APG.
+    """Compute scaled proximal operator in SAPPHIRE via APG.
 
     Given preconditioner P stored in the SAPPHIRE state, this function
     approximately evaluates the scaled proximal mapping:
-
-    `prox_P(x_k - eta x grads)`,
-
-    using Accelerated Proximal Gradient.
+    prox_P(x_k - eta * grads), using Accelerated Proximal Gradient.
 
     Args:
         var_vals: Current variable values.
         grads: Gradient direction.
         state: SAPPHIRE state containing preconditioner P, step size eta, and norm.
-        op_split: SAPPHIRE operator splitting object.
         subproblem_iters: Number of APG iterations for subproblem.
+        prox_fn: Proximal operator function.
 
     Returns:
         Tuple of (approximate solution to scaled proximal subproblem, unchanged state).
@@ -351,7 +334,7 @@ def prox_update_P(
         Pd = y.from_flat_tensor(state.P @ (y - var_vals).to_flat_tensor())
         y_int = y - alpha * (state.eta * grads + Pd)
 
-        z0 = op_split.prox(y_int, state.eta * alpha)
+        z0 = prox_fn(y_int, state.eta * alpha)
         t = (1 + (1 + 4 * t_old**2) ** (0.5)) / 2
         y = z0 + (t_old - 1) / t * (z0 - z_old)
 
@@ -375,7 +358,10 @@ def load_batch(op_split: SapphireSplit):
 
 ##### Step functions #####
 def prox_gd_step(
-    var_vals: TensorDict, state: ProxGradState, op_split: ProxGradSplit | SapphireSplit
+    var_vals: TensorDict,
+    state: ProxGradState,
+    full_gradient_fn: Callable[[TensorDict], TensorDict],
+    prox_fn: Callable[[TensorDict, float], TensorDict],
 ):
     """Perform one step of proximal gradient descent.
 
@@ -384,17 +370,22 @@ def prox_gd_step(
     Args:
         var_vals: Current variable values.
         state: Proximal gradient state.
-        op_split: Operator splitting object.
+        full_gradient_fn: Function to compute full dataset gradient.
+        prox_fn: Proximal operator function.
 
     Returns:
-        Result of proximal update with full gradient.
+        Tuple of (result of proximal update with full gradient, unchanged state).
     """
-    grads = full_gradient(var_vals, op_split)
-    return prox_update(var_vals, grads, state, op_split)
+    grads = full_gradient_fn(var_vals)
+    return prox_fn(var_vals - state.eta * grads, state.eta), state
 
 
 def linesearch(
-    var_vals: TensorDict, state: ProxGradState, op_split: ProxGradSplit
+    var_vals: TensorDict,
+    state: ProxGradState,
+    f: Callable[[TensorDict], torch.Tensor],
+    full_gradient_fn: Callable[[TensorDict], TensorDict],
+    prox_fn: Callable[[TensorDict, float], TensorDict],
 ) -> tuple[TensorDict, ProxGradState]:
     """Perform backtracking line search to find appropriate step size.
 
@@ -404,22 +395,24 @@ def linesearch(
     Args:
         var_vals: Current variable values.
         state: Proximal gradient state containing initial step size eta.
-        op_split: Operator splitting object.
+        f: Objective function to minimize.
+        full_gradient_fn: Function to compute full dataset gradient.
+        prox_fn: Proximal operator function.
 
     Returns:
         Tuple of (accepted iterate, updated state with new step size and error).
     """
     beta = 0.5
-    f0 = op_split.func_f(var_vals)
-    grads = full_gradient(var_vals, op_split)
+    f0 = f(var_vals)
+    grads = full_gradient_fn(var_vals)
     cond = False
 
     def linesearch_step(var_vals: TensorDict, state: ProxGradState):
-        z, _ = prox_update(var_vals, grads, state, op_split)
+        z = prox_fn(var_vals - state.eta * grads, state.eta)
         d = z - var_vals
         u = f0 + grads.flat_dot(d) + 1 / (2 * state.eta) * (d.flat_norm() ** 2)
 
-        if op_split.func_f(z) <= u:
+        if f(z) <= u:
             err_new = d.flat_norm() / state.eta
             # Simple forward tracking to ensure step_size does not become too small:
             eta_new = state.eta / beta
@@ -438,21 +431,27 @@ def linesearch(
 def grad_mapping_norm(
     var_vals: TensorDict,
     state: GradSolverState,
-    op_split: ProxGradSplit | SapphireSplit,
-) -> float:
+    full_gradient_fn: Callable[[TensorDict], TensorDict],
+    prox_fn: Callable[[TensorDict, float], TensorDict],
+) -> tuple[TensorDict, GradSolverState]:
     """Compute gradient mapping norm as convergence metric.
 
-    The gradient mapping is defined as G = (x - prox_step(x)) / eta, which
-    measures proximity to a stationary point.
+    The gradient mapping is defined as:
+    G(x) = (x - prox(x - eta * g(x), eta)) / eta,
+    where g(x) is the gradient evaluated at x, and eta is the stepsize.
+    For composite objectives ||G(x)|| measures proximity to a stationary point.
+    When the composite objective is also convex, ||G(x)|| = 0 means x is a minimizer.
+    In the smooth case, G(x) collapses to the gradient.
 
     Args:
         var_vals: Current variable values.
         state: Gradient solver state containing step size eta.
-        op_split: Operator splitting object.
+        full_gradient_fn: Function to compute full dataset gradient.
+        prox_fn: Proximal operator function.
 
     Returns:
         Tuple of (unchanged var_vals, updated state with error metric).
     """
-    var_vals_new, _ = prox_gd_step(var_vals, state, op_split)
+    var_vals_new, _ = prox_gd_step(var_vals, state, full_gradient_fn, prox_fn)
     G = (var_vals - var_vals_new) / state.eta
     return var_vals, replace(state, err=G.flat_norm().item())

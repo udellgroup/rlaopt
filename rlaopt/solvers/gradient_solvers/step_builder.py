@@ -1,3 +1,5 @@
+"""Helper module for building gradient solver step functions."""
+
 from dataclasses import replace
 from functools import partial
 from typing import Callable
@@ -5,15 +7,15 @@ from typing import Callable
 import torch
 
 from rlaopt.ext_tensordict import TensorDict
-from rlaopt.linalg import IdentityConfig, NystromConfig, PreconditionerConfig
-from rlaopt.linalg.preconditioners.nystrom import Nystrom
-from rlaopt.solvers.gradient_solvers import grad_solver_core as core
+from rlaopt.linalg import IdentityConfig
+from rlaopt.solvers.gradient_solvers import gradient_solver_core as core
 from rlaopt.splitting.operator_split import _OperatorSplit
 from rlaopt.splitting.prox_grad_split import ProxGradSplit
 from rlaopt.splitting.sapphire_split import SapphireSplit
 
 from .gradient_solver_configs import GradSolverConfig, ProxGradConfig, SapphireConfig
 from .gradient_solver_states import GradSolverState, SapphireState
+from .precond_update_fn_builder import build_preconditioner_update
 
 DataBatch = tuple[torch.Tensor, torch.Tensor, torch.Tensor]
 
@@ -29,21 +31,33 @@ def get_step_fn(config: GradSolverConfig, op_split: ProxGradSplit | SapphireSpli
 ##### ProxGrad Builder #####
 def _prox_grad_step_builder(config: ProxGradConfig, op_split: _OperatorSplit):
     # Get functions used for building proximal gradient step
-    prox_step = _op_split_partial(core.prox_gd_step, op_split)
-    ls_update_par = _op_split_partial(core.linesearch, op_split)
-    err_fn = _op_split_partial(core.grad_mapping_norm, op_split)
+    f, grad_f, prox_fn = op_split.func_f, op_split.grad_f, op_split.prox
 
-    # Build update chain for acceleration and linesearch
+    prox_step = partial(
+        core.prox_gd_step,
+        full_gradient_fn=grad_f,
+        prox_fn=prox_fn,
+    )
+
+    ls_step = partial(core.linesearch, f=f, full_gradient_fn=grad_f, prox_fn=prox_fn)
+
+    # Only non-ls chains get err_fn as ls automatically
+    # computes current error.
+    err_fn = partial(core.grad_mapping_norm, full_gradient_fn=grad_f, prox_fn=prox_fn)
+
+    #  Update chain for acceleration and linesearch
     if config.use_acceleration and config.use_linesearch:
-        chain = (core.nest_accel_update, ls_update_par, err_fn)
+        chain = (core.nest_accel_update, ls_step)
 
-    # Build update chain for just acceleration
+    # Update chain for just acceleration
     elif config.use_acceleration:
         chain = (core.nest_accel_update, prox_step, err_fn)
-    # Build update chain for just linesearch
+
+    # Update chain for just linesearch
     elif config.use_linesearch:
-        chain = (ls_update_par, err_fn)
-    # Build update chain for vanilla proximal gradient.
+        chain = (ls_step,)
+
+    # Update chain for vanilla proximal gradient.
     else:
         chain = (prox_step, err_fn)
 
@@ -66,38 +80,62 @@ def _sapphire_step_builder(config: SapphireConfig, op_split: SapphireSplit):
     grad_batch_size = op_split.loader.batch_size
     conv_factor = n // grad_batch_size
 
+    # Get loss and prediction functions
+    loss_fn, prediction_fn = op_split.model._loss_fn, op_split.model._get_prediction
+
+    # Get batch and full gradient functions
+    batch_grad_fn, full_gradient_fn = op_split.batch_grad_loss, op_split.grad_loss
+
+    # Get prox operator and data loader functions
+    prox_fn, loader_fn = op_split.prox, op_split.loader.get_batch
+
+    # Setup termination function
+    termination_fn = partial(
+        core.grad_mapping_norm, full_gradient_fn=full_gradient_fn, prox_fn=prox_fn
+    )
+
     # Get gradient oracle for base method specified in the config file.
     if config.base_method == "sgd":
-        gradient_fn = core.SGDOracle.build_gradient_fn(op_split)
+        gradient_fn = core.SGDOracle.build_gradient_fn(batch_grad_fn=batch_grad_fn)
     elif config.base_method == "svrg":
-        update_threshold = n // grad_batch_size
+        # Get snapshot update frequency
+        update_threshold = conv_factor * config.snapshot_update_freq
         gradient_fn = core.SVRGOracle.build_gradient_fn(
-            op_split, update_threshold=update_threshold
+            batch_gradient_fn=batch_grad_fn,
+            full_gradient_fn=full_gradient_fn,
+            update_threshold=update_threshold,
         )
     else:
         gradient_fn = core.SAGAOracle.build_gradient_fn(
-            op_split, n=n, has_intercept=op_split.model.fit_intercept
+            loss_fn=loss_fn,
+            prediction_fn=prediction_fn,
+            n=n,
+            has_intercept=op_split.model.fit_intercept,
         )
 
-    # Get additional parameters to build step function.
+    # Build preconditioner update function
     device = op_split.model.variable_values.to_flat_tensor().device
+    dtype = op_split.model.variable_values.to_flat_tensor().dtype
+
     # Convert from epochs to iterations
     check_termination_freq = config.check_termination_freq * conv_factor
     precond_update_freq = config.precond_update_freq * conv_factor
 
-    # Get functions for building the step function.
-    loader_fn = _op_split_partial(core.load_batch, op_split)
-    prox_fn = _op_split_partial(core.prox_update, op_split)
-    termination_fn = _op_split_partial(core.grad_mapping_norm, op_split)
-    update_precond_fn = _build_preconditioner_update(
-        config.precond_config, op_split, precond_update_freq, device
+    update_precond_fn = build_preconditioner_update(
+        config.precond_config,
+        op_split,
+        precond_update_freq,
+        device,
+        dtype,
+        config.auto_update_stepsize,
     )
 
-    # Branching conditioning, config_cond is True when an identity
-    # preconditioner is used or the Nyström preconditioner is used and
-    # there is no non-smooth term.
+    # Branching condition
+    # config_cond is True when an identity preconditioner is used
+    # or the Nyström preconditioner is used and there is no non-smooth term
+
     config_cond = isinstance(config.precond_config, IdentityConfig) or (
-        isinstance(config.precond_config, NystromConfig) and op_split.r is None
+        not isinstance(config.precond_config, IdentityConfig) and op_split.r is None
     )
 
     if config_cond:
@@ -115,8 +153,8 @@ def _sapphire_step_builder(config: SapphireConfig, op_split: SapphireSplit):
         # proxable regularizer present.
         prox_P_fn = partial(
             core.prox_update_P,
-            op_split=op_split,
             subproblem_iters=config.subproblem_iters,
+            prox_fn=prox_fn,
         )
     return _sapphire_pipeline_chain(
         loader_fn,
@@ -142,7 +180,9 @@ def _sapphire_pipeline_chain(
     termination_fn: Callable,
     check_termination_freq: int = 100,
 ):
-    """Pipeline: load data → gradient → transform → update → check termination, with optional preconditioner updates"""
+    """Pipeline: load data → preconditioner update → gradient → transform
+    → variable update → check termination.
+    """
     if transform_fn is None:
         transform_fn = core.identity_transform
 
@@ -151,7 +191,7 @@ def _sapphire_pipeline_chain(
         batch = loader_fn()
 
         # Update preconditioner if needed
-        state = update_precond_fn(batch, variable_values, state)
+        state = update_precond_fn(variable_values, state, batch)
 
         # Compute gradient
         grads, state = gradient_fn(variable_values, state, batch)
@@ -168,52 +208,3 @@ def _sapphire_pipeline_chain(
         return variable_values, replace(state, iter_=state.iter_ + 1)
 
     return step
-
-
-def _build_preconditioner_update(
-    precond_config: PreconditionerConfig,
-    op_split: SapphireSplit,
-    precond_update_freq: int,
-    device: torch.device,
-) -> Callable[[DataBatch, TensorDict, SapphireState], SapphireState]:
-    """Build preconditioner update function.
-
-    Returns:
-        Callable for updating the preconditioner
-    """
-    if isinstance(precond_config, IdentityConfig):
-        # No-op functions for identity preconditioner
-        def update_fn(
-            batch: DataBatch, var_values: TensorDict, state: SapphireState
-        ) -> SapphireState:
-            return state
-
-        return update_fn
-
-    elif isinstance(precond_config, NystromConfig):
-        # Create the Nystrom preconditioner
-        P = Nystrom(precond_config)
-
-        def update_fn(
-            batch: DataBatch, beta_value: TensorDict, state: SapphireState
-        ) -> SapphireState:
-            if state.iter_ % precond_update_freq == 0:
-                X_batch, y_batch, _ = batch
-                Hop = op_split.get_subsamp_hessian_linop(
-                    beta_value, X_batch, y_batch, device
-                )
-                P._update(Hop, X_batch.dtype)
-                return replace(state, P=P)
-            else:
-                return state
-
-        return update_fn
-
-    else:
-        raise ValueError(f"Unsupported preconditioner config: {type(precond_config)}")
-
-
-##### Helpers #####
-def _op_split_partial(fn: Callable, op_split: ProxGradSplit | SapphireSplit):
-    """Binds op_split fo fn."""
-    return partial(fn, op_split=op_split)
