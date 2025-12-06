@@ -1,9 +1,11 @@
 """Preconditioned Conjugate Gradient solver implementation."""
 
+import time
 from dataclasses import dataclass, replace
 from typing import Callable
 
 import torch
+from pydantic import Field
 
 from rlaopt.linalg import (
     IdentityConfig,
@@ -13,15 +15,16 @@ from rlaopt.linalg import (
     get_preconditioner,
 )
 from rlaopt.solvers.configs_base import SolverConfig, StoppingCriteria
-from rlaopt.solvers.solver_base import LinSysSolver, SolverState
+from rlaopt.solvers.solver_base import (
+    ConvergenceStatus,
+    LinSysResult,
+    LinSysSolver,
+    SolverState,
+)
 
 
 class PCGConfig(SolverConfig):
-    """Configuration for the Preconditioned Conjugate Gradient solver.
-
-    Attributes:
-        preconditioner_config: Configuration for the preconditioner to use.
-    """
+    """Configuration for the Preconditioned Conjugate Gradient solver."""
 
     preconditioner_config: PreconditionerConfig = IdentityConfig()
 
@@ -29,10 +32,12 @@ class PCGConfig(SolverConfig):
 class PCGStoppingCriteria(StoppingCriteria):
     """Stopping criteria specific to the PCG solver.
 
-    Inherits from the base StoppingCriteria class.
+    Attributes:
+        max_iters: Maximum number of iterations.
+        tol: Relative tolerance for convergence.
     """
 
-    pass
+    tol: float = Field(default=1e-6, gt=0)
 
 
 @dataclass(frozen=True)
@@ -61,29 +66,45 @@ class PCGState(SolverState):
     tol: float | None = None
 
 
-class PCG(LinSysSolver):
-    """Block Preconditioned Conjugate Gradient solver for linear systems.
+@dataclass(frozen=True)
+class PCGResult(LinSysResult):
+    """Result container for the PCG solver.
 
-    Solves linear systems of the form:
-        AW = B
-    where A is a symmetric positive-definite matrix.
-
-    The PCG method uses a preconditioner to improve convergence. The algorithm
-    iteratively refines the solution by moving along conjugate search directions
-    that are scaled by the preconditioner.
+    Attributes:
+        solution: Converged solution parameters.
+        convergence_status: Status indicating how the solver terminated.
+        num_iters: Number of iterations performed.
+        solver_time: Time taken by the solver in seconds.
+        residual_norm: Final residual norm per component.
     """
 
-    def __init__(self, lin_sys: LinSys, config: PCGConfig):
-        """Initialize the PCG solver.
+    residual_norm: torch.Tensor
+
+
+class _PCG:
+    """Internal PCG implementation that operates on a given preconditioner.
+
+    This is the core algorithm implementation. It doesn't inherit from
+    LinSysSolver since it's an internal building block with a different
+    interface. Use the public PCG class for the standard API.
+    """
+
+    def __init__(
+        self,
+        lin_sys: LinSys,
+        preconditioner: Preconditioner,
+        detach: bool = True,
+    ):
+        """Initialize PCG solver with a preconditioner.
 
         Args:
-            lin_sys (LinSys): The linear system to solve.
-            config (PCGConfig): Configuration for the solver.
+            lin_sys: The linear system to solve.
+            preconditioner: Preconditioner instance to use.
+            detach: Whether to detach params and state from computation graph
+                between iterations.
         """
-        super().__init__(lin_sys, config)
-        P = get_preconditioner(config.preconditioner_config, lin_sys.A)
-        self._init_state = _build_init_state(lin_sys, P)
-        self._step = _build_step(lin_sys, P)
+        self._init_state = _build_init_state(lin_sys, preconditioner)
+        self._step = _build_step(lin_sys, preconditioner, detach)
         self._solve = lambda tol, max_iters: _build_solve(
             lin_sys, self._init_state, self._step, tol, max_iters
         )
@@ -117,7 +138,7 @@ class PCG(LinSysSolver):
         self,
         params: torch.Tensor | None = None,
         stopping_criteria: PCGStoppingCriteria = PCGStoppingCriteria(),
-    ) -> tuple[torch.Tensor, torch.Tensor]:
+    ) -> PCGResult:
         """Solve the linear system AW = B using PCG.
 
         Args:
@@ -127,12 +148,91 @@ class PCG(LinSysSolver):
                 Defaults to PCGStoppingCriteria().
 
         Returns:
-            Tuple of solution parameters and final residual norm.
+            PCGResult containing the solution and convergence information.
         """
         solve_fn = self._solve(
             tol=stopping_criteria.tol, max_iters=stopping_criteria.max_iters
         )
         return solve_fn(params)
+
+
+class PCG(LinSysSolver):
+    """Block Preconditioned Conjugate Gradient solver for linear systems.
+
+    Solves linear systems of the form:
+        AW = B
+    where A is a symmetric positive-definite matrix.
+
+    The PCG method uses a preconditioner to improve convergence. The algorithm
+    iteratively refines the solution by moving along conjugate search directions
+    that are scaled by the preconditioner.
+    """
+
+    def __init__(self, lin_sys: LinSys, config: PCGConfig, detach: bool = True):
+        """Initialize the PCG solver.
+
+        Args:
+            lin_sys: The linear system to solve.
+            config: Configuration for the solver.
+            detach: Whether to detach params and state from computation graph
+                between iterations. Set to False only if you need to differentiate
+                through the entire solver. Default: True.
+        """
+        # Call parent constructor first
+        super().__init__(lin_sys, config, detach)
+
+        # Create preconditioner from config
+        preconditioner = get_preconditioner(
+            config.preconditioner_config,
+            lin_sys.A,
+            lin_sys.dtype,
+        )
+
+        # Delegate to internal implementation (composition)
+        self._impl = _PCG(lin_sys, preconditioner, detach)
+
+    def init_state(self, params: torch.Tensor) -> PCGState:
+        """Initialize the solver state.
+
+        Args:
+            params: Initial parameters (solution estimate).
+
+        Returns:
+            Initial solver state.
+        """
+        return self._impl.init_state(params)
+
+    def step(
+        self, params: torch.Tensor, state: PCGState
+    ) -> tuple[torch.Tensor, PCGState]:
+        """Perform a single PCG iteration step.
+
+        Args:
+            params: Current parameters (solution estimate).
+            state: Current solver state.
+
+        Returns:
+            Tuple of updated parameters and solver state.
+        """
+        return self._impl.step(params, state)
+
+    def solve(
+        self,
+        params: torch.Tensor | None = None,
+        stopping_criteria: PCGStoppingCriteria = PCGStoppingCriteria(),
+    ) -> PCGResult:
+        """Solve the linear system AW = B using PCG.
+
+        Args:
+            params: Initial parameters (solution estimate). If None, defaults to
+                parameters in linear system.
+            stopping_criteria: Criteria to determine when to stop the solver.
+                Defaults to PCGStoppingCriteria().
+
+        Returns:
+            PCGResult containing the solution and convergence information.
+        """
+        return self._impl.solve(params, stopping_criteria)
 
 
 def _compute_convergence_mask(
@@ -182,6 +282,7 @@ def _build_init_state(
 def _build_step(
     lin_sys: LinSys,
     P: Preconditioner,
+    detach: bool,
 ) -> Callable[[torch.Tensor, PCGState], tuple[torch.Tensor, PCGState]]:
     def step(
         params: torch.Tensor,
@@ -252,6 +353,15 @@ def _build_step(
             # If no tolerance is set, keep all components active
             mask_new = mask
 
+        # Detach if requested to avoid expanding autodiff tree
+        if detach:
+            params_new = params_new.detach()
+            r_new = r_new.detach()
+            z_new = z_new.detach()
+            p_new = p_new.detach()
+            rz_new = rz_new.detach()
+            res_norm_new = res_norm_new.detach()
+
         new_state = PCGState(
             iter_=state.iter_ + 1,
             r=r_new,
@@ -274,18 +384,20 @@ def _build_solve(
     step_fn: Callable[[torch.Tensor, PCGState], tuple[torch.Tensor, PCGState]],
     tol: float,
     max_iters: int,
-) -> Callable[[torch.Tensor | None], tuple[torch.Tensor, torch.Tensor]]:
+) -> Callable[[torch.Tensor | None], PCGResult]:
     """Build the solve function with stopping criteria."""
 
-    def solve(params: torch.Tensor | None = None) -> tuple[torch.Tensor, torch.Tensor]:
+    def solve(params: torch.Tensor | None = None) -> PCGResult:
         """Solve the linear system AW = B.
 
         Args:
             params: Initial parameters. If None, defaults to zeros.
 
         Returns:
-            Tuple of solution parameters and final residual norm.
+            PCGResult containing the solution and convergence information.
         """
+        ts = time.time()
+
         if params is None:
             params = lin_sys.w.clone()
 
@@ -299,7 +411,20 @@ def _build_solve(
         while state.mask.any() and state.iter_ < max_iters:
             params, state = step_fn(params, state)
 
-        # Return final params and residual norm
-        return params, state.res_norm
+        # Determine convergence status
+        if not state.mask.any():
+            convergence_status = ConvergenceStatus.CONVERGED
+        else:
+            convergence_status = ConvergenceStatus.NOT_CONVERGED
+
+        total_time = time.time() - ts
+
+        return PCGResult(
+            solution=params,
+            convergence_status=convergence_status,
+            num_iters=state.iter_,
+            solver_time=total_time,
+            residual_norm=state.res_norm,
+        )
 
     return solve
