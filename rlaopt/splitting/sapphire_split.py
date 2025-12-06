@@ -1,16 +1,13 @@
 """SapphireSplit class for representing finite-sum composite objective functions."""
 
-from functools import partial
-from typing import Callable
-
 import torch
-from linops import LinearOperator
 
 from rlaopt.atoms import Atom
 from rlaopt.atoms.linear_model.linear_model import LinearModel
 from rlaopt.data import DataLoader
 from rlaopt.expression import AddExpression, Expression
 from rlaopt.ext_tensordict import TensorDict
+from rlaopt.splitting.linops import _SubampHVPLinOp
 
 
 class SapphireSplit:
@@ -227,7 +224,7 @@ class SapphireSplit:
             val += self._f.evaluate(beta_value)
         return val
 
-    def batch_loss_grad(
+    def batch_grad_loss(
         self, beta_value: TensorDict, X_batch: torch.Tensor, y_batch: torch.Tensor
     ) -> TensorDict:
         """Computes gradient of the smooth loss on a batch.
@@ -242,7 +239,7 @@ class SapphireSplit:
         """
         return torch.func.grad(self.loss)(beta_value, X_batch, y_batch)
 
-    def gradient(self, beta_value: TensorDict) -> TensorDict:
+    def grad_loss(self, beta_value: TensorDict) -> TensorDict:
         """Computes gradient of the full smooth loss.
 
         Args:
@@ -286,78 +283,4 @@ class SapphireSplit:
         Returns:
             _SubampHessianLinOp: A linear operator representing the subsampled Hessian.
         """
-        return _SubampHessianLinOp(
-            self._model.loss, beta_value, X_batch, y_batch, device
-        )
-
-
-class _SubampHessianLinOp(LinearOperator):
-    """Subsampled Hessian linear operator class.
-
-    Implements a linear operator interface for computing Hessian-vector products
-    using a subsampled batch of data. Uses forward-over-reverse automatic
-    differentiation for efficient computation.
-
-    Args:
-        loss (Callable): Loss function from which subsampled Hessian is constructed.
-            Should accept a TensorDict and return a scalar tensor.
-        variable_values (TensorDict): Variables at which the subsampled Hessian
-            is evaluated.
-        X_batch (torch.Tensor): Subsampled data matrix at which the loss is evaluated.
-        y_batch (torch.Tensor): Labels tensor at which the loss is evaluated.
-        device (torch.device): Device the model parameters live on.
-
-    Attributes:
-        device (torch.device): Device on which computations are performed.
-    """
-
-    def __init__(
-        self,
-        loss: Callable[[TensorDict, tuple[torch.Tensor, torch.Tensor]], torch.Tensor],
-        variable_values: TensorDict,
-        X_batch: torch.Tensor,
-        y_batch: torch.Tensor,
-        device: torch.device,
-    ):
-        """Initialize Subsampled Hessian linear operator.
-
-        Args:
-            loss (Callable): Loss function from which subsampled Hessian is constructed.
-                Should have signature loss(variable_values, X, y) -> scalar tensor.
-            variable_values (TensorDict): Variables at which the subsampled Hessian
-                is evaluated.
-            X_batch (torch.Tensor): Subsampled data matrix at which the loss is evaluated.
-            y_batch (torch.Tensor): Labels tensor at which the loss is evaluated.
-            device (torch.device): Device the model parameters live on.
-        """
-        super().__init__()
-        self._loss = partial(loss, X=X_batch, y=y_batch)
-        self._variable_values = variable_values
-
-        n = variable_values.flat_dim()
-        self._shape = (n, n)
-        self.device = device
-
-    def _matmul_impl(self, v: torch.Tensor) -> torch.Tensor:
-        """Compute Hessian-vector product using forward-over-reverse autodiff.
-
-        Computes the product of the subsampled Hessian matrix with a vector v
-        without explicitly forming the Hessian matrix. Uses automatic differentiation
-        to efficiently compute the Hessian-vector product.
-
-        Args:
-            v (torch.Tensor): Vector to multiply with the Hessian. Should have
-                shape (n,) where n is the flattened dimension of variable_values.
-
-        Returns:
-            torch.Tensor: The result of Hessian @ v as a flattened tensor.
-        """
-
-        def grad_dot_v(var_vals: TensorDict) -> torch.Tensor:
-            # Compute gradient of smooth_expr
-            grad = torch.func.grad(lambda x: self._loss(x))(var_vals)
-            return torch.dot(grad.to_flat_tensor(), v)
-
-        # Differentiate grad_dot_v to get Hessian @ v
-        hvp_td = torch.func.grad(grad_dot_v)(self._variable_values)
-        return hvp_td.to_flat_tensor()
+        return _SubampHVPLinOp(self._model.loss, beta_value, X_batch, y_batch, device)

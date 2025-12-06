@@ -61,15 +61,6 @@ class ProxGradSplit(_OperatorSplit):
                 "All non-smooth terms must be proxable atoms for ProxGradSplit."
             )
 
-        # All non-smooth terms must be proxable atoms
-        if any(
-            not (isinstance(term, Atom) and term.is_proxable())
-            for term in non_smooth_exprs
-        ):
-            raise ValueError(
-                "All non-smooth terms must be proxable atoms for ProxGradSplit."
-            )
-
         # Check for variable disjointness (this is essential for proximal gradient)
         seen_variables = set()
         for term in non_smooth_exprs:
@@ -80,7 +71,7 @@ class ProxGradSplit(_OperatorSplit):
                 )
             seen_variables.update(expr_var_names)
 
-            return smooth_part, non_smooth_exprs
+        return smooth_part, non_smooth_exprs
 
     @property
     def variable_values(self) -> TensorDict:
