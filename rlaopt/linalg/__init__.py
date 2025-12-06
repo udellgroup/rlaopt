@@ -6,3 +6,4 @@ from rlaopt.linalg.preconditioners import NystromConfig as NystromConfig
 from rlaopt.linalg.preconditioners import Preconditioner as Preconditioner
 from rlaopt.linalg.preconditioners import PreconditionerConfig as PreconditionerConfig
 from rlaopt.linalg.preconditioners import get_preconditioner as get_preconditioner
+from rlaopt.linalg.spectral_estimators import randomized_powering as randomized_powering
