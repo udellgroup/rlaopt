@@ -1,0 +1,29 @@
+name: Pre-commit checks
+
+on:
+  workflow_call:
+
+jobs:
+  pre-commit:
+    name: Pre-commit checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Install pre-commit
+        run: pip install pre-commit
+
+      - name: Run pre-commit on changed files
+        run: |
+          if [ "${{ github.event_name }}" == "pull_request" ]; then
+            pre-commit run --from-ref origin/${{ github.base_ref }} --to-ref HEAD
+          else
+            pre-commit run --from-ref ${{ github.event.before }} --to-ref ${{ github.sha }}
+          fi

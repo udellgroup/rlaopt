@@ -5,112 +5,28 @@ on:
       - main
   pull_request:
     types: [opened, synchronize, reopened]
+
 jobs:
   # Stage 1: Pre-commit checks (formatting, linting)
   pre-commit:
-    name: Pre-commit checks
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v5
-        with:
-          fetch-depth: 0
-
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.10'
-
-      - name: Install pre-commit
-        run: pip install pre-commit
-
-      - name: Run pre-commit on changed files
-        run: |
-          if [ "${{ github.event_name }}" == "pull_request" ]; then
-            pre-commit run --from-ref origin/${{ github.base_ref }} --to-ref HEAD
-          else
-            pre-commit run --from-ref ${{ github.event.before }} --to-ref ${{ github.sha }}
-          fi
+    uses: ./.github/workflows/pre-commit.yml
 
   # Stage 2: CPU-only tests
   cpu-tests:
-    name: CPU-only Tests
-    runs-on: ubuntu-latest
-    needs: pre-commit  # Only run if pre-commit checks pass
-    strategy:
-      matrix:
-        python-version: ['3.10', '3.11', '3.12']
-    steps:
-      - uses: actions/checkout@v5
-        with:
-          fetch-depth: 0
-
-      - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v4
-        with:
-          python-version: ${{ matrix.python-version }}
-
-      - name: Install and test CPU-only build
-        run: |
-          python -m pip install --upgrade pip
-          RLAOPT_CPU_ONLY=1 pip install -e ".[test]"
-          pytest -x
+    needs: pre-commit
+    uses: ./.github/workflows/cpu-tests.yml
 
   # Stage 3: CUDA-enabled tests
   cuda-tests:
-    name: CUDA-enabled Tests
-    runs-on: ubuntu-latest
-    needs: cpu-tests  # Only run CUDA tests if CPU tests pass
-    strategy:
-      matrix:
-        python-version: ['3.10', '3.11', '3.12']
-    steps:
-      - uses: actions/checkout@v5
-        with:
-          fetch-depth: 0
+    needs: cpu-tests
+    uses: ./.github/workflows/cuda-tests.yml
+    secrets: inherit  # Pass secrets to the reusable workflow for SonarQube
 
-      - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v4
-        with:
-          python-version: ${{ matrix.python-version }}
-
-      - name: Setup CUDA
-        uses: Jimver/cuda-toolkit@v0.2.22
-        with:
-          cuda: '12.5.0'
-          method: 'network'
-          sub-packages: '["nvcc", "cudart"]'
-          use-github-cache: 'true'
-
-      - name: Verify CUDA
-        run: nvcc --version
-
-      # Python 3.10 with coverage for SonarQube
-      - name: Install and test CUDA build with coverage
-        if: matrix.python-version == '3.10'
-        run: |
-          python -m pip install --upgrade pip
-          pip install -e ".[test]"
-          pytest -x --cov=rlaopt --cov-report=xml
-
-      # Other Python versions without coverage
-      - name: Install and test CUDA build
-        if: matrix.python-version != '3.10'
-        run: |
-          python -m pip install --upgrade pip
-          pip install -e ".[test]"
-          pytest -x
-
-      # SonarQube Scan (only for Python 3.10)
-      - name: SonarQube Scan
-        if: matrix.python-version == '3.10'
-        uses: SonarSource/sonarqube-scan-action@v6
-        env:
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-
+  # Final check
   final-check:
     name: Build
     runs-on: ubuntu-latest
-    needs: [cpu-tests, cuda-tests]
+    needs: [cuda-tests]
     steps:
       - name: Success
         run: echo "All tests passed!"

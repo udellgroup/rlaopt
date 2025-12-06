@@ -1,0 +1,55 @@
+name: CUDA Tests
+
+on:
+  workflow_call:
+
+jobs:
+  cuda-tests:
+    name: CUDA-enabled Tests
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ['3.10', '3.11', '3.12']
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Setup CUDA
+        uses: Jimver/cuda-toolkit@v0.2.22
+        with:
+          cuda: '12.5.0'
+          method: 'network'
+          sub-packages: '["nvcc", "cudart"]'
+          use-github-cache: 'true'
+
+      - name: Verify CUDA
+        run: nvcc --version
+
+      # Python 3.10 with coverage for SonarQube
+      - name: Install and test CUDA build with coverage
+        if: matrix.python-version == '3.10'
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[test]"
+          pytest -x --cov=rlaopt --cov-report=xml
+
+      # Other Python versions without coverage
+      - name: Install and test CUDA build
+        if: matrix.python-version != '3.10'
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[test]"
+          pytest -x
+
+      # SonarQube Scan (only for Python 3.10)
+      - name: SonarQube Scan
+        if: matrix.python-version == '3.10'
+        uses: SonarSource/sonarqube-scan-action@v6
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
