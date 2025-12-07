@@ -5,7 +5,7 @@ import torch
 
 from rlaopt.atoms import Box, L1Norm, NonNegative, SumSquares
 from rlaopt.expression import Variable
-from rlaopt.solvers import ProxGrad, ProxGradConfig, GradSolverStoppingCriteria
+from rlaopt.solvers import GradSolverStoppingCriteria, ProxGrad, ProxGradConfig
 
 TOLERANCES = {torch.float32: 1e-4, torch.float64: 1e-7}
 MAX_ITERS = 5000
@@ -52,7 +52,7 @@ def generate_least_squares_data(n=1024, p=256, precision=torch.float32, seed=0):
     """Generate random data for least squares problems."""
     torch.manual_seed(seed)
     A = torch.randn(n, p, dtype=precision) / (n**0.5)
-    x_star = torch.randn(p) / (p ** 0.5)
+    x_star = torch.randn(p) / (p**0.5)
     b = A @ x_star + 0.01 * torch.randn(n)
     x = Variable(torch.zeros(p, dtype=precision))
     return A, b, x
@@ -241,10 +241,10 @@ def _solve_and_verify(obj, eta, use_acceleration, use_linesearch):
     """Test that optimization problem is solved correctly."""
     opt = _build_opt(obj, eta, use_acceleration, use_linesearch)
     stopping_criteria = GradSolverStoppingCriteria(max_iters=MAX_ITERS)
-   
+
     # Test using solve method
     results = opt.solve(stopping_criteria=stopping_criteria)
-    assert results.convergence_status.value == 'converged'
+    assert results.convergence_status.value == "converged"
 
 
 def _init_opt(obj, opt):
