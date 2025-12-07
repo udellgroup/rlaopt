@@ -29,7 +29,10 @@ extensions = [
     "sphinx.ext.mathjax",
     "myst_parser",
     "sphinxcontrib.autodoc_pydantic",
+    "sphinxcontrib.bibtex",
 ]
+
+bibtex_bibfiles = ["refs.bib"]
 
 templates_path = ["_templates"]
 

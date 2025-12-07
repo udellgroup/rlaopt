@@ -3,7 +3,7 @@ Linear Algebra Module
 
 .. automodule:: rlaopt.linalg
 
-Linear System Solver
+Linear System
 --------------------
 
 .. autoclass:: rlaopt.linalg.LinSys
@@ -22,4 +22,3 @@ Preconditioner Configuration
 
 .. autopydantic_model:: rlaopt.linalg.NystromConfig
    :inherited-members: BaseModel
-

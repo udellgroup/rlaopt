@@ -4,6 +4,7 @@ from typing import Literal
 from warnings import warn
 
 import torch
+from linops import LinearOperator
 from pydantic import Field, model_validator
 from typing_extensions import Self
 
@@ -21,7 +22,7 @@ class NystromConfig(PreconditionerConfig):
     rank_init: int = Field(
         gt=0, description="Initial rank of the Nyström approximation."
     )
-    rank_max: int | None = Field(None, description="Maximum allowable rank.")
+    rank_max: int | None = Field(default=None, description="Maximum allowable rank.")
     num_power_iters: int = Field(
         default=10,
         gt=0,
@@ -70,14 +71,21 @@ class Nystrom(Preconditioner):
         self.current_damping = None
         self.using_low_precision = False
 
-    def _update(self, A: torch.Tensor):
+    def _update(self, A: torch.Tensor | LinearOperator, dtype: torch.dtype):
         """Update the Nyström preconditioner based on the matrix A."""
-        dtype = A.dtype
-        device = A.device
-        n = A.shape[0]
+        # Unpack config
+        num_cols_to_add = self._config.rank_init
+        error_tolerance = self._config.error_tolerance
+        num_power_iters = self._config.num_power_iters
+        rank_max = self._config.rank_max
+        damping_mode = self._config.damping_mode
+        base_damping = self._config.base_damping
 
         if dtype != torch.float64:
             self.using_low_precision = True
+
+        device = A.device
+        n = A.shape[0]
 
         # Initialize sketching matrix and sketch
         Omega = torch.empty((n, 0), dtype=dtype, device=device)
@@ -86,14 +94,6 @@ class Nystrom(Preconditioner):
         # Initialize empty tensors for estimated eigenvectors and eigenvalues
         U = torch.Tensor([])
         S = torch.Tensor([])
-
-        # Unpack config
-        num_cols_to_add = self._config.rank_init
-        error_tolerance = self._config.error_tolerance
-        num_power_iters = self._config.num_power_iters
-        rank_max = self._config.rank_max
-        damping_mode = self._config.damping_mode
-        base_damping = self._config.base_damping
 
         # Start error at infinity to enter the loop
         error = torch.inf
@@ -127,7 +127,7 @@ class Nystrom(Preconditioner):
             S = torch.nn.functional.relu(sigma**2 - shift)
 
             # Make sure to estimate error before possibly breaking early
-            error = _randomized_power_err_est(A, U, S, num_power_iters)
+            error = _randomized_power_err_est(A, U, S, num_power_iters, dtype)
 
             if break_early:
                 break
@@ -202,10 +202,14 @@ def _generate_ortho_embedding(
 
 
 def _randomized_power_err_est(
-    A: torch.Tensor, U: torch.Tensor, S: torch.Tensor, num_iters: int
+    A: torch.Tensor | LinearOperator,
+    U: torch.Tensor,
+    S: torch.Tensor,
+    num_iters: int,
+    dtype: torch.dtype,
 ) -> float:
     """Estimate approximation error of the Nyström method."""
-    v_prev = torch.randn(A.shape[0], dtype=A.dtype, device=A.device)
+    v_prev = torch.randn(A.shape[0], dtype=dtype, device=A.device)
     v_prev /= torch.linalg.norm(v_prev)
     err_est = torch.inf
 

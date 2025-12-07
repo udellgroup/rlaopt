@@ -63,13 +63,12 @@ Call the solver to find the solution:
 .. code-block:: python
 
    # Solve the problem
-   # solver.solve() returns (variable_values, final_error)
-   variable_values, final_error = solver.solve()
+   result = solver.solve()
 
    # Access the solution
-   solution = x.value.data
+   solution, err = result.variable_values, result.err
    print(f"Solution: {solution}")
-   print(f"Final error: {final_error}")
+   print(f"Final error: {err}")
 
 Complete Example
 ----------------
@@ -86,7 +85,7 @@ Here's a complete example putting it all together:
    # Step 1: Create variables and data
    n_samples, n_features = 100, 50
    x = Variable((n_features,), name='beta')
-   
+
    # X and y are data tensors, not variables
    X = torch.randn(n_samples, n_features)
    y = torch.randn(n_samples)
@@ -100,10 +99,10 @@ Here's a complete example putting it all together:
    # Step 3 & 4: Solve
    config = ProxGradConfig(eta=0.01, max_iters=1000, tol=1e-4)
    solver = ProxGrad(objective, config)
-   variable_values, final_error = solver.solve()
+   result = solver.solve()
 
-   print(f"Optimal solution: {x.value.data}")
-   print(f"Final error: {final_error}")
+   print(f"Optimal solution: {result.variable_values}")
+   print(f"Final error: {result.err}")
 
 Tips
 ----
@@ -112,5 +111,3 @@ Tips
 * **Check smoothness**: Use ``is_smooth()`` to understand which solvers work
 * **Tune parameters**: Adjust step sizes and tolerances based on your problem
 * **Monitor convergence**: Check solver state for convergence information
-
-

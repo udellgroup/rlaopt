@@ -2,11 +2,59 @@
 
 import pytest
 import torch
+from tensordict import assert_allclose_td
 
 from rlaopt.atoms import L1Norm, SumSquares
 from rlaopt.expression import Variable
 from rlaopt.ext_tensordict import TensorDict
 from rlaopt.splitting.admm_split import ADMMSplit
+
+# ============================================================================
+# Helper functions for common test patterns
+# ============================================================================
+
+
+def assert_A_T_has_correct_shape(obj):
+    """Helper to verify A_T has correct shape (transpose of A)."""
+    assert obj.A_T.shape == (obj.A.shape[1], obj.A.shape[0])
+
+
+def assert_A_T_is_adjoint_of_A(obj, input_dim, output_dim):
+    """Helper to verify A_T is the adjoint of A using inner product property."""
+    u = torch.randn(output_dim)
+    v = torch.randn(input_dim)
+    # Check <A @ v, u> = <v, A_T @ u>
+    lhs = torch.dot(obj.A @ v, u)
+    rhs = torch.dot(v, obj.A_T @ u)
+    assert torch.allclose(lhs, rhs)
+
+
+def assert_init_dual_variables_correct(obj, expected_shapes):
+    """Helper to verify init_dual_variables creates correct structure."""
+    dual_vars = obj.init_dual_variables()
+    expected = TensorDict(
+        {f"u_{idx}": torch.zeros(shape) for idx, shape in enumerate(expected_shapes)}
+    )
+    assert_allclose_td(dual_vars, expected)
+
+
+def assert_A_is_identity(obj, dim):
+    """Helper to verify A is identity matrix."""
+    v = torch.randn(dim)
+    result = obj.A @ v
+    assert torch.allclose(result, v)
+
+
+def assert_A_T_is_identity(obj, dim):
+    """Helper to verify A_T is identity matrix."""
+    v = torch.randn(dim)
+    result = obj.A_T @ v
+    assert torch.allclose(result, v)
+
+
+# ============================================================================
+# Fixtures
+# ============================================================================
 
 
 @pytest.fixture
@@ -60,18 +108,37 @@ class TestAllNonsmoothExpression:
         obj, _ = single_nonsmooth
         # For L1Norm(x), decomposition is L1Norm(z) with z = x
         # So A should be identity
-        v = torch.randn(5)
-        result = obj.A @ v
-        assert torch.allclose(result, v)
+        assert_A_is_identity(obj, dim=5)
 
     def test_b_is_zero(self, single_nonsmooth):
         """Test b is zero when affine expr has no bias."""
         obj, _ = single_nonsmooth
         assert torch.allclose(obj.b, torch.zeros(5))
 
+    def test_A_T_shape(self, single_nonsmooth):
+        """Test A_T has correct shape (transpose of A)."""
+        obj, _ = single_nonsmooth
+        assert_A_T_has_correct_shape(obj)
+
+    def test_A_T_is_identity(self, single_nonsmooth):
+        """Test A_T is identity when A is identity."""
+        obj, _ = single_nonsmooth
+        # For L1Norm(x), A is identity, so A_T should also be identity
+        assert_A_T_is_identity(obj, dim=5)
+
+    def test_A_T_is_adjoint_of_A(self, single_nonsmooth):
+        """Test A_T is the adjoint of A."""
+        obj, _ = single_nonsmooth
+        assert_A_T_is_adjoint_of_A(obj, input_dim=5, output_dim=5)
+
+    def test_init_dual_variables(self, single_nonsmooth):
+        """Test init_dual_variables creates correct structure."""
+        obj, _ = single_nonsmooth
+        assert_init_dual_variables_correct(obj, expected_shapes=[5])
+
     def test_A_matches_affine_expr(self, lasso_constraint):
         """Test A matches the matrix in affine expression."""
-        obj, x, A_matrix, b_vec = lasso_constraint
+        obj, _, A_matrix, _ = lasso_constraint
         # The decomposition is L1Norm(z) with z = A @ x - b
         # So obj.A should match A_matrix
         v = torch.randn(10)
@@ -81,9 +148,33 @@ class TestAllNonsmoothExpression:
 
     def test_b_matches_affine_expr(self, lasso_constraint):
         """Test b matches the bias in affine expression."""
-        obj, x, A_matrix, b_vec = lasso_constraint
+        obj, _, _, b_vec = lasso_constraint
         # Note: ADMMSplit negates b internally
         assert torch.allclose(obj.b, b_vec)
+
+    def test_A_T_shape_lasso(self, lasso_constraint):
+        """Test A_T has correct shape for lasso constraint."""
+        obj, _, _, _ = lasso_constraint
+        assert_A_T_has_correct_shape(obj)
+
+    def test_A_T_matches_matrix_transpose(self, lasso_constraint):
+        """Test A_T matches the transpose of the matrix."""
+        obj, _, A_matrix, _ = lasso_constraint
+        # obj.A_T should match A_matrix.T
+        v = torch.randn(5)
+        result = obj.A_T @ v
+        expected = A_matrix.T @ v
+        assert torch.allclose(result, expected)
+
+    def test_A_T_is_adjoint_of_A_lasso(self, lasso_constraint):
+        """Test A_T is the adjoint of A for lasso constraint."""
+        obj, _, _, _ = lasso_constraint
+        assert_A_T_is_adjoint_of_A(obj, input_dim=10, output_dim=5)
+
+    def test_init_dual_variables_lasso(self, lasso_constraint):
+        """Test init_dual_variables for lasso constraint."""
+        obj, _, _, _ = lasso_constraint
+        assert_init_dual_variables_correct(obj, expected_shapes=[5])
 
     def test_func_f_returns_zero(self, single_nonsmooth):
         """Test func_f returns 0 when there's no smooth part."""
@@ -109,19 +200,18 @@ class TestAllNonsmoothExpression:
 
     def test_hvp_f_ATA_linop(self, lasso_constraint):
         """Test hvp_f_ATA_linop with only non-smooth terms."""
-        obj, x, A_matrix, _ = lasso_constraint
+        obj, _, A_matrix, _ = lasso_constraint
         new_vals = TensorDict({"x": torch.ones(10)})
         rho = 2.0
-        sigma = 0.5
 
-        linop = obj.hvp_f_ATA_linop(new_vals, rho, sigma)
+        linop = obj.hvp_f_ATA_linop(new_vals, rho)
 
         # Test on a vector
         v = torch.randn(10)
         result = linop @ v
 
-        # Expected: rho * A^T A @ v + sigma * v (no Hessian for all-nonsmooth)
-        expected = rho * (A_matrix.T @ (A_matrix @ v)) + sigma * v
+        # Expected: rho * A^T A @ v (no Hessian for all-nonsmooth)
+        expected = rho * (A_matrix.T @ (A_matrix @ v))
         assert torch.allclose(result, expected)
 
     def test_r_variable_values(self, single_nonsmooth):
@@ -165,17 +255,34 @@ class TestMixedSameVariable:
 
     def test_A_shape(self, elastic_net_problem):
         """Test A has correct shape."""
-        obj, _, _, x = elastic_net_problem
+        obj, _, _, _ = elastic_net_problem
         # A maps from x to auxiliary variable z (same dimension)
         assert obj.A.shape == (16, 16)
 
     def test_A_is_identity(self, elastic_net_problem):
         """Test A is identity for L1Norm(x)."""
         obj, _, _, _ = elastic_net_problem
-        p = obj.A.shape[1]
-        v = torch.randn(p)
-        result = obj.A @ v
-        assert torch.allclose(result, v)
+        assert_A_is_identity(obj, dim=16)
+
+    def test_A_T_shape(self, elastic_net_problem):
+        """Test A_T has correct shape."""
+        obj, _, _, _ = elastic_net_problem
+        assert_A_T_has_correct_shape(obj)
+
+    def test_A_T_is_identity(self, elastic_net_problem):
+        """Test A_T is identity when A is identity."""
+        obj, _, _, _ = elastic_net_problem
+        assert_A_T_is_identity(obj, dim=16)
+
+    def test_A_T_is_adjoint_of_A(self, elastic_net_problem):
+        """Test A_T is the adjoint of A."""
+        obj, _, _, _ = elastic_net_problem
+        assert_A_T_is_adjoint_of_A(obj, input_dim=16, output_dim=16)
+
+    def test_init_dual_variables(self, elastic_net_problem):
+        """Test init_dual_variables creates correct structure."""
+        obj, _, _, _ = elastic_net_problem
+        assert_init_dual_variables_correct(obj, expected_shapes=[16])
 
     def test_func_f(self, elastic_net_problem):
         """Test func_f method."""
@@ -209,16 +316,15 @@ class TestMixedSameVariable:
         p = A.shape[1]
         new_vals = TensorDict({"x": torch.zeros(p)})
         rho = 1.5
-        sigma = 0.2
 
-        linop = obj.hvp_f_ATA_linop(new_vals, rho, sigma)
+        linop = obj.hvp_f_ATA_linop(new_vals, rho)
         v = torch.randn(p)
         result = linop @ v
 
-        # Expected: H @ v + rho * I @ v + sigma * v
+        # Expected: H @ v + rho * I @ v
         # (A is identity for this decomposition)
         hessian_v = A.T @ (A @ v)
-        expected = hessian_v + rho * v + sigma * v
+        expected = hessian_v + rho * v
         assert torch.allclose(result, expected)
 
     def test_variable_values(self, elastic_net_problem):
@@ -264,7 +370,7 @@ class TestMixedDisjointVariables:
 
     def test_f_and_affine_variable_values_smooth_extra(self, smooth_has_extra_var):
         """Test f_and_affine_variable_values includes both variables."""
-        obj, x, y = smooth_has_extra_var
+        obj, _, _ = smooth_has_extra_var
         vals = obj.f_and_affine_variable_values
         # Should include both x (from f) and y (from affine expr)
         assert "x" in vals
@@ -287,6 +393,21 @@ class TestMixedDisjointVariables:
         expected = torch.tensor([1.0, 2.0, 3.0])
         assert torch.allclose(result, expected)
 
+    def test_A_T_shape_smooth_extra(self, smooth_has_extra_var):
+        """Test A_T shape when smooth has extra variable."""
+        obj, _, _ = smooth_has_extra_var
+        assert_A_T_has_correct_shape(obj)
+
+    def test_A_T_is_adjoint_of_A_smooth_extra(self, smooth_has_extra_var):
+        """Test A_T is the adjoint of A when smooth has extra variable."""
+        obj, _, _ = smooth_has_extra_var
+        assert_A_T_is_adjoint_of_A(obj, input_dim=8, output_dim=3)
+
+    def test_init_dual_variables_smooth_extra(self, smooth_has_extra_var):
+        """Test init_dual_variables when smooth has extra variable."""
+        obj, _, _ = smooth_has_extra_var
+        assert_init_dual_variables_correct(obj, expected_shapes=[3])
+
     def test_initialization_nonsmooth_extra(self, nonsmooth_has_extra_var):
         """Test initialization when affine expr has extra variable."""
         obj, _, _, _ = nonsmooth_has_extra_var
@@ -298,7 +419,7 @@ class TestMixedDisjointVariables:
         self, nonsmooth_has_extra_var
     ):
         """Test f_and_affine_variable_values includes affine variables."""
-        obj, x, y, _ = nonsmooth_has_extra_var
+        obj, _, _, _ = nonsmooth_has_extra_var
         vals = obj.f_and_affine_variable_values
         # Should include both x (from f and affine) and y (from affine)
         assert "x" in vals
@@ -306,7 +427,7 @@ class TestMixedDisjointVariables:
 
     def test_A_shape_nonsmooth_extra(self, nonsmooth_has_extra_var):
         """Test A shape when affine expr has extra variable."""
-        obj, _, _, A_matrix = nonsmooth_has_extra_var
+        obj, _, _, _ = nonsmooth_has_extra_var
         # Input: (x, y) = 5 + 3 = 8
         # Output: z has dimension 3
         assert obj.A.shape == (3, 8)
@@ -322,9 +443,24 @@ class TestMixedDisjointVariables:
         expected = A_matrix @ x_val + y_val
         assert torch.allclose(result, expected)
 
+    def test_A_T_shape_nonsmooth_extra(self, nonsmooth_has_extra_var):
+        """Test A_T shape when affine expr has extra variable."""
+        obj, _, _, _ = nonsmooth_has_extra_var
+        assert_A_T_has_correct_shape(obj)
+
+    def test_A_T_is_adjoint_of_A_nonsmooth_extra(self, nonsmooth_has_extra_var):
+        """Test A_T is the adjoint of A when affine has extra variable."""
+        obj, _, _, _ = nonsmooth_has_extra_var
+        assert_A_T_is_adjoint_of_A(obj, input_dim=8, output_dim=3)
+
+    def test_init_dual_variables_nonsmooth_extra(self, nonsmooth_has_extra_var):
+        """Test init_dual_variables when affine has extra variable."""
+        obj, _, _, _ = nonsmooth_has_extra_var
+        assert_init_dual_variables_correct(obj, expected_shapes=[3])
+
     def test_grad_f_nonsmooth_extra(self, nonsmooth_has_extra_var):
         """Test grad_f only affects smooth variables."""
-        obj, x, y, _ = nonsmooth_has_extra_var
+        obj, _, _, _ = nonsmooth_has_extra_var
         new_vals = TensorDict({"x": torch.ones(5), "y": torch.zeros(3)})
         grads = obj.grad_f(new_vals)
 
@@ -376,15 +512,34 @@ class TestMultipleDecomposableAtoms:
     def test_A_is_identity(self, multiple_atoms):
         """Test A is identity when both are simple decompositions."""
         obj, _, _ = multiple_atoms
-        v = torch.randn(8)
-        result = obj.A @ v
-        assert torch.allclose(result, v)
+        assert_A_is_identity(obj, dim=8)
 
     def test_b_stacks_correctly(self, multiple_atoms):
         """Test b stacks correctly."""
         obj, _, _ = multiple_atoms
         assert obj.b.shape[0] == 8
         assert torch.allclose(obj.b, torch.zeros(8))
+
+    def test_A_T_shape_multiple(self, multiple_atoms):
+        """Test A_T has correct shape with multiple atoms."""
+        obj, _, _ = multiple_atoms
+        assert_A_T_has_correct_shape(obj)
+
+    def test_A_T_is_identity_multiple(self, multiple_atoms):
+        """Test A_T is identity when A is identity for multiple atoms."""
+        obj, _, _ = multiple_atoms
+        assert_A_T_is_identity(obj, dim=8)
+
+    def test_A_T_is_adjoint_of_A_multiple(self, multiple_atoms):
+        """Test A_T is the adjoint of A for multiple atoms."""
+        obj, _, _ = multiple_atoms
+        assert_A_T_is_adjoint_of_A(obj, input_dim=8, output_dim=8)
+
+    def test_init_dual_variables_multiple(self, multiple_atoms):
+        """Test init_dual_variables with multiple atoms."""
+        obj, _, _ = multiple_atoms
+        # Should have two dual variables, one for each atom
+        assert_init_dual_variables_correct(obj, expected_shapes=[5, 3])
 
     def test_variable_values(self, multiple_atoms):
         """Test variable_values includes all variables."""

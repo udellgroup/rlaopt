@@ -46,7 +46,7 @@ Here's a simple example of creating variables and building expressions:
    # Solve using proximal gradient
    config = ProxGradConfig(eta=0.01, use_linesearch=True)
    solver = ProxGrad(objective, config)
-   variable_values, final_error = solver.solve()
+   result = solver.solve()
 
 Lasso Regression Example
 ~~~~~~~~~~~~~~~~~~~~~~~~
@@ -81,10 +81,13 @@ A complete example of solving a Lasso regression problem:
    # Solve
    config = ProxGradConfig(eta=0.01, max_iters=1000, tol=1e-4)
    solver = ProxGrad(objective, config)
-   variable_values, final_error = solver.solve()
+   result = solver.solve()
 
-   print(f"Solution: {beta.value.data}")
-   print(f"Final error: {final_error}")
+   # Update variables with the solution
+   objective.update_variables(result.solution)
+
+   print(f"Solution: {beta.value}")
+   print(f"Final error: {result.err}")
 
 Key Features
 ------------

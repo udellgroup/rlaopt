@@ -5,6 +5,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 
 import torch
+from linops import LinearOperator
 from pydantic import BaseModel, ConfigDict
 
 
@@ -26,11 +27,13 @@ class Preconditioner(ABC):
         self._config = config
 
     @abstractmethod
-    def _update(self, A: torch.Tensor):
+    def _update(self, A: torch.Tensor | LinearOperator, dtype: torch.dtype):
         """Update the preconditioner based on the matrix A.
 
         Args:
-            A (torch.Tensor): The matrix for which to compute the preconditioner.
+            A (torch.Tensor | LinearOperator): The matrix for which to
+                compute the preconditioner.
+            dtype (torch.dtype): The data type for computations.
         """
         pass
 
