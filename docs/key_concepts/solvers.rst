@@ -90,7 +90,7 @@ Choosing a Solver
 **Use ADMM when:**
 
 * Your objective can be written in the form :math:`f(x) + \sum_{i = 1}^k g_i(A_i x - b_i)` where :math:`f` is smooth and :math:`g_i` are proxable
-* If there are no non-smooth components, use ProxGrad instead
+* If there are only smooth components, use ProxGrad instead
 
 **Use ProxGrad when:**
 
