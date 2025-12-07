@@ -16,8 +16,9 @@ license = "Apache-2.0"
 license-files = ["LICENSE"]
 authors = [
     {name = "Pratik Rathore", email = "pratikr@stanford.edu"},
+    {name = "Zachary Frangella", email = "zfran@stanford.edu"},
     {name = "Parth Nobel", email = "ptnobel@stanford.edu"},
-    {name = "Zachary Frangella", email = "zfran@stanford.edu"}
+    {name = "Alexa Hu", email = "xuningh@stanford.edu"},
 ]
 dependencies = [
     "numpy>=2.2.6",
