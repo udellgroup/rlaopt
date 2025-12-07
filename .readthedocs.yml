@@ -21,7 +21,7 @@ build:
   jobs:
     post_install:
       # Install the package itself so autodoc can import it
-      - pip install -e .[doc]
+      - pip install -e .
 
 # Explicitly set the version of Python and its requirements
 python:

@@ -8,6 +8,7 @@ problems by solving the ADMM linear system approximately using
 preconditioned conjugate gradient (PCG).
 """
 
+import math
 import time
 from dataclasses import dataclass
 from typing import Callable
@@ -39,19 +40,7 @@ PCG_TOL_EPS = 1e-3
 
 
 class ADMMConfig(SolverConfig):
-    """Configuration for the ADMM solver.
-
-    Attributes:
-        rho: Augmented Lagrangian penalty at initialization.
-        rho_update_factor: Factor to update rho in primal-dual balancing.
-        rho_update_threshold: Threshold for updating rho in primal-dual balancing.
-        alpha: Over-relaxation parameter.
-        sigma: Regularization parameter for the inexact ADMM linear system.
-        gamma: Exponent for the linear system solve tolerance.
-        preconditioner_config: Configuration for the preconditioner.
-        preconditioner_update_freq: Frequency (in iterations) for
-            updating the preconditioner.
-    """
+    """Configuration for the ADMM solver."""
 
     rho: float = Field(
         1.0,
@@ -510,7 +499,7 @@ def _solve_x_subproblem(
     # Solve the linear system using PCG
     pcg_solver = _PCG(lin_sys, preconditioner=preconditioner, detach=detach)
     rel_tol = min((primal_residual_norm * dual_residual_norm) ** 0.5, 1.0)
-    if rel_tol == 0.0:
+    if math.isclose(rel_tol, 0.0):
         rel_tol = PCG_TOL_EPS
     rel_tol /= (iter_ + 1) ** gamma
     stopping_criteria = PCGStoppingCriteria(
