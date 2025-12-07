@@ -1,7 +1,7 @@
 """ADMMSplit class for representing composite objective functions."""
 
 import torch
-from linops import IdentityOperator, LinearOperator, hstack, vstack
+from linops import LinearOperator, hstack, vstack
 from tensordict import merge_tensordicts
 
 from rlaopt.atoms import Atom, AtomDecomposition
@@ -50,7 +50,7 @@ class ADMMSplit(_OperatorSplit):
         # g(Ax - b) -> g(z) with the constraint Ax - b = z
         # NOTE: We form A_T explicitly to avoid potential issues with
         # automatic adjoint creation in certain linop implementations.
-        self._A, self._A_T, self._b = _extract_lin_op_and_bias(
+        self._A, self._A_T, self._b, self._b_shapes = _extract_lin_op_and_bias(
             self._affine_exprs, self.f_and_affine_variable_values
         )
 
@@ -110,6 +110,11 @@ class ADMMSplit(_OperatorSplit):
         return self._A
 
     @property
+    def A_T(self) -> LinearOperator:
+        """Returns the transpose of the linear operator A used in the decomposition."""
+        return self._A_T
+
+    @property
     def b(self) -> torch.Tensor:
         """Returns the bias vector b used in the decomposition."""
         return self._b
@@ -138,31 +143,44 @@ class ADMMSplit(_OperatorSplit):
         tds_r = [r.variable_values for r in self._r]
         return merge_tensordicts(TensorDict({}), *tds_r)
 
+    def init_dual_variables(self) -> TensorDict:
+        """Initialize dual variables (u) to zero.
+
+        Returns:
+            TensorDict: A dictionary of dual variables initialized to zero.
+        """
+        dual_vars = {}
+        for idx, shape in enumerate(self._b_shapes):
+            dual_vars[f"u_{idx}"] = torch.zeros(shape[0], device=self._b.device)
+        return TensorDict(dual_vars)
+
     def hvp_f_ATA_linop(
-        self, variable_values: TensorDict, rho: float, sigma: float
+        self, variable_values: TensorDict, rho: float
     ) -> LinearOperator:
-        """Form the Hessian + rho * A^T A + sigma * I linear operator.
+        """Form the Hessian + rho * A^T A linear operator.
 
         This is useful for inexactly solving the x-subproblem in ADMM methods.
 
         Args:
             variable_values (TensorDict): A dictionary of variables.
             rho (float): Scaling factor for A^T A term.
-            sigma (float): Scaling factor for the identity term.
 
         Returns:
             LinearOperator: The combined linear operator.
         """
         hvp_op = _HVPLinOp(self._f, variable_values)
         AT_A = self._A_T @ self._A
-        scaled_identity = sigma * IdentityOperator(hvp_op.shape[0]).to(hvp_op.device)
-        return hvp_op + rho * AT_A + scaled_identity
+        # HACK: add info that might not be preserved by vstack/hstack/summation
+        AT_A.device = hvp_op.device
+        total_op = hvp_op + rho * AT_A
+        total_op.device = hvp_op.device
+        return total_op
 
 
 def _extract_lin_op_and_bias(
     affine_exprs: list[Expression],
     f_and_affine_variable_values: TensorDict,
-) -> tuple[LinearOperator, LinearOperator, torch.Tensor]:
+) -> tuple[LinearOperator, LinearOperator, torch.Tensor, list[torch.Size]]:
     """Extracts the linear operator and bias from an affine expression.
 
     Args:
@@ -171,8 +189,9 @@ def _extract_lin_op_and_bias(
             the smooth part of the objective function along with the affine constraints.
 
     Returns:
-        tuple[LinearOperator, LinearOperator, torch.Tensor]: A tuple containing
-            the linear operator A, its transpose A.T, and the bias vector b.
+        tuple[LinearOperator, LinearOperator, torch.Tensor, list[torch.Size]]: A tuple
+            containing the linear operator A, its transpose A.T, the bias vector b,
+            and the shapes of the biases.
     """
     As = []
     ATs = []
@@ -193,4 +212,4 @@ def _extract_lin_op_and_bias(
     A = vstack(As)
     A_T = hstack(ATs)
     b = -torch.cat(bs, dim=0)  # Negate to match Ax - b form
-    return A, A_T, b
+    return A, A_T, b, [bias.shape for bias in bs]
