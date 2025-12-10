@@ -23,7 +23,7 @@ authors = [
 dependencies = [
     "numpy>=2.2.6",
     "torch>=2.6.0",
-    "torch_linops @ git+https://github.com/cvxgrp/torch_linops.git@193d4d5c793787b18ff363554009a6becc1b5d65",
+    "torch_linops >= 0.2.0",
     "pandas>=2.0.0",
     "pydantic>=2.12.0",
     "tensordict>=0.10.0",
