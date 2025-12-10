@@ -45,8 +45,10 @@ class L2Norm(NonsmoothRegularizer):
         proximal operator is:
 
             prox_{τ f}(v) = (1 - λ / max(||v||_2, λ)) * v,
-
-        where λ = scaling * prox_scaling. In particular, if ||v||_2 ≤ λ, the result is 0.
+            
+        where λ = scaling * prox_scaling
+        
+        If ||v||_2 ≤ λ, the result is 0
         """
         scaling = self.get_buffer("scaling")
         lam = scaling * prox_scaling 
