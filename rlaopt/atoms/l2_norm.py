@@ -44,18 +44,17 @@ class L2Norm(NonsmoothRegularizer):
         For f(x) = scaling * ||x||_2 and prox parameter tau = prox_scaling, the
         proximal operator is:
 
-            prox_{τ f}(v) = (1 - scaling * tau / ||v||_2)_+ * v
+            prox_{τ f}(v) = (1 - λ / max(||v||_2, λ)) * v,
 
-        where (·)_+ = max(·, 0). If ||v||_2 <= scaling * tau, then prox(v) = 0.
+        where λ = scaling * prox_scaling. In particular, if ||v||_2 ≤ λ, the result is 0.
         """
         scaling = self.get_buffer("scaling")
         lam = scaling * prox_scaling 
 
         def prox_l2(x: torch.Tensor) -> torch.Tensor:
-            norm = torch.linalg.norm(x, ord=2)
-            if norm == 0:
-                return torch.zeros_like(x)
-            factor = torch.clamp(1.0 - lam / norm, min=0.0)
-            return factor * x
+            norm = torch.linalg.norm(x)  # ||x||_2 (scalar)
+            denom = torch.maximum(norm, lam)  # max(||x||, λ)
+            scale = 1 - (lam / denom)  # 1 - (λ / max{||x||, λ})
+            return scale * x
 
         return relevant_variable_values.apply(prox_l2)

@@ -29,6 +29,19 @@ The :class:`~rlaopt.atoms.L1Norm` atom represents the L1 (Manhattan) norm: :math
    x = Variable((10,), name='x')
    l1 = L1Norm(x, scaling=0.1)  # 0.1 * ||x||_1
 
+L2 Norm
+~~~~~~~
+
+The :class:`~rlaopt.atoms.L2Norm` atom represents the L2 (Euclidean) norm: :math:`\|x\|_2 = \sqrt{\sum_i x_i^2}`.
+
+.. code-block:: python
+
+   from rlaopt.atoms import L2Norm
+   from rlaopt.expression import Variable
+
+   x = Variable((10,), name='x')
+   l2 = L2Norm(x, scaling=0.1)  # 0.1 * ||x||_2
+
 Sum of Squares
 ~~~~~~~~~~~~~~
 
@@ -61,6 +74,7 @@ Other Atoms
 
 rlaopt provides many other atoms:
 
+* :class:`~rlaopt.atoms.L2Norm`: L2 (Euclidean) norm
 * :class:`~rlaopt.atoms.Box`: Box constraints
 * :class:`~rlaopt.atoms.NonNegative`: Non-negativity constraints
 * :class:`~rlaopt.atoms.LinearEquality`: Linear equality constraints
