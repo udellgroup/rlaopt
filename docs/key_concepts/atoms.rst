@@ -118,5 +118,3 @@ Each atom provides information about its properties:
    print(atom.is_proxable())  # True
 
 These properties help determine which solvers can be used with the atom.
-
-

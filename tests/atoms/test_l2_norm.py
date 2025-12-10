@@ -79,9 +79,7 @@ class TestL2NormProx:
         # v has norm 5 -> factor = 1 - 1/5 = 0.8
         location = TensorDict({simple_variable.name: torch.tensor([3.0, 4.0, 0.0])})
         result = atom.prox(location, prox_scaling=1.0)
-        expected = TensorDict(
-            {simple_variable.name: torch.tensor([2.4, 3.2, 0.0])}
-        )
+        expected = TensorDict({simple_variable.name: torch.tensor([2.4, 3.2, 0.0])})
         assert_allclose_td(result, expected)
 
     def test_prox_with_scaling_factor(self, simple_variable):
@@ -90,9 +88,7 @@ class TestL2NormProx:
         # lam = 2.0 * 0.5 = 1.0, norm = 5 -> factor = 1 - 1/5 = 0.8
         location = TensorDict({simple_variable.name: torch.tensor([3.0, 4.0, 0.0])})
         result = atom.prox(location, prox_scaling=0.5)
-        expected = TensorDict(
-            {simple_variable.name: torch.tensor([2.4, 3.2, 0.0])}
-        )
+        expected = TensorDict({simple_variable.name: torch.tensor([2.4, 3.2, 0.0])})
         assert_allclose_td(result, expected)
 
     def test_prox_all_below_threshold(self, simple_variable):
@@ -173,7 +169,7 @@ class TestL2NormDecompose:
         decomp = decompositions[0]
 
         assert isinstance(decomp.atom, L2Norm)
-        
+
         assert decomp.affine_expr is affine_expr
 
         assert torch.allclose(decomp.atom.get_buffer("scaling"), torch.tensor(1.5))
