@@ -28,14 +28,11 @@ Let's solve a simple quadratic optimization problem:
    # Solve
    config = ProxGradConfig(eta=0.1, max_iters=100, tol=1e-6)
    solver = ProxGrad(objective, config)
-   variable_values, final_error = solver.solve()
+   result = solver.solve()
 
-   print(f"Solution: {x.value.data}")
+   print(f"Solution: {result.variable_values}")
    print(f"Target: {target}")
-   print(f"Final error: {final_error}")
-   print(f"Distance to target: {torch.norm(x.value.data - target)}")
+   print(f"Final error: {result.err}")
+   print(f"Distance to target: {torch.linalg.norm(result.variable_values.to_flat_tensor() - target)}")
 
 This should find :math:`x = \text{target}`, minimizing the squared distance.
-
-
-

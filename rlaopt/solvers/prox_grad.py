@@ -1,5 +1,6 @@
 """Proximal gradient solver implementation."""
 
+import time
 from dataclasses import dataclass, replace
 from typing import Callable
 
@@ -9,22 +10,37 @@ from pydantic import Field
 from rlaopt.expression import Expression
 from rlaopt.ext_tensordict import TensorDict
 from rlaopt.solvers.configs_base import SolverConfig, StoppingCriteria
-from rlaopt.solvers.solver_base import OptimSolver, SolverState
+from rlaopt.solvers.solver_base import (
+    ConvergenceStatus,
+    OptimResult,
+    OptimSolver,
+    SolverState,
+)
 from rlaopt.splitting import ProxGradSplit
 
 
 class ProxGradConfig(SolverConfig):
     """Configuration for the proximal gradient solver."""
 
-    eta: float = Field(default=1.0, gt=0.0, description="Step size for the gradient update.")
-    use_acceleration: bool = Field(default=False, description="Whether to use acceleration techniques.")
-    use_linesearch: bool = Field(default=True, description="Whether to use line search for step size selection.")
+    eta: float = Field(
+        default=1.0, gt=0.0, description="Step size for the gradient update."
+    )
+    use_acceleration: bool = Field(
+        default=False, description="Whether to use acceleration techniques."
+    )
+    use_linesearch: bool = Field(
+        default=True, description="Whether to use line search for step size selection."
+    )
 
 
 class ProxGradStoppingCriteria(StoppingCriteria):
     """Stopping criteria specific to the Proximal Gradient solver."""
 
-    tol: float = Field(default=1e-4, gt=0.0, description="Tolerance for convergence based on the error metric.")
+    tol: float = Field(
+        default=1e-4,
+        gt=0.0,
+        description="Tolerance for convergence based on the error metric.",
+    )
 
 
 @dataclass(frozen=True)
@@ -45,6 +61,21 @@ class ProxGradState(SolverState):
     err: torch.Tensor = torch.tensor(torch.inf)
 
 
+@dataclass(frozen=True)
+class ProxGradResult(OptimResult):
+    """Result container for the proximal gradient solver.
+
+    Attributes:
+        variable_values: Optimized variable values.
+        convergence_status: Status indicating how the solver terminated.
+        num_iters: Number of iterations performed.
+        solver_time: Time taken by the solver in seconds.
+        err: Final error metric upon termination.
+    """
+
+    err: float
+
+
 class ProxGrad(OptimSolver):
     """Proximal gradient solver for optimization problems.
 
@@ -60,24 +91,27 @@ class ProxGrad(OptimSolver):
     - Combinations of acceleration and line search
     """
 
-    def __init__(self, obj: Expression, config: ProxGradConfig):
+    def __init__(self, obj: Expression, config: ProxGradConfig, detach: bool = True):
         """Initialize the proximal gradient solver.
 
         Args:
             obj: The optimization objective (Expression).
             config: Configuration for the solver.
+            detach: Whether to detach params and state from computation graph
+                between iterations. Set to False only if you need to differentiate
+                through the entire solver. Default: True.
         """
         if not isinstance(obj, Expression):
             raise ValueError("ProxGrad solver requires an Expression objective.")
         if not isinstance(config, ProxGradConfig):
             raise ValueError("ProxGrad solver requires a ProxGradConfig configuration.")
-        super().__init__(obj, config)
+        super().__init__(obj, config, detach)
 
         op_split = ProxGradSplit(obj)
 
         self._init_state = _build_init_state(config.eta, config.use_acceleration)
         self._step = _build_step(
-            op_split, config.use_acceleration, config.use_linesearch
+            op_split, config.use_acceleration, config.use_linesearch, detach
         )
         self._solve = lambda tol, max_iters: _build_solve(
             op_split, self._init_state, self._step, tol, max_iters
@@ -112,7 +146,7 @@ class ProxGrad(OptimSolver):
         self,
         variable_values: TensorDict | None = None,
         stopping_criteria: ProxGradStoppingCriteria = ProxGradStoppingCriteria(),
-    ) -> tuple[TensorDict, torch.Tensor]:
+    ) -> ProxGradResult:
         """Solve the optimization problem using the proximal gradient method.
 
         Args:
@@ -122,7 +156,8 @@ class ProxGrad(OptimSolver):
                 Defaults to ProxGradStoppingCriteria().
 
         Returns:
-            Tuple of optimized variable values and final solver error.
+            ProxGradResult: Result of the optimization containing optimized variable
+                values among other metrics.
         """
         solve_fn = self._solve(
             tol=stopping_criteria.tol, max_iters=stopping_criteria.max_iters
@@ -151,6 +186,7 @@ def _build_step(
     op_split: ProxGradSplit,
     use_acceleration: bool,
     use_linesearch: bool,
+    detach: bool,
 ) -> Callable[
     [TensorDict, ProxGradState],
     tuple[TensorDict, ProxGradState],
@@ -174,6 +210,12 @@ def _build_step(
         ) -> tuple[TensorDict, ProxGradState]:
             var_vals_prev = var_vals
             var_vals, state = _accel_prox_grad_ls_step(var_vals, state, f, grad_f, prox)
+
+            # Detach if requested to avoid expanding autodiff tree
+            if detach:
+                var_vals = var_vals.detach()
+                var_vals_prev = var_vals_prev.detach()
+
             return var_vals, replace(
                 state, iter_=state.iter_ + 1, variable_values_prev=var_vals_prev
             )
@@ -186,6 +228,12 @@ def _build_step(
             var_vals_prev = var_vals
             var_vals = _accel_prox_grad_step(var_vals, state, grad_f, prox)
             err = err_fn(var_vals, state)
+
+            # Detach if requested to avoid expanding autodiff tree
+            if detach:
+                var_vals = var_vals.detach()
+                var_vals_prev = var_vals_prev.detach()
+
             return var_vals, replace(
                 state,
                 iter_=state.iter_ + 1,
@@ -199,6 +247,11 @@ def _build_step(
             var_vals: TensorDict, state: ProxGradState
         ) -> tuple[TensorDict, ProxGradState]:
             var_vals, state = _linesearch(var_vals, state, f, grad_f, prox)
+
+            # Detach if requested to avoid expanding autodiff tree
+            if detach:
+                var_vals = var_vals.detach()
+
             return var_vals, replace(state, iter_=state.iter_ + 1)
 
     else:
@@ -208,6 +261,11 @@ def _build_step(
         ) -> tuple[TensorDict, ProxGradState]:
             var_vals = _prox_grad_step(var_vals, state, grad_f, prox)
             err = err_fn(var_vals, state)
+
+            # Detach if requested to avoid expanding autodiff tree
+            if detach:
+                var_vals = var_vals.detach()
+
             return var_vals, replace(state, iter_=state.iter_ + 1, err=err)
 
     return step
@@ -219,11 +277,13 @@ def _build_solve(
     step_fn: Callable,
     tol: float,
     max_iters: int,
-) -> Callable[[TensorDict | None], tuple[TensorDict, torch.Tensor]]:
+) -> Callable[[TensorDict | None], ProxGradResult]:
     """Build the solve function with stopping criteria."""
 
-    def solve(var_vals: TensorDict | None = None) -> tuple[TensorDict, torch.Tensor]:
+    def solve(var_vals: TensorDict | None = None) -> ProxGradResult:
         """Solve the optimization problem."""
+        ts = time.time()
+
         if var_vals is None:
             var_vals = op_split.variable_values
 
@@ -235,7 +295,20 @@ def _build_solve(
         while state.err > epsilon and state.iter_ < max_iters:
             var_vals, state = step_fn(var_vals, state)
 
-        return var_vals, state.err
+        if state.err <= epsilon:
+            convergence_status = ConvergenceStatus.CONVERGED
+        else:
+            convergence_status = ConvergenceStatus.NOT_CONVERGED
+
+        total_time = time.time() - ts
+
+        return ProxGradResult(
+            variable_values=var_vals,
+            convergence_status=convergence_status,
+            num_iters=state.iter_,
+            solver_time=total_time,
+            err=state.err.item(),
+        )
 
     return solve
 

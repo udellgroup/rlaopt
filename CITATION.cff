@@ -1,0 +1,15 @@
+cff-version: 1.2.0
+message: "If you use this software in your work, please cite it as below."
+authors:
+  - family-names: Rathore
+    given-names: Pratik
+  - family-names: Frangella
+    given-names: Zachary
+  - family-names: Nobel
+    given-names: Parth
+  - family-name: Hu
+    given-names: Alexa
+  - family-name: Udell
+    given-names: Madeleine
+title: "rlaopt: Randomized linear algebra-based methods for optimization and scientific computing in PyTorch"
+url: "https://github.com/udellgroup/rlaopt"

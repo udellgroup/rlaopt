@@ -5,7 +5,7 @@ This example demonstrates solving an Elastic Net regression problem, which combi
 
 .. math::
 
-   \minimize_{\beta} \frac{1}{2}\|X\beta - y\|_2^2 + \lambda_1 \|\beta\|_1 + \lambda_2 \|\beta\|_2^2
+   \operatorname{minimize}_{\beta} \frac{1}{2}\|X\beta - y\|_2^2 + \lambda_1 \|\beta\|_1 + \lambda_2 \|\beta\|_2^2
 
 Problem Setup
 -------------
@@ -53,10 +53,7 @@ Solving
 
    config = ProxGradConfig(eta=0.01, use_linesearch=True, max_iters=1000, tol=1e-4)
    solver = ProxGrad(objective, config)
-   variable_values, final_error = solver.solve()
+   result = solver.solve()
 
-   print(f"Solution: {beta.value.data}")
-   print(f"Final error: {final_error}")
-
-
-
+   print(f"Solution: {result.variable_values}")
+   print(f"Final error: {result.err}")

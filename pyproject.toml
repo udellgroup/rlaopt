@@ -2,6 +2,9 @@
 requires = ["setuptools", "wheel"]
 build-backend = "setuptools.build_meta"
 
+[tool.setuptools.packages.find]
+include = ["rlaopt*"]
+
 [project]
 name = "rlaopt"
 version = "0.1.0"
@@ -13,13 +16,14 @@ license = "Apache-2.0"
 license-files = ["LICENSE"]
 authors = [
     {name = "Pratik Rathore", email = "pratikr@stanford.edu"},
+    {name = "Zachary Frangella", email = "zfran@stanford.edu"},
     {name = "Parth Nobel", email = "ptnobel@stanford.edu"},
-    {name = "Zachary Frangella", email = "zfran@stanford.edu"}
+    {name = "Alexa Hu", email = "xuningh@stanford.edu"},
 ]
 dependencies = [
     "numpy>=2.2.6",
     "torch>=2.6.0",
-    "torch_linops @ git+https://github.com/cvxgrp/torch_linops.git@193d4d5c793787b18ff363554009a6becc1b5d65",
+    "torch_linops >= 0.2.0",
     "pandas>=2.0.0",
     "pydantic>=2.12.0",
     "tensordict>=0.10.0",

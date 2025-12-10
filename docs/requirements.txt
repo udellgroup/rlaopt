@@ -3,6 +3,7 @@
 
 sphinx>=7.0.0
 sphinx-book-theme>=1.0.0
+sphinxcontrib-bibtex>=2.6.0
 myst-parser>=2.0.0
 autodoc-pydantic>=2.0.0
 

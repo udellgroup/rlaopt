@@ -21,7 +21,7 @@ class _AffineExprLinOp(LinearOperator):
 
         input_dim = smooth_expr_vars.flat_dim()
         self._shape = (self._bias.shape[0], input_dim)
-        self._device = self._bias.device
+        self.device = self._bias.device
 
     def _matmul_impl(self, v: torch.Tensor):
         v_td = self._unflatten(v)
@@ -50,7 +50,7 @@ class _AffineExprAdjointLinOp(LinearOperator):
         # Transpose shape
         m, n = forward_shape
         self._shape = (n, m)
-        self._device = smooth_expr_vars.to_flat_tensor().device
+        self.device = smooth_expr_vars.to_flat_tensor().device
 
     def _matmul_impl(self, v: torch.Tensor) -> torch.Tensor:
         """Compute A.T @ v using VJP."""
@@ -81,7 +81,8 @@ class _HVPLinOp(LinearOperator):
 
         n = variable_values.flat_dim()
         self._shape = (n, n)
-        self._device = variable_values.to_flat_tensor().device
+        self._adjoint = self  # Hessian is symmetric
+        self.device = variable_values.to_flat_tensor().device
 
     def _matmul_impl(self, v: torch.Tensor) -> torch.Tensor:
         """Compute Hessian @ v using forward-over-reverse autodiff."""

@@ -149,8 +149,8 @@ def _solve_and_verify(lin_sys, preconditioner_config, tol):
     _verify_solution(lin_sys, params, tol, "Step-by-step solving")
 
     # Test solve method
-    params, _ = solver.solve(stopping_criteria=stopping_criteria)
-    _verify_solution(lin_sys, params, tol, "Solve method")
+    result = solver.solve(stopping_criteria=stopping_criteria)
+    _verify_solution(lin_sys, result.solution, tol, "Solve method")
 
 
 def _verify_solution(lin_sys, params, tol, method_name):
@@ -201,11 +201,13 @@ def _solve_system(A, B, reg):
 def _solved_params_sq_norm(A, B, reg, preconditioner_config, tol):
     """Compute ||w||^2 where w solves (A + reg*I)w = B using PCG."""
     lin_sys = LinSys(A, B, reg)
-    solver = PCG(lin_sys, PCGConfig(preconditioner_config=preconditioner_config))
-    params, _ = solver.solve(
+    solver = PCG(
+        lin_sys, PCGConfig(preconditioner_config=preconditioner_config), detach=False
+    )
+    result = solver.solve(
         stopping_criteria=PCGStoppingCriteria(max_iters=MAX_ITERS, tol=tol)
     )
-    return torch.linalg.norm(params) ** 2
+    return torch.linalg.norm(result.solution) ** 2
 
 
 def _analytical_gradient(A, B, reg, wrt):

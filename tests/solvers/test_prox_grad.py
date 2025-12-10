@@ -247,9 +247,10 @@ def _solve_and_verify(obj, eta, tol, use_acceleration, use_linesearch):
     assert err <= tol, f"Step-by-step solving failed: error {err} > tolerance {tol}"
 
     # Test using solve method
-    params, err = opt.solve(stopping_criteria=stopping_criteria)
-    assert err.item() <= tol * (params.flat_dim() ** 0.5), (
-        f"Solve method failed: error {err.item()} > tolerance {tol}"
+    result = opt.solve(stopping_criteria=stopping_criteria)
+    params, err = result.variable_values, result.err
+    assert err <= tol * (params.flat_dim() ** 0.5), (
+        f"Solve method failed: error {err} > tolerance {tol}"
     )
 
 

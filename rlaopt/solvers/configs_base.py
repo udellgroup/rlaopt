@@ -14,5 +14,6 @@ class StoppingCriteria(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    max_iters: int = Field(default=1000, gt=0, description="Maximum number of iterations.")
-    tol: float = Field(default=1e-6, gt=0, description="Tolerance for convergence.")
+    max_iters: int = Field(
+        default=1000, gt=0, description="Maximum number of iterations."
+    )
