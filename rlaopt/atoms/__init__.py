@@ -6,6 +6,7 @@ from rlaopt.atoms.box import Box as Box
 from rlaopt.atoms.elastic_net import ElasticNet as ElasticNet
 from rlaopt.atoms.halfspace import Halfspace as Halfspace
 from rlaopt.atoms.l1_norm import L1Norm as L1Norm
+from rlaopt.atoms.l2_norm import L2Norm as L2Norm
 from rlaopt.atoms.linear_equality import LinearEquality as LinearEquality
 from rlaopt.atoms.linear_model.linear_model import (
     CompoundPoissonGammaRegression as CompoundPoissonGammaRegression,
