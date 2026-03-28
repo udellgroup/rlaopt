@@ -19,11 +19,7 @@ class LInfNormBall(Box):
         radius: Non-negative radius of the L-infinity norm ball (default: 1.0).
     """
 
-    def __init__(
-        self, 
-        x: Variable, 
-        radius: float | int | torch.Tensor = 1.0
-    ):
+    def __init__(self, x: Variable, radius: float | int | torch.Tensor = 1.0):
         """Initialize the L-infinity norm ball constraint atom."""
         radius = _validate_radius(radius)
         if torch.is_tensor(radius):
@@ -47,4 +43,5 @@ def _validate_radius(radius: float | int | torch.Tensor) -> float | torch.Tensor
             raise ValueError("radius must be non-negative")
         return radius
     raise TypeError(
-        f"radius must be float, int, or Tensor, got {type(radius).__name__}")
+        f"radius must be float, int, or Tensor, got {type(radius).__name__}"
+    )
