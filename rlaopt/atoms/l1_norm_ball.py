@@ -98,10 +98,12 @@ def _validate_radius(radius: float | int | torch.Tensor) -> float | torch.Tensor
         if torch.any(radius < 0):
             raise ValueError("radius must be non-negative")
         return radius
-    raise TypeError(f"radius must be float, int, or Tensor, got {type(radius).__name__}")
+    raise TypeError(
+        f"radius must be float, int, or Tensor, got {type(radius).__name__}")
 
 
-def _indicator(satisfied: bool, device: torch.device, dtype: torch.dtype) -> torch.Tensor:
+def _indicator(satisfied: bool, 
+               device: torch.device, dtype: torch.dtype) -> torch.Tensor:
     """Return 0 if satisfied, infinity otherwise."""
     if satisfied:
         return torch.tensor(0.0, device=device, dtype=dtype)
