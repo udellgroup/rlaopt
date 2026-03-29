@@ -24,9 +24,14 @@ from .step_builder import get_step_fn
 class GradSolverStoppingCriteria(StoppingCriteria):
     """Stopping criteria for Gradient-based solvers.
 
+    Convergence is declared when:
+
+    ||G(x_k)|| <= eps_abs + eps_rel * ||x_k||.
+
     Attributes:
         max_iters: Maximum number of iterations.
-        tol: Tolerance for convergence based on the error metric.
+        eps_abs: Absolute tolerance.
+        eps_rel: Relative tolerance.
     """
 
     eps_abs: float = Field(default=1e-4, gt=0.0)

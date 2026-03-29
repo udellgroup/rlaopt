@@ -6,6 +6,7 @@ from typing import Callable
 
 import torch
 
+from rlaopt.data import DataLoader
 from rlaopt.ext_tensordict import TensorDict
 from rlaopt.linalg import IdentityConfig
 from rlaopt.solvers.gradient_solvers import gradient_solver_core as core
@@ -18,6 +19,37 @@ from .gradient_solver_states import GradSolverState, SapphireState
 from .precond_update_fn_builder import build_preconditioner_update
 
 DataBatch = tuple[torch.Tensor, torch.Tensor, torch.Tensor]
+
+
+# Core step interface
+def optimization_step(
+    var_values: TensorDict,
+    state: GradSolverState,
+    var_values_transform: Callable,
+    gradient_fn: Callable,
+    apply_updates: Callable,
+    update_precond_fn: Callable,
+) -> tuple[TensorDict, GradSolverState]:
+    state = update_precond_fn(var_values, state)
+
+    updates, state = _get_updates(var_values, state, var_values_transform, gradient_fn)
+
+    var_values, state = apply_updates(updates, var_values, state)
+
+    return var_values, state
+
+
+def _get_updates(
+    var_values: TensorDict,
+    state: GradSolverState,
+    var_values_transform: Callable,
+    gradient_fn: Callable,
+):
+    var_values, state = var_values_transform(var_values, state)
+
+    updates, state = gradient_fn(var_values, state)
+
+    return updates, state
 
 
 def get_step_fn(config: GradSolverConfig, op_split: ProxGradSplit | SapphireSplit):
@@ -33,44 +65,34 @@ def _prox_grad_step_builder(config: ProxGradConfig, op_split: _OperatorSplit):
     # Get functions used for building proximal gradient step
     f, grad_f, prox_fn = op_split.func_f, op_split.grad_f, op_split.prox
 
-    prox_step = partial(
-        core.prox_gd_step,
-        full_gradient_fn=grad_f,
-        prox_fn=prox_fn,
-    )
-
-    ls_step = partial(core.linesearch, f=f, full_gradient_fn=grad_f, prox_fn=prox_fn)
-
-    # Only non-ls chains get err_fn as ls automatically
-    # computes current error.
     err_fn = partial(core.grad_mapping_norm, full_gradient_fn=grad_f, prox_fn=prox_fn)
 
-    #  Update chain for acceleration and linesearch
-    if config.use_acceleration and config.use_linesearch:
-        chain = (core.nest_accel_update, ls_step)
+    prox_update = partial(core.prox_update, prox_fn=prox_fn)
 
-    # Update chain for just acceleration
-    elif config.use_acceleration:
-        chain = (core.nest_accel_update, prox_step, err_fn)
-
-    # Update chain for just linesearch
-    elif config.use_linesearch:
-        chain = (ls_step,)
-
-    # Update chain for vanilla proximal gradient.
+    if config.use_linesearch == False:
+        return prox_update
     else:
-        chain = (prox_step, err_fn)
+        apply_updates = partial(core.linesearch, f=f, apply_updates=prox_update)
 
-    return _chain_updates(chain)
+    if config.use_acceleration:
+        var_values_transform = core.nest_accel_update
+    else:
+        var_values_transform = lambda p, s: (p, s)
 
+    _step = partial(
+        optimization_step,
+        var_values_transform=var_values_transform,
+        gradient_fn=grad_f,
+        apply_updates=apply_updates,
+        update_precond_fn=lambda s: s,
+    )
 
-def _chain_updates(update_chain: tuple[Callable, ...]):
-    def chained_updates(variable_values: TensorDict, state: GradSolverState):
-        for update_fn in update_chain:
-            variable_values, state = update_fn(variable_values, state)
-        return variable_values, replace(state, iter_=state.iter_ + 1)
+    def step(var_values, state):
+        var_values, state = _step(var_values, state)
+        state = err_fn(var_values, state)
+        return var_values, state
 
-    return chained_updates
+    return step
 
 
 ##### SAPPHIRE builder #####
@@ -79,6 +101,10 @@ def _sapphire_step_builder(config: SapphireConfig, op_split: SapphireSplit):
     n = op_split.num_samples
     grad_batch_size = op_split.loader.batch_size
     conv_factor = n // grad_batch_size
+    # Create dataloader for the preconditioner and stepsize update
+    precond_loader = DataLoader(
+        op_split.loader.dataset, batch_size=op_split.loader.batch_size
+    )
 
     # Get loss and prediction functions
     loss_fn, prediction_fn = op_split.model._loss_fn, op_split.model._get_prediction
@@ -86,29 +112,29 @@ def _sapphire_step_builder(config: SapphireConfig, op_split: SapphireSplit):
     # Get batch and full gradient functions
     batch_grad_fn, full_gradient_fn = op_split.batch_grad_loss, op_split.grad_loss
 
-    # Get prox operator and data loader functions
-    prox_fn, loader_fn = op_split.prox, op_split.loader.get_batch
-
-    # Setup termination function
-    termination_fn = partial(
-        core.grad_mapping_norm, full_gradient_fn=full_gradient_fn, prox_fn=prox_fn
-    )
+    # Get prox operator and data loader
+    prox_fn, loader = op_split.prox, op_split.loader
 
     # Get gradient oracle for base method specified in the config file.
     if config.base_method == "sgd":
-        gradient_fn = core.SGDOracle.build_gradient_fn(batch_grad_fn=batch_grad_fn)
+        gradient_fn = core.SGDOracle.build_gradient_fn(
+            loader=loader, batch_grad_fn=batch_grad_fn
+        )
     elif config.base_method == "svrg":
         # Get snapshot update frequency
         update_threshold = conv_factor * config.snapshot_update_freq
         gradient_fn = core.SVRGOracle.build_gradient_fn(
+            loader=loader,
             batch_gradient_fn=batch_grad_fn,
             full_gradient_fn=full_gradient_fn,
             update_threshold=update_threshold,
         )
     else:
         gradient_fn = core.SAGAOracle.build_gradient_fn(
+            loader=loader,
             loss_fn=loss_fn,
             prediction_fn=prediction_fn,
+            grad_reg=op_split.grad_reg,
             n=n,
             has_intercept=op_split.model.fit_intercept,
         )
@@ -124,6 +150,7 @@ def _sapphire_step_builder(config: SapphireConfig, op_split: SapphireSplit):
     update_precond_fn = build_preconditioner_update(
         config.precond_config,
         op_split,
+        precond_loader,
         precond_update_freq,
         device,
         dtype,
@@ -132,79 +159,47 @@ def _sapphire_step_builder(config: SapphireConfig, op_split: SapphireSplit):
 
     # Branching condition
     # config_cond is True when an identity preconditioner is used
-    # or the Nyström preconditioner is used and there is no non-smooth term
+    # or the Nyström preconditioner is used and the objective is smooth.
 
     config_cond = isinstance(config.precond_config, IdentityConfig) or (
         not isinstance(config.precond_config, IdentityConfig) and op_split.r is None
     )
 
     if config_cond:
-        return _sapphire_pipeline_chain(
-            loader_fn,
-            gradient_fn,
-            core.precond_grad,
-            prox_fn,
-            update_precond_fn,
-            termination_fn,
-            check_termination_freq=check_termination_freq,
-        )
+
+        def apply_updates(
+            updates: TensorDict, var_values: TensorDict, state: SapphireState
+        ):
+            dir_ = core.precond_grad(updates, state)
+            return core.prox_update(var_values, dir_, state, prox_fn)
+
     else:
-        # Branch where non-identity preconditioner is used and there is a non-smooth
-        # proxable regularizer present.
-        prox_P_fn = partial(
-            core.prox_update_P,
-            subproblem_iters=config.subproblem_iters,
-            prox_fn=prox_fn,
-        )
-    return _sapphire_pipeline_chain(
-        loader_fn,
-        gradient_fn,
-        None,
-        prox_P_fn,
-        update_precond_fn,
-        termination_fn,
-        check_termination_freq=check_termination_freq,
+
+        def apply_updates(
+            updates: TensorDict, var_values: TensorDict, state: SapphireState
+        ):
+            return core.prox_update_P(
+                var_values, updates, state, config.subproblem_iters, prox_fn
+            )
+
+    _step = partial(
+        optimization_step,
+        var_values_transform=lambda p, s: (p, s),
+        gradient_fn=gradient_fn,
+        apply_updates=apply_updates,
+        update_precond_fn=update_precond_fn,
     )
 
-
-def _sapphire_pipeline_chain(
-    loader_fn: Callable[[], DataBatch],
-    gradient_fn: Callable[
-        [TensorDict, SapphireState, DataBatch], tuple[TensorDict, SapphireState]
-    ],
-    transform_fn: Callable[[TensorDict, SapphireState], TensorDict] | None,
-    update_fn: Callable[
-        [TensorDict, TensorDict, SapphireState], tuple[TensorDict, SapphireState]
-    ],
-    update_precond_fn: Callable[[DataBatch, TensorDict, SapphireState], SapphireState],
-    termination_fn: Callable,
-    check_termination_freq: int = 100,
-):
-    """Pipeline: load data → preconditioner update → gradient → transform
-    → variable update → check termination.
-    """
-    if transform_fn is None:
-        transform_fn = core.identity_transform
-
-    def step(variable_values: TensorDict, state: SapphireState):
-        # Get batch
-        batch = loader_fn()
-
-        # Update preconditioner if needed
-        state = update_precond_fn(variable_values, state, batch)
-
-        # Compute gradient
-        grads, state = gradient_fn(variable_values, state, batch)
-
-        # Transform gradient (e.g., preconditioning)
-        updates = transform_fn(grads, state)
-
-        # Apply update
-        variable_values, state = update_fn(variable_values, updates, state)
+    def step(
+        var_values: TensorDict, state: SapphireState
+    ) -> tuple[TensorDict, SapphireState]:
+        var_values, state = _step(var_values, state)
 
         if state.iter_ % check_termination_freq == 0:
-            variable_values, state = termination_fn(variable_values, state)
+            var_values, state = core.grad_mapping_norm(
+                var_values, state, full_gradient_fn, prox_fn
+            )
 
-        return variable_values, replace(state, iter_=state.iter_ + 1)
+        return var_values, replace(state, iter_=state.iter_ + 1)
 
     return step

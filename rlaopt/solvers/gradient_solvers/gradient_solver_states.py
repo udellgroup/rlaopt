@@ -133,22 +133,22 @@ def _build_prox_grad_state(
     else:
         variable_values_prev = None
     return ProxGradState(
-        iter_=0, eta=config.eta0, variable_values_prev=variable_values_prev
+        iter_=0, eta=config.eta, variable_values_prev=variable_values_prev
     )
 
 
 def _build_sapphire_state(
     op_split: SapphireSplit, variable_values: TensorDict, config: SapphireConfig
 ) -> SapphireState:
-    eta0, precond_update_freq = config.eta0, config.precond_update_freq
+    eta, precond_update_freq = config.eta, config.precond_update_freq
     n = op_split.num_samples
 
     if config.base_method == "sgd":
-        return SGDState(iter_=0, eta=eta0, precond_update_freq=precond_update_freq)
+        return SGDState(iter_=0, eta=eta, precond_update_freq=precond_update_freq)
     elif config.base_method == "svrg":
         return SVRGState(
             iter_=0,
-            eta=eta0,
+            eta=eta,
             precond_update_freq=precond_update_freq,
             snapshot=None,
             snapshot_grad=None,
@@ -164,7 +164,7 @@ def _build_sapphire_state(
             table = torch.zeros(n, device=device)
         return SAGAState(
             iter_=0,
-            eta=eta0,
+            eta=eta,
             precond_update_freq=precond_update_freq,
             table=table,
             grad_avg=grad_avg,

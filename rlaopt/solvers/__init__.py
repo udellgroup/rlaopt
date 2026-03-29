@@ -23,6 +23,7 @@ from rlaopt.solvers.pcg import PCGConfig as PCGConfig
 from rlaopt.solvers.pcg import PCGResult as PCGResult
 from rlaopt.solvers.pcg import PCGState as PCGState
 from rlaopt.solvers.pcg import PCGStoppingCriteria as PCGStoppingCriteria
+from rlaopt.solvers.solver_base import ConvergenceStatus as ConvergenceStatus
 from rlaopt.solvers.solver_base import LinSysSolver as LinSysSolver
 from rlaopt.solvers.solver_base import OptimResult as OptimResult
 from rlaopt.solvers.solver_base import OptimSolver as OptimSolver
