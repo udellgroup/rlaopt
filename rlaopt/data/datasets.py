@@ -142,7 +142,8 @@ class Dataset(BaseDataset, torch.utils.data.TensorDataset):
         dtype (torch.dtype, optional): Data type for tensors. Defaults to torch.float32.
 
     Raises:
-        ValueError: If X is not 2-dimensional or if X and y have mismatched sample sizes.
+        ValueError: If X is not 2-dimensional or if X and y have mismatched
+        sample sizes.
 
     Examples:
         >>> # From numpy
@@ -220,7 +221,10 @@ class Dataset(BaseDataset, torch.utils.data.TensorDataset):
         X, y = super().__getitem__(index)
 
         # Return the data, target, and the index
-        # The index is returned as a single-element tensor for consistency with collation
+        # The index is returned as a single-element tensor for consistency with
+        # collation
+        if isinstance(index, slice):
+            return X, y, index
         return X, y, torch.as_tensor(index, dtype=torch.long)
 
     @classmethod
