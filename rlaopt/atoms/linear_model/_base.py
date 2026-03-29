@@ -177,7 +177,7 @@ class BaseLinearModel(Atom, ABC):
         total_loss = 0.0
         n_samples = 0
 
-        for X_batch, y_batch in self.dataloader:
+        for X_batch, y_batch, _ in self.dataloader:
             loss = self._get_batch_loss(beta, intercept, X_batch, y_batch)
             total_loss += loss
             n_samples += X_batch.shape[0]
@@ -217,7 +217,7 @@ class BaseLinearModel(Atom, ABC):
 
         # Case 3: Training dataset - batched (for both Dataset and BatchedDataset)
         predictions = []
-        for X_batch, _ in self.dataloader:
+        for X_batch, _, _ in self.dataloader:
             batch_raw_pred, _ = self._get_batch_prediction(beta, intercept, X_batch)
             batch_pred = self._inv_link_fn(batch_raw_pred)
             predictions.append(batch_pred)
