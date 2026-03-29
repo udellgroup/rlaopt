@@ -40,6 +40,9 @@ class SapphireSplit:
         Args:
             expr (Expression): An expression object representing the composite function.
         """
+        if not isinstance(expr, AddExpression):
+            expr = AddExpression(expr)
+        
         model, f, r = self._attempt_split(expr)
 
         self._model = model
@@ -249,6 +252,22 @@ class SapphireSplit:
             TensorDict: Gradient of the full smooth loss with respect to beta.
         """
         return torch.func.grad(self.loss)(beta_value, None, None)
+    
+    def grad_reg(self, beta_value: TensorDict) -> TensorDict | float:
+        """Computes gradient of the smooth regularizer.
+        
+        Args:
+            beta_value (TensorDict): Linear model weights.
+        
+        Returns:
+            TensorDict: Gradient of the smooth regularizer with respect to beta.
+        """
+
+        if self.f:
+            return torch.func.grad(self._f.evaluate)(beta_value)
+        else:
+            return 0.0
+        
 
     def prox(self, beta_value: TensorDict, eta: float) -> TensorDict:
         """Apply the proximal operator of r with step size eta to the variables.
