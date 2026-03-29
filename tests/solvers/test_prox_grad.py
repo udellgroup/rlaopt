@@ -256,7 +256,7 @@ def _init_opt(obj, opt):
 def _build_opt(obj, eta, use_acceleration, use_linesearch):
     """Build proximal gradient optimizer with specified configuration."""
     config = ProxGradConfig(
-        eta0=eta,
+        eta=eta,
         use_acceleration=use_acceleration,
         use_linesearch=use_linesearch,
     )

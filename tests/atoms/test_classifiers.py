@@ -38,7 +38,7 @@ class BatchedBinaryClassificationDataset(BatchedDataset):
     def __getitem__(self, idx):
         """Return a single sample at the given index."""
         if isinstance(idx, int):
-            return self._X[idx], self._y[idx]
+            return self._X[idx], self._y[idx], torch.tensor(idx, dtype=torch.long)
         else:
             raise TypeError(f"Unsupported index type: {type(idx)}")
     
@@ -82,7 +82,7 @@ class BatchedMulticlassClassificationDataset(BatchedDataset):
     def __getitem__(self, idx):
         """Return a single sample at the given index."""
         if isinstance(idx, int):
-            return self._X[idx], self._y[idx]
+            return self._X[idx], self._y[idx], torch.tensor(idx, dtype=torch.long)
         else:
             raise TypeError(f"Unsupported index type: {type(idx)}")
     

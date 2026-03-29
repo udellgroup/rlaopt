@@ -130,7 +130,7 @@ class BaseLinearModelTest(ABC):
         tol = 1e-2
         for _ in range(2000):
             beta_val, state = opt.step(beta_val, state)
-            err = state.err.item()
+            err = state.err
             if err <= tol:
                 break
         assert err <= tol
