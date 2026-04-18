@@ -30,9 +30,12 @@ def optimization_step(
     apply_updates: Callable,
     update_precond_fn: Callable,
 ) -> tuple[TensorDict, GradSolverState]:
+    """Execute one optimization step: precondition, gradient, update."""
     state = update_precond_fn(var_values, state)
 
-    updates, state = _get_updates(var_values, state, var_values_transform, gradient_fn)
+    updates, state, var_values = _get_updates(
+        var_values, state, var_values_transform, gradient_fn
+    )
 
     var_values, state = apply_updates(updates, var_values, state)
 
@@ -49,7 +52,7 @@ def _get_updates(
 
     updates, state = gradient_fn(var_values, state)
 
-    return updates, state
+    return updates, state, var_values
 
 
 def get_step_fn(config: GradSolverConfig, op_split: ProxGradSplit | SapphireSplit):
@@ -67,30 +70,41 @@ def _prox_grad_step_builder(config: ProxGradConfig, op_split: _OperatorSplit):
 
     err_fn = partial(core.grad_mapping_norm, full_gradient_fn=grad_f, prox_fn=prox_fn)
 
-    prox_update = partial(core.prox_update, prox_fn=prox_fn)
-
-    if config.use_linesearch == False:
-        return prox_update
+    if config.use_linesearch:
+        # linesearch calls apply_updates(x, eta) -> TensorDict, so pass prox_fn directly
+        apply_updates = partial(core.linesearch, f=f, apply_updates=prox_fn)
     else:
-        apply_updates = partial(core.linesearch, f=f, apply_updates=prox_update)
+        # optimization_step calls apply_updates(updates, var_values, state); wrap to
+        # match prox_update(var_vals, updates, state, prox_fn) argument order.
+        def apply_updates(updates, var_vals, state):
+            return core.prox_update(var_vals, updates, state, prox_fn)
 
     if config.use_acceleration:
         var_values_transform = core.nest_accel_update
     else:
-        var_values_transform = lambda p, s: (p, s)
+
+        def var_values_transform(p, s):
+            return p, s
+
+    # grad_f(v) -> TensorDict; wrap to match (v, s) -> (updates, s) interface
+    def gradient_fn(v, s):
+        return grad_f(v), s
+
+    def no_op_precond(v, s):
+        return s
 
     _step = partial(
         optimization_step,
         var_values_transform=var_values_transform,
-        gradient_fn=grad_f,
+        gradient_fn=gradient_fn,
         apply_updates=apply_updates,
-        update_precond_fn=lambda s: s,
+        update_precond_fn=no_op_precond,
     )
 
     def step(var_values, state):
         var_values, state = _step(var_values, state)
-        state = err_fn(var_values, state)
-        return var_values, state
+        var_values, state = err_fn(var_values, state)
+        return var_values, replace(state, iter_=state.iter_ + 1)
 
     return step
 
@@ -118,7 +132,7 @@ def _sapphire_step_builder(config: SapphireConfig, op_split: SapphireSplit):
     # Get gradient oracle for base method specified in the config file.
     if config.base_method == "sgd":
         gradient_fn = core.SGDOracle.build_gradient_fn(
-            loader=loader, batch_grad_fn=batch_grad_fn
+            loader=loader, batch_gradient_fn=batch_grad_fn
         )
     elif config.base_method == "svrg":
         # Get snapshot update frequency

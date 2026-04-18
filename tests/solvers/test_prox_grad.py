@@ -215,6 +215,38 @@ class TestProxGrad:
         _solve_and_verify(obj, eta, acceleration, ls)
 
 
+class TestProxGradDifferentiability:
+    """Tests for differentiating through the ProxGrad solver."""
+
+    def test_diff_through_lasso(self):
+        """Gradient of test loss w.r.t. L1 penalty mu should be finite and non-zero."""
+        torch.manual_seed(0)
+        n, p, s = 512, 64, 16
+        A, b, _, _ = generate_lasso_data(n=n, p=p, s=s, precision=torch.float32)
+
+        n_train = int(0.8 * n)
+        A_train, b_train = A[:n_train], b[:n_train]
+        A_test, b_test = A[n_train:], b[n_train:]
+        n_test = n - n_train
+
+        def test_loss(mu: torch.Tensor) -> torch.Tensor:
+            x = Variable(torch.zeros(p, dtype=torch.float32), name="x")
+            obj = SumSquares(A_train @ x - b_train) + L1Norm(x, scaling=mu)
+            config = ProxGradConfig(use_linesearch=True)
+            opt = ProxGrad(obj, config, detach=False)
+            result = opt.solve(
+                stopping_criteria=GradSolverStoppingCriteria(max_iters=500)
+            )
+            x_sol = result.variable_values["x"]
+            return 1 / n_test * torch.linalg.norm(A_test @ x_sol - b_test) ** 2
+
+        mu = torch.tensor(0.1, dtype=torch.float32)
+        grad, _ = torch.func.grad_and_value(test_loss)(mu)
+
+        assert torch.isfinite(grad), f"Gradient w.r.t. mu should be finite, got {grad}"
+        assert grad != 0.0, "Gradient w.r.t. mu should be non-zero"
+
+
 class TestProxGradErrors:
     """Tests for error conditions in ProxGrad initialization."""
 
