@@ -28,7 +28,6 @@ class DataLoader(torch.utils.data.DataLoader):
         sampler: Strategy to draw samples from the dataset. Default: None.
         batch_sampler: Strategy to draw batches of samples. Default: None.
         num_workers: Number of subprocesses for data loading. Default: 0.
-        collate_fn: Function to merge a list of samples into a batch. Default: None.
         pin_memory: Whether to copy tensors into CUDA pinned memory. Default: False.
         drop_last: Whether to drop the last incomplete batch. Default: False.
         timeout: Timeout value for collecting a batch from workers. Default: 0.
@@ -67,7 +66,6 @@ class DataLoader(torch.utils.data.DataLoader):
         sampler=None,
         batch_sampler=None,
         num_workers=0,
-        collate_fn=None,
         pin_memory=False,
         drop_last=False,
         timeout=0,
@@ -87,10 +85,7 @@ class DataLoader(torch.utils.data.DataLoader):
                 f"received {type(dataset).__name__}"
             )
 
-        # 1. Index Tracking Injection Logic"
-        # Inject the custom collate function
-        collate_fn = IndexTrackingCollate()
-
+        # Inject the custom collate function so batches carry sample indices.
         super().__init__(
             dataset,
             batch_size,
@@ -98,7 +93,7 @@ class DataLoader(torch.utils.data.DataLoader):
             sampler,
             batch_sampler,
             num_workers,
-            collate_fn,
+            IndexTrackingCollate(),
             pin_memory,
             drop_last,
             timeout,
