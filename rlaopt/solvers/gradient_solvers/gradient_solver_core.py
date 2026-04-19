@@ -69,8 +69,9 @@ class StochasticGradientOracle(ABC):
         Args:
             var_vals: Current variable values.
             state: Current optimizer state.
-            batch: Tuple of (X_batch, y_batch, batch_indices).
-            op_split: SAPPHIRE operator splitting object.
+            loader: DataLoader providing mini-batches via ``get_batch()``.
+            batch_gradient_fn: Function computing the per-batch gradient
+                given (var_vals, X_batch, y_batch).
             **kwargs: Additional method-specific parameters.
 
         Returns:
@@ -96,7 +97,7 @@ class SGDOracle(StochasticGradientOracle):
         Args:
             var_vals: Current variable values.
             state: SGD optimizer state.
-            batch: Tuple of (X_batch, y_batch, batch_indices).
+            loader: DataLoader providing mini-batches via ``get_batch()``.
             batch_gradient_fn: Function to compute batch gradients.
 
         Returns:
@@ -130,7 +131,7 @@ class SVRGOracle(StochasticGradientOracle):
         Args:
             var_vals: Current variable values.
             state: SVRG optimizer state containing snapshot and snapshot gradient.
-            batch: Tuple of (X_batch, y_batch, batch_indices).
+            loader: DataLoader providing mini-batches via ``get_batch()``.
             batch_gradient_fn: Function to compute batch gradients.
             full_gradient_fn: Function to compute full dataset gradient.
             update_threshold: Number of iterations between snapshot updates.
@@ -179,9 +180,11 @@ class SAGAOracle(StochasticGradientOracle):
         Args:
             var_vals: Current variable values.
             state: SAGA optimizer state containing gradient table and average.
-            batch: Tuple of (X_batch, y_batch, batch_indices).
+            loader: DataLoader providing mini-batches via ``get_batch()``.
             loss_fn: Loss function for computing gradients.
             prediction_fn: Function to compute model predictions.
+            grad_reg: Function returning the regularizer gradient for the
+                given var_vals.
             n: Total number of samples in the dataset.
             has_intercept: Whether the model includes an intercept term.
 
@@ -364,11 +367,12 @@ def linesearch(
     decrease condition based on the quadratic upper bound at the proximal point.
 
     Args:
+        grads: Gradient TensorDict used to form candidate updates.
         var_vals: Current variable values.
         state: Proximal gradient state containing initial step size eta.
         f: Objective function to minimize.
-        full_gradient_fn: Function to compute full dataset gradient.
-        prox_fn: Proximal operator function.
+        apply_updates: Callable applying the update step (e.g. proximal
+            map) to a candidate iterate.
 
     Returns:
         Tuple of (accepted iterate, updated state with new step size and error).
