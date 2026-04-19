@@ -42,11 +42,11 @@ class HuberRegression(BaseRegressor):
 
         Args:
             beta: Model parameters variable representing regression coefficients.
-            dataloader: DataLoader containing the training data with features and targets.
+            dataloader: DataLoader with training features and targets.
             fit_intercept: Whether to fit an intercept term. Defaults to True.
             delta: Threshold parameter that defines the point where the loss transitions
-                from quadratic to linear. Smaller values increase robustness to outliers.
-                Defaults to 1.0.
+                from quadratic to linear. Smaller values increase robustness
+                to outliers. Defaults to 1.0.
         """
         super().__init__(
             LossType.HUBER,
@@ -82,7 +82,7 @@ class LinearRegression(BaseRegressor):
 
         Args:
             beta: Model parameters variable representing regression coefficients.
-            dataloader: DataLoader containing the training data with features and targets.
+            dataloader: DataLoader with training features and targets.
             fit_intercept: Whether to fit an intercept term. Defaults to True.
         """
         super().__init__(
@@ -185,10 +185,14 @@ class CompoundPoissonGammaRegression(BaseGLM):
     and positive.
 
     Common applications:
-        - Insurance claims: Many policies have zero claims, non-zero claims are continuous
-        - Rainfall modeling: Many days have zero rainfall, rainy days have continuous amounts
-        - Customer spending: Many customers spend nothing, active customers spend varying amounts
-        - Healthcare costs: Many patients incur zero costs, others have continuous expenses
+        - Insurance claims: Many policies have zero claims, non-zero claims
+          are continuous
+        - Rainfall modeling: Many days have zero rainfall, rainy days have
+          continuous amounts
+        - Customer spending: Many customers spend nothing, active customers
+          spend varying amounts
+        - Healthcare costs: Many patients incur zero costs, others have
+          continuous expenses
 
     The model uses a log link function to ensure predictions are always positive:
         ŷ = exp(X @ β)
