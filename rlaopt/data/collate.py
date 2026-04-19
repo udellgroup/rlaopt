@@ -1,3 +1,5 @@
+"""Collate functions for batching dataset samples with index tracking."""
+
 import torch
 from torch.utils.data._utils.collate import default_collate
 
@@ -6,7 +8,9 @@ class IndexTrackingCollate:
     """Collate function to stack (data, target, index) tuples into batch tensors."""
 
     def __call__(self, batch):
-        """Args:
+        """Stack (data, target, index) tuples into batch tensors.
+
+        Args:
             batch (list): A list of tuples, where each tuple is the output of
                           Dataset.__getitem__: (X_i, y_i, index_i)
 
