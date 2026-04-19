@@ -1,3 +1,5 @@
+"""Base test class for linear model atoms."""
+
 from abc import ABC, abstractmethod
 
 import pytest
@@ -22,9 +24,13 @@ def _generate_test_data(
 
 
 class BaseLinearModelTest(ABC):
+    """Shared test suite for all LinearModel subclasses."""
+
     @pytest.fixture
     @abstractmethod
-    def model(self, beta_var, dataloader, fit_intercept): ...
+    def model(self, beta_var, dataloader, fit_intercept):
+        """Return a LinearModel instance for the concrete test class."""
+        ...
 
     def test_forward(self, model):
         """Test that forward() returns a scalar tensor."""
@@ -45,7 +51,9 @@ class BaseLinearModelTest(ABC):
             assert intercept.forward().grad is not None
 
     @abstractmethod
-    def test_invalid_init(self, dataloader): ...
+    def test_invalid_init(self, dataloader):
+        """Test that invalid beta variable raises ValueError on initialization."""
+        ...
 
     def test_loss_on_training_data(self, model):
         """Test loss computation on training data."""
@@ -136,5 +144,6 @@ class BaseLinearModelTest(ABC):
         assert err <= tol
 
     def test_prox(self, model):
+        """Test that prox raises NotImplementedError for linear models."""
         with pytest.raises(NotImplementedError, match="Proximal operator"):
             model.prox(model.variable_values, 1.0)

@@ -129,7 +129,8 @@ class _SubampHVPLinOp(LinearOperator):
                 Should have signature loss(variable_values, X, y) -> scalar tensor.
             variable_values (TensorDict): Variables at which the subsampled Hessian
                 is evaluated.
-            X_batch (torch.Tensor): Subsampled data matrix at which the loss is evaluated.
+            X_batch (torch.Tensor): Subsampled data matrix at which the loss
+                is evaluated.
             y_batch (torch.Tensor): Labels tensor at which the loss is evaluated.
             device (torch.device): Device the model parameters live on.
         """

@@ -42,7 +42,7 @@ class SapphireSplit:
         """
         if not isinstance(expr, AddExpression):
             expr = AddExpression(expr)
-        
+
         model, f, r = self._attempt_split(expr)
 
         self._model = model
@@ -101,7 +101,8 @@ class SapphireSplit:
 
         if len(linear_model_exprs) > 1:
             raise ValueError(
-                "Smooth part of the objective can only have one expression of type LinearModel."
+                "Smooth part of the objective can only have one expression"
+                " of type LinearModel."
             )
 
         linear_model = linear_model_exprs[0]
@@ -115,7 +116,8 @@ class SapphireSplit:
             if smooth_var_names != {"beta"}:
                 raise ValueError(
                     "Smooth expression depends upon variables other than beta. "
-                    "SAPPHIRE solver only supports smooth expressions that depend on beta."
+                    "SAPPHIRE solver only supports smooth expressions that"
+                    " depend on beta."
                 )
 
         # Validate non-smooth expression depends only on beta (only if present)
@@ -124,7 +126,8 @@ class SapphireSplit:
             if non_smooth_var_names != {"beta"}:
                 raise ValueError(
                     "Non-smooth regularizer depends upon variables other than beta. "
-                    "SAPPHIRE solver only supports non-smooth expressions that depend on beta."
+                    "SAPPHIRE solver only supports non-smooth expressions"
+                    " that depend on beta."
                 )
 
         # Prepare return values
@@ -252,22 +255,20 @@ class SapphireSplit:
             TensorDict: Gradient of the full smooth loss with respect to beta.
         """
         return torch.func.grad(self.loss)(beta_value, None, None)
-    
+
     def grad_reg(self, beta_value: TensorDict) -> TensorDict | float:
         """Computes gradient of the smooth regularizer.
-        
+
         Args:
             beta_value (TensorDict): Linear model weights.
-        
+
         Returns:
             TensorDict: Gradient of the smooth regularizer with respect to beta.
         """
-
         if self.f:
             return torch.func.grad(self._f.evaluate)(beta_value)
         else:
             return 0.0
-        
 
     def prox(self, beta_value: TensorDict, eta: float) -> TensorDict:
         """Apply the proximal operator of r with step size eta to the variables.
@@ -294,7 +295,8 @@ class SapphireSplit:
         """Construct subsampled Hessian linear operator.
 
         Args:
-            beta_value (TensorDict): Linear model weights at which to evaluate the Hessian.
+            beta_value (TensorDict): Linear model weights at which to evaluate
+                the Hessian.
             X_batch (torch.Tensor): Batch of feature data for subsampling.
             y_batch (torch.Tensor): Batch of target labels for subsampling.
             device (torch.device): Device on which the model parameters live.

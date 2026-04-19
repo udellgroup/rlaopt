@@ -54,6 +54,8 @@ class GradSolverResult(OptimResult):
 
 
 class BaseGradientSolver(OptimSolver):
+    """Base class for gradient-based solvers (ProxGrad, SAPPHIRE)."""
+
     def __init__(
         self,
         obj: Expression,
@@ -61,6 +63,14 @@ class BaseGradientSolver(OptimSolver):
         target_config: GradSolverConfig,
         detach=True,
     ):
+        """Initialize the gradient solver.
+
+        Args:
+            obj: Optimization objective expression.
+            config: Solver configuration.
+            target_config: Expected configuration type for validation.
+            detach: Whether to detach variable values from the autograd graph.
+        """
         if not isinstance(obj, Expression):
             raise ValueError(
                 f"{type(self).__name__} solver requires an Expression objective."
@@ -93,6 +103,7 @@ class BaseGradientSolver(OptimSolver):
         variable_values: TensorDict | None = None,
         stopping_criteria: GradSolverStoppingCriteria = GradSolverStoppingCriteria(),
     ) -> GradSolverResult:
+        """Run the solver until convergence or maximum iterations."""
         ts = perf_counter()
 
         if variable_values is None:
@@ -160,22 +171,25 @@ class ProxGrad(BaseGradientSolver):
         Args:
             obj: The optimization objective (Expression).
             config: Configuration for the solver.
+            detach: Whether to detach variable values from the autograd graph.
         """
         if not isinstance(config, ProxGradConfig):
             raise ValueError("ProxGrad solver requires a ProxGradConfig configuration.")
         super().__init__(obj, config, ProxGradConfig, detach)
 
     def init_state(self, variable_values: TensorDict) -> ProxGradState:
+        """Initialize the proximal gradient solver state."""
         return super().init_state(variable_values)
 
     def step(
         self, variable_values: TensorDict, state: ProxGradState
     ) -> tuple[TensorDict, ProxGradState]:
+        """Perform a single proximal gradient step."""
         return super().step(variable_values, state)
 
 
 class Sapphire(BaseGradientSolver):
-    """SAPPHIRE solver for empirical risk minimization.
+    r"""SAPPHIRE solver for empirical risk minimization.
 
     Solves problems of the form:
 
@@ -228,8 +242,8 @@ class Sapphire(BaseGradientSolver):
             International Conference on Computational Statistics
 
     .. [2] Johnson, R., Zhang T. (2013).
-            Accelerating Stochastic Gradient Descent using Predictive Variance Reduction.
-            Advances in Neural Information Processing Systems.
+            Accelerating Stochastic Gradient Descent using Predictive Variance
+            Reduction. Advances in Neural Information Processing Systems.
 
     .. [3] Defazio, A., Bach, F., Lacoste-Julien, S. (2014).
            SAGA: A Fast Incremental Gradient Method With
@@ -245,20 +259,29 @@ class Sapphire(BaseGradientSolver):
             Estimates. Journal of Machine Learning Research.
 
     .. [6] Sun, J., Frangella, Z., Udell, M. (2025).
-           SAPPHIRE: Preconditioned Stochastic Variance Reduction for Faster Large-Scale Statistical Learning.
-           Preprint.
+           SAPPHIRE: Preconditioned Stochastic Variance Reduction for Faster
+           Large-Scale Statistical Learning. Preprint.
 
     """
 
     def __init__(self, obj: Expression, config: SapphireConfig, detach=True):
+        """Initialize the SAPPHIRE solver.
+
+        Args:
+            obj: Optimization objective of the form discussed in the class docstring.
+            config: Configuration for SAPPHIRE solver.
+            detach: Whether to detach variable values from the autograd graph.
+        """
         super().__init__(obj, config, SapphireConfig, detach)
 
     def init_state(self, variable_values: TensorDict) -> SapphireState:
+        """Initialize the SAPPHIRE solver state."""
         return super().init_state(variable_values)
 
     def step(
         self, variable_values: TensorDict, state: SapphireState
     ) -> tuple[TensorDict, SapphireState]:
+        """Perform a single SAPPHIRE step."""
         return super().step(variable_values, state)
 
     def solve(
@@ -266,6 +289,7 @@ class Sapphire(BaseGradientSolver):
         variable_values: TensorDict | None = None,
         stopping_criteria: GradSolverStoppingCriteria = GradSolverStoppingCriteria(),
     ):
+        """Run SAPPHIRE until convergence or max iterations."""
         return super().solve(variable_values, stopping_criteria)
 
 

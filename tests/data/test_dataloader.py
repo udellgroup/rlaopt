@@ -12,6 +12,7 @@ class MockBatchedDataset(BatchedDataset):
     """Mock BatchedDataset for testing."""
 
     def __init__(self, num_samples, feature_dim, target_dim):
+        """Initialize with pre-generated deterministic data."""
         super().__init__()
         self._num_samples = num_samples
         self._feature_dim = feature_dim
@@ -26,19 +27,23 @@ class MockBatchedDataset(BatchedDataset):
         )
 
     def __getitem__(self, idx):
+        """Return (X, y, idx) for a given index or slice."""
         if isinstance(idx, slice):
             return self._data[idx], self._labels[idx], idx
         return self._data[idx], self._labels[idx], torch.tensor(idx, dtype=torch.long)
 
     def __len__(self):
+        """Return total number of samples."""
         return self._num_samples
 
     @property
     def feature_dimension(self):
+        """Number of input features."""
         return self._feature_dim
 
     @property
     def target_dimension(self):
+        """Target dimension."""
         return self._target_dim
 
 
