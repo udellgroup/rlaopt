@@ -2,12 +2,11 @@
 
 import torch
 
-from rlaopt.atoms import Atom
-from rlaopt.atoms.linear_model.linear_model import LinearModel
+from rlaopt.atoms import Atom, LinearModel
 from rlaopt.data import DataLoader
 from rlaopt.expression import AddExpression, Expression
 from rlaopt.ext_tensordict import TensorDict
-from rlaopt.splitting.linops import _SubampHVPLinOp
+from rlaopt.splitting.linops import make_subsamp_hvp_linop
 
 
 class SapphireSplit:
@@ -302,6 +301,8 @@ class SapphireSplit:
             device (torch.device): Device on which the model parameters live.
 
         Returns:
-            _SubampHessianLinOp: A linear operator representing the subsampled Hessian.
+            LinearOperator: A linear operator representing the subsampled Hessian.
         """
-        return _SubampHVPLinOp(self._model.loss, beta_value, X_batch, y_batch, device)
+        return make_subsamp_hvp_linop(
+            self._model.loss, beta_value, X_batch, y_batch, device
+        )

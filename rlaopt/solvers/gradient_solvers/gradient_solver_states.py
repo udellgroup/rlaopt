@@ -5,11 +5,9 @@ from dataclasses import dataclass
 import torch
 
 from rlaopt.ext_tensordict import TensorDict
-from rlaopt.linalg.preconditioners.identity import Identity, IdentityConfig
-from rlaopt.linalg.preconditioners.nystrom import Nystrom
+from rlaopt.linalg import Preconditioner
 from rlaopt.solvers.solver_base import SolverState
-from rlaopt.splitting.prox_grad_split import ProxGradSplit
-from rlaopt.splitting.sapphire_split import SapphireSplit
+from rlaopt.splitting import ProxGradSplit, SapphireSplit
 
 from .gradient_solver_configs import GradSolverConfig, ProxGradConfig, SapphireConfig
 
@@ -52,13 +50,12 @@ class SGDState(GradSolverState):
     and accelerated stochastic methods.
 
     Attributes:
-        P: Preconditioner matrix (Nystrom approximation or Identity).
-            Defaults to Identity.
+        P: Preconditioner. None until first update.
         precond_update_freq: Frequency (in iterations) for updating the
             preconditioner. Defaults to 1.
     """
 
-    P: Nystrom | Identity = Identity(IdentityConfig())
+    P: Preconditioner | None = None
     precond_update_freq: int = 1
 
 

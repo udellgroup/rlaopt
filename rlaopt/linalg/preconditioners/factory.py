@@ -11,7 +11,7 @@ from rlaopt.linalg.preconditioners.preconditioner import (
 )
 
 
-def get_preconditioner_class(
+def _get_preconditioner_class(
     config: IdentityConfig | NystromConfig,
 ) -> type[Preconditioner]:
     """Returns appropriate Preconditioner class based on config."""
@@ -43,7 +43,7 @@ def get_preconditioner(
         TypeError: If the configuration type is unknown.
 
     """
-    preconditioner_class = get_preconditioner_class(config)
+    preconditioner_class = _get_preconditioner_class(config)
     preconditioner = preconditioner_class(config)
     preconditioner._update(A, dtype)
     return preconditioner

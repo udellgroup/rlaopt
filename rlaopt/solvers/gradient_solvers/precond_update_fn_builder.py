@@ -8,9 +8,12 @@ from linops import LinearOperator
 
 from rlaopt.data import DataLoader
 from rlaopt.ext_tensordict import TensorDict
-from rlaopt.linalg import IdentityConfig, PreconditionerConfig, randomized_powering
-from rlaopt.linalg.preconditioners.factory import get_preconditioner_class
-from rlaopt.splitting.linops import _SubampHVPLinOp
+from rlaopt.linalg import (
+    IdentityConfig,
+    PreconditionerConfig,
+    get_preconditioner,
+    randomized_powering,
+)
 from rlaopt.splitting.sapphire_split import SapphireSplit
 
 from .gradient_solver_states import SapphireState
@@ -32,8 +35,6 @@ def build_preconditioner_update(
     Returns:
         Callable for updating the preconditioner
     """
-    preconditioner_class = get_preconditioner_class(precond_config)
-    P = preconditioner_class(precond_config)
 
     def update_precond_fn(beta_value: TensorDict, state: SapphireState):
         if state.iter_ % precond_update_freq == 0:
@@ -42,7 +43,7 @@ def build_preconditioner_update(
                 beta_value, X_batch, y_batch, device
             )
 
-            P._update(Hop, dtype)
+            P = get_preconditioner(precond_config, Hop, dtype)
 
             if update_stepsize:
                 if isinstance(precond_config, IdentityConfig):
@@ -56,7 +57,7 @@ def build_preconditioner_update(
                     def Aop(v: torch.Tensor) -> torch.Tensor:
                         return P.inv @ (Hop @ v + P.current_damping * v)
 
-                state = _update_stepsize(state, Aop, Hop.shape, device)
+                state = _update_stepsize(state, Aop, Hop.shape, device, precond_config)
 
             return replace(state, P=P)
         else:
@@ -70,13 +71,16 @@ def _update_stepsize(
     Aop: Callable[[torch.Tensor], torch.Tensor] | LinearOperator,
     shape: tuple[int, int],
     device: torch.device,
+    precond_config: PreconditionerConfig,
 ) -> SapphireState:
     L = randomized_powering(Aop, shape, device=device)
 
-    if isinstance(Aop, _SubampHVPLinOp):
-        L += 1e-2
+    if isinstance(precond_config, IdentityConfig):
+        # Clamp so step size (1/L) never exceeds 100;
+        # minibatch estimates can be overconfident
+        L = max(L, 1e-2)
     else:
-        L = 2 * L
+        L = 2 * L  # conservative safety factor for preconditioned operator
 
     eta_new = 1 / L
 

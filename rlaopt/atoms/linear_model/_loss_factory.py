@@ -1,7 +1,6 @@
 from enum import Enum
 
 import torch
-from torch.nn.modules.loss import _Loss
 
 from ._tweedie import (
     CompoundPoissonGammaLoss,
@@ -36,7 +35,7 @@ LOSSES = {
 }
 
 
-def get_loss_function(loss_type: LossType) -> _Loss:
+def get_loss_function(loss_type: LossType) -> torch.nn.Module:
     """Return the appropriate loss function for the given loss type.
 
     Args:

@@ -23,7 +23,7 @@ class ProxGradConfig(GradSolverConfig):
     )
 
     use_acceleration: bool = Field(
-        default=False, description="Whether to use acceleration techniques."
+        default=False, description="Whether to use Nesterov acceleration."
     )
 
     use_linesearch: bool = Field(
@@ -41,7 +41,7 @@ class SapphireConfig(GradSolverConfig):
 
     # Stepsize selection
     eta: float = Field(
-        default=0.10,
+        default=0.1,
         gt=0.0,
         description="Step size for the gradient update. "
         "Only used when auto_update_stepsize = False",
@@ -78,7 +78,8 @@ class SapphireConfig(GradSolverConfig):
         default=20,
         gt=0,
         description="Number of accelerated proximal gradient iterations "
-        "performed to evaluate the scaled proximal operator.",
+        "performed to evaluate the scaled proximal operator. "
+        "Not used if the problem is fully smooth.",
     )
 
     snapshot_update_freq: int = Field(

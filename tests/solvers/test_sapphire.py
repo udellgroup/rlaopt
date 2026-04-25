@@ -422,6 +422,13 @@ class TestSapphireDifferentiability:
         assert torch.isfinite(grad), f"Gradient w.r.t. mu should be finite, got {grad}"
         assert grad != 0.0, "Gradient w.r.t. mu should be non-zero"
 
+        eps = torch.tensor(1e-3, dtype=mu.dtype)
+        numerical_grad = (test_loss(mu + eps) - test_loss(mu - eps)) / (2 * eps)
+        assert torch.allclose(grad, numerical_grad, rtol=0.05), (
+            f"Autodiff grad {grad:.4f} does not match "
+            f"numerical grad {numerical_grad:.4f}"
+        )
+
 
 # ============================================================================
 # prox_update_P Tests

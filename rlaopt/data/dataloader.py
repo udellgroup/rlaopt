@@ -133,6 +133,11 @@ class DataLoader(torch.utils.data.DataLoader):
             return next(self.data_iter)
 
     @property
+    def shuffle(self) -> bool:
+        """Whether the dataloader shuffles data each epoch."""
+        return self._shuffle
+
+    @property
     def y(self):
         """Get all training labels from the dataset."""
         return self._y()

@@ -94,7 +94,7 @@ class _HVPLinOp(LinearOperator):
         )
 
 
-class _SubampHVPLinOp(LinearOperator):
+class _SubsampHVPLinOp(LinearOperator):
     """Subsampled Hessian linear operator class.
 
     Implements a linear operator interface for computing Hessian-vector products
@@ -157,6 +157,17 @@ class _SubampHVPLinOp(LinearOperator):
             torch.Tensor: The result of Hessian @ v as a flattened tensor.
         """
         return _pearlmutter_hvp(lambda x: self._loss(x), self._variable_values, v)
+
+
+def make_subsamp_hvp_linop(
+    loss: Callable[[TensorDict, tuple[torch.Tensor, torch.Tensor]], torch.Tensor],
+    variable_values: TensorDict,
+    X_batch: torch.Tensor,
+    y_batch: torch.Tensor,
+    device: torch.device,
+) -> LinearOperator:
+    """Create a subsampled Hessian-vector product linear operator."""
+    return _SubsampHVPLinOp(loss, variable_values, X_batch, y_batch, device)
 
 
 def _pearlmutter_hvp(

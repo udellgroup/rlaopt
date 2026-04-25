@@ -112,7 +112,7 @@ class BaseLinearModel(Atom, ABC):
         return self._get_loss(beta_tensor, intercept_tensor)
 
     def evaluate(self, variable_values):
-        if self.dataloader._shuffle:
+        if self.dataloader.shuffle:
             self.dataloader.data_iter = iter(self.dataloader)
 
         variable_values_selected = self.select_relevant_variables(variable_values)

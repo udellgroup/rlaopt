@@ -11,7 +11,6 @@ from functools import partial
 from typing import Any, Callable
 
 import torch
-from torch.nn.modules.loss import _Loss
 
 from rlaopt.data import DataLoader
 from rlaopt.ext_tensordict import TensorDict
@@ -167,7 +166,7 @@ class SAGAOracle(StochasticGradientOracle):
         var_vals: TensorDict,
         state: SAGAState,
         loader: DataLoader,
-        loss_fn: _Loss,
+        loss_fn: torch.nn.Module,
         prediction_fn: Callable[
             [torch.Tensor, torch.Tensor, torch.Tensor], torch.Tensor
         ],
