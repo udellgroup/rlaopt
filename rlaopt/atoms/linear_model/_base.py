@@ -112,9 +112,6 @@ class BaseLinearModel(Atom, ABC):
         return self._get_loss(beta_tensor, intercept_tensor)
 
     def evaluate(self, variable_values):
-        if self.dataloader.shuffle:
-            self.dataloader.data_iter = iter(self.dataloader)
-
         variable_values_selected = self.select_relevant_variables(variable_values)
         params = self._variable_values_to_params_dict(variable_values_selected)
         result = torch.func.functional_call(
