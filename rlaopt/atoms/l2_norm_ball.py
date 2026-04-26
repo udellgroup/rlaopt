@@ -55,8 +55,6 @@ class L2NormBall(Atom):
             norm = torch.linalg.norm(x)
             if (norm <= radius_t).item():
                 return x
-            if norm.item() == 0:
-                return x
             return (radius_t / norm) * x
 
         return relevant_variable_values.apply(project_onto_l2_ball)
