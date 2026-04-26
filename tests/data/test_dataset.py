@@ -166,7 +166,7 @@ class TestDatasetProperties:
         """Test Dataset indexing returns correct sample shapes."""
         X, y = sample_data
         data = Dataset(X, y)
-        X_sample, y_sample = data[0]
+        X_sample, y_sample, idx = data[0]
         assert X_sample.shape == (5,)
         assert y_sample.shape == ()
 

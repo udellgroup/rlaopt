@@ -93,6 +93,3 @@ rlaopt supports natural mathematical syntax through operator overloading:
 * ``**``: Exponentiation
 
 This allows you to write optimization problems in a natural, readable way.
-
-
-

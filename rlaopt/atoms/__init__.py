@@ -18,6 +18,7 @@ from rlaopt.atoms.linear_model.linear_model import HuberRegression as HuberRegre
 from rlaopt.atoms.linear_model.linear_model import (
     InverseGaussianRegression as InverseGaussianRegression,
 )
+from rlaopt.atoms.linear_model.linear_model import LinearModel as LinearModel
 from rlaopt.atoms.linear_model.linear_model import LinearRegression as LinearRegression
 from rlaopt.atoms.linear_model.linear_model import (
     LogisticRegression as LogisticRegression,

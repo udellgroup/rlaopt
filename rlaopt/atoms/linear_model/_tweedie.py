@@ -18,7 +18,8 @@ class TweedieLoss(_Loss):
     - Inverse Gaussian (power=3)p
 
     The Tweedie loss is defined as:
-        L(y, ŷ) = -[y * ŷ^(1-p) / (1-p) - ŷ^(2-p) / (2-p)]  [ignoring y-dependent constants]
+        L(y, ŷ) = -[y * ŷ^(1-p) / (1-p) - ŷ^(2-p) / (2-p)]
+                  (ignoring y-dependent constants)
 
     For p=1 (Poisson), this reduces to:
         L(y, ŷ) = ŷ - y * log(ŷ)
@@ -31,7 +32,8 @@ class TweedieLoss(_Loss):
 
     Args:
         power: Tweedie power parameter (p).
-               Common values: 1.0 (Poisson), 1.5 (Compound), 2.0 (Gamma), 3.0 (Inverse Gaussian)
+               Common values: 1.0 (Poisson), 1.5 (Compound), 2.0 (Gamma),
+                              3.0 (Inverse Gaussian).
                Also accepts values in range (1, 2) for compound distributions.
                Default: 1.5
         reduction: Specifies the reduction to apply to the output:
@@ -54,7 +56,8 @@ class TweedieLoss(_Loss):
         if power not in valid_discrete and not (1.0 < power < 2.0):
             raise ValueError(
                 f"Power must be one of {valid_discrete} or in range (1, 2). "
-                f"Got {power}. Common values: 1.0 (Poisson), 1.5 (Compound Poisson-Gamma), "
+                f"Got {power}. Common values: 1.0 (Poisson), "
+                f"1.5 (Compound Poisson-Gamma), "
                 f"2.0 (Gamma), 3.0 (Inverse Gaussian)"
             )
         self.power = power
@@ -113,7 +116,8 @@ def tweedie_loss(
 
     else:
         # General Tweedie case (mostly for 1 < p < 2)
-        # NLL = -[y * ŷ^(1-p) / (1-p) - ŷ^(2-p) / (2-p)]  [ignoring y-dependent constants]
+        # NLL = -[y * ŷ^(1-p) / (1-p) - ŷ^(2-p) / (2-p)]
+        # (ignoring y-dependent constants)
         p1 = 1 - power
         p2 = 2 - power
 

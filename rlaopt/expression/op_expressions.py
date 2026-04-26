@@ -71,15 +71,22 @@ class AddExpression(_NAryOpExpression):
         """
         return [e for e in self.exprs if not e.is_smooth()]
 
-    def get_smooth_part(self) -> Expression:
+    def get_smooth_part(
+        self, return_mode: str = "expression"
+    ) -> Expression | list[Expression]:
         """Get the smooth part of the sum expression.
 
         Returns:
             Expression: Smooth part of the sum.
         """
         smooth_exprs = [e for e in self.exprs if e.is_smooth()]
+
         if not smooth_exprs:
             return Constant(0.0)
+
+        if return_mode == "list":
+            return smooth_exprs
+
         return AddExpression(*smooth_exprs)
 
     def _build_op(self) -> Callable[[list[torch.Tensor]], torch.Tensor]:

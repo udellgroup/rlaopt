@@ -14,6 +14,7 @@ from rlaopt.linalg.preconditioners.preconditioner import (
 def _get_preconditioner_class(
     config: IdentityConfig | NystromConfig,
 ) -> type[Preconditioner]:
+    """Returns appropriate Preconditioner class based on config."""
     if isinstance(config, IdentityConfig):
         return Identity
     elif isinstance(config, NystromConfig):
