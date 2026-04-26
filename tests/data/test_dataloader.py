@@ -12,6 +12,7 @@ class MockBatchedDataset(BatchedDataset):
     """Mock BatchedDataset for testing."""
 
     def __init__(self, num_samples, feature_dim, target_dim):
+        """Initialize with pre-generated deterministic data."""
         super().__init__()
         self._num_samples = num_samples
         self._feature_dim = feature_dim
@@ -26,19 +27,23 @@ class MockBatchedDataset(BatchedDataset):
         )
 
     def __getitem__(self, idx):
+        """Return (X, y, idx) for a given index or slice."""
         if isinstance(idx, slice):
-            return self._data[idx], self._labels[idx]
-        return self._data[idx], self._labels[idx]
+            return self._data[idx], self._labels[idx], idx
+        return self._data[idx], self._labels[idx], torch.tensor(idx, dtype=torch.long)
 
     def __len__(self):
+        """Return total number of samples."""
         return self._num_samples
 
     @property
     def feature_dimension(self):
+        """Number of input features."""
         return self._feature_dim
 
     @property
     def target_dimension(self):
+        """Target dimension."""
         return self._target_dim
 
 
@@ -170,7 +175,7 @@ class TestDataLoaderFetching:
         """Test that iterating over DataLoader yields correctly sized batches."""
         loader = DataLoader(in_memory_dataset, batch_size=10, shuffle=False)
         batch_count = 0
-        for X_batch, y_batch in loader:
+        for X_batch, y_batch, _ in loader:
             assert X_batch.shape[0] <= 10
             assert y_batch.shape[0] <= 10
             batch_count += 1
@@ -180,7 +185,7 @@ class TestDataLoaderFetching:
         """Test that iterating over DataLoader works with batched datasets."""
         loader = DataLoader(batched_dataset, batch_size=8, shuffle=False)
         batch_count = 0
-        for X_batch, y_batch in loader:
+        for X_batch, y_batch, _ in loader:
             assert X_batch.shape == (8, 8)
             assert y_batch.shape == (8, 3)
             batch_count += 1
@@ -189,8 +194,8 @@ class TestDataLoaderFetching:
     def test_get_batch_in_memory(self, in_memory_dataset):
         """Test get_batch method returns correct data from in-memory dataset."""
         loader = DataLoader(in_memory_dataset, batch_size=10, shuffle=False)
-        X_batch, y_batch = loader.get_batch()
-        X_true, y_true = in_memory_dataset[0:10]
+        X_batch, y_batch, _ = loader.get_batch()
+        X_true, y_true, _ = in_memory_dataset[0:10]
 
         assert X_batch.shape[0] <= 10
         assert y_batch.shape[0] <= 10
@@ -201,8 +206,8 @@ class TestDataLoaderFetching:
     def test_get_batch_with_batched_dataset(self, batched_dataset):
         """Test get_batch method returns correct data from batched dataset."""
         loader = DataLoader(batched_dataset, batch_size=8, shuffle=False)
-        X_batch, y_batch = loader.get_batch()
-        X_true, y_true = batched_dataset[0:8]
+        X_batch, y_batch, _ = loader.get_batch()
+        X_true, y_true, _ = batched_dataset[0:8]
 
         assert X_batch.shape[0] <= 8
         assert y_batch.shape[0] <= 8
@@ -220,7 +225,7 @@ class TestDataLoaderFetching:
         # recovers dataset
         X, y = [], []
         for _ in range(num_batches):
-            X_batch, y_batch = loader.get_batch()
+            X_batch, y_batch, _ = loader.get_batch()
             X.append(X_batch)
             y.append(y_batch)
         X = torch.cat(X)
@@ -231,7 +236,7 @@ class TestDataLoaderFetching:
 
         # Check loader reset properly after
         # iterting through dataset
-        X_batch, y_batch = loader.get_batch()
+        X_batch, y_batch, _ = loader.get_batch()
 
         # X_batch should equal X_true[0:10],
         # y_batch should equal y_true[0:10]
@@ -242,12 +247,12 @@ class TestDataLoaderFetching:
         """Tests iteration with get_batch with batched_dataset."""
         loader = DataLoader(batched_dataset, batch_size=8, shuffle=False)
         num_samples = batched_dataset.num_samples
-        X_true, y_true = batched_dataset[0:num_samples]
+        X_true, y_true, _ = batched_dataset[0:num_samples]
         num_batches = len(loader)
 
         X, y = [], []
         for _ in range(num_batches):
-            X_batch, y_batch = loader.get_batch()
+            X_batch, y_batch, _ = loader.get_batch()
             X.append(X_batch)
             y.append(y_batch)
         X = torch.cat(X)
@@ -258,7 +263,7 @@ class TestDataLoaderFetching:
 
         # Check loader reset properly after
         # iterting through dataset
-        X_batch, y_batch = loader.get_batch()
+        X_batch, y_batch, _ = loader.get_batch()
 
         # X_batch should equal X_true[0:8],
         # y_batch should equal y_true[0:8]

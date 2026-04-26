@@ -10,6 +10,7 @@ class ConcreteBatchedDataset(BatchedDataset):
     """Concrete implementation for testing BatchedDataset interface."""
 
     def __init__(self, num_samples, feature_dim, target_dim):
+        """Initialize with dimensions; data is generated on-the-fly."""
         super().__init__()
         self._num_samples = num_samples
         self._feature_dim = feature_dim
@@ -39,14 +40,17 @@ class ConcreteBatchedDataset(BatchedDataset):
         return X, y
 
     def __len__(self):
+        """Return total number of samples."""
         return self._num_samples
 
     @property
     def feature_dimension(self):
+        """Number of input features."""
         return self._feature_dim
 
     @property
     def target_dimension(self):
+        """Target dimension (scalar int or tuple)."""
         return self._target_dim
 
 
@@ -75,7 +79,8 @@ class TestBatchedDatasetGetitem:
         """Create a concrete batched dataset fixture for testing.
 
         Returns:
-            ConcreteBatchedDataset: A dataset with 50 samples, 8 features, and 3 target dimensions.
+            ConcreteBatchedDataset: A dataset with 50 samples, 8 features,
+                and 3 target dimensions.
         """
         return ConcreteBatchedDataset(50, 8, 3)
 
@@ -125,7 +130,7 @@ class TestBatchedDatasetProperties:
         assert dataset.target_dimension == 5
 
     def test_target_dimension_tuple(self):
-        """Test that target_dimension property handles multidimensional targets correctly."""
+        """Test that target_dimension property handles multidimensional targets."""
         dataset = ConcreteBatchedDataset(100, 10, (3, 28, 28))
         assert dataset.target_dimension == (3, 28, 28)
         assert isinstance(dataset.target_dimension, tuple)

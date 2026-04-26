@@ -22,7 +22,7 @@ class InverseLinkFunction(ABC):
 
     @abstractmethod
     def __call__(self, linear_pred: torch.Tensor) -> torch.Tensor:
-        """Apply the inverse link function to transform linear predictor to mean parameter.
+        """Apply inverse link to transform linear predictor to mean parameter.
 
         Args:
             linear_pred: Linear predictor η = Xβ

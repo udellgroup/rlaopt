@@ -30,5 +30,3 @@ Workflow
 --------
 
 The :doc:`workflow` page provides a step-by-step guide to building and solving optimization problems with rlaopt.
-
-
