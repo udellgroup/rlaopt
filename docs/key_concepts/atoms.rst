@@ -80,6 +80,9 @@ rlaopt provides many other atoms:
 * :class:`~rlaopt.atoms.LinearEquality`: Linear equality constraints
 * :class:`~rlaopt.atoms.Halfspace`: Halfspace constraints
 * :class:`~rlaopt.atoms.Polyhedron`: Polyhedral constraints
+* :class:`~rlaopt.atoms.L1NormBall`: L1-norm ball constraint
+* :class:`~rlaopt.atoms.L2NormBall`: L2-norm ball constraint
+* :class:`~rlaopt.atoms.LInfNormBall`: L-infinity norm ball constraint
 * :class:`~rlaopt.atoms.NucNorm`: Nuclear norm
 
 See the :doc:`../api/atoms` section for a complete list.

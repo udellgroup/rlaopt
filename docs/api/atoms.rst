@@ -69,6 +69,24 @@ Constraints
    :show-inheritance:
    :exclude-members: decompose
 
+Norm Balls
+~~~~~~~~~~
+
+.. autoclass:: rlaopt.atoms.L1NormBall
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+.. autoclass:: rlaopt.atoms.L2NormBall
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+.. autoclass:: rlaopt.atoms.LInfNormBall
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 Regression Models
 -----------------
 
