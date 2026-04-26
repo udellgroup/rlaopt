@@ -48,7 +48,7 @@ class TestL1NormBall:
         expected = TensorDict({vector_var.name: torch.tensor([2.0, -0.0, 0.0])})
         assert_allclose_td(result, expected)
 
-    def test_prox_keeps_feasible_point(self, vector_var):
+    def test_prox_preserves_feasible_point(self, vector_var):
         """Prox returns input unchanged for feasible points."""
         atom = L1NormBall(vector_var, radius=2.0)
         location = TensorDict({vector_var.name: torch.tensor([0.5, -0.5, 0.5])})
@@ -97,7 +97,7 @@ class TestL2NormBall:
         expected = TensorDict({vector_var.name: torch.tensor([1.2, 1.6, 0.0])})
         assert_allclose_td(result, expected)
 
-    def test_prox_keeps_feasible_point(self, vector_var):
+    def test_prox_preserves_feasible_point(self, vector_var):
         """Prox returns input unchanged for feasible points."""
         atom = L2NormBall(vector_var, radius=2.0)
         location = TensorDict({vector_var.name: torch.tensor([0.5, -0.5, 0.5])})

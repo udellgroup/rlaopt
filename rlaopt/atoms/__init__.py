@@ -6,9 +6,7 @@ from rlaopt.atoms.box import Box as Box
 from rlaopt.atoms.elastic_net import ElasticNet as ElasticNet
 from rlaopt.atoms.halfspace import Halfspace as Halfspace
 from rlaopt.atoms.l1_norm import L1Norm as L1Norm
-from rlaopt.atoms.l1_norm_ball import L1NormBall as L1NormBall
 from rlaopt.atoms.l2_norm import L2Norm as L2Norm
-from rlaopt.atoms.l2_norm_ball import L2NormBall as L2NormBall
 from rlaopt.atoms.linear_equality import LinearEquality as LinearEquality
 from rlaopt.atoms.linear_model.linear_model import (
     CompoundPoissonGammaRegression as CompoundPoissonGammaRegression,
@@ -29,8 +27,10 @@ from rlaopt.atoms.linear_model.linear_model import (
 from rlaopt.atoms.linear_model.linear_model import (
     PoissonRegression as PoissonRegression,
 )
-from rlaopt.atoms.linf_norm_ball import LInfNormBall as LInfNormBall
 from rlaopt.atoms.non_negative import NonNegative as NonNegative
+from rlaopt.atoms.norm_balls import L1NormBall as L1NormBall
+from rlaopt.atoms.norm_balls import L2NormBall as L2NormBall
+from rlaopt.atoms.norm_balls import LInfNormBall as LInfNormBall
 from rlaopt.atoms.nuc_norm import NucNorm as NucNorm
 from rlaopt.atoms.polyhedron import Polyhedron as Polyhedron
 from rlaopt.atoms.sum_squares import SumSquares as SumSquares
