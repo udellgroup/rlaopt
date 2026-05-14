@@ -22,7 +22,7 @@ class SumExpression(_NAryOpExpression):
     def __init__(self, *exprs: Expression):
         """Initialize sum expression.
 
-        Note: Flattening and optimization are handled by _create_add in utils.py.
+        Note: Flattening and optimization are handled by _create_sum in utils.py.
         This constructor assumes it receives already-optimized expressions.
 
         Args:

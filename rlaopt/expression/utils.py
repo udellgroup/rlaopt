@@ -7,7 +7,7 @@ import torch
 from rlaopt.expression import expr_types
 
 
-def _create_add(left, right):
+def _create_sum(left, right):
     """Create an addition expression with automatic optimizations.
 
     Optimizations:

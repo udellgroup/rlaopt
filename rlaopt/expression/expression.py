@@ -17,7 +17,7 @@ from typing_extensions import Self
 
 from rlaopt.expression import expr_types
 from rlaopt.expression.tree import ExprTree
-from rlaopt.expression.utils import _create_add, _create_product
+from rlaopt.expression.utils import _create_product, _create_sum
 from rlaopt.ext_tensordict import TensorDict
 
 
@@ -258,7 +258,7 @@ class Expression(torch.nn.Module, ABC):
         Returns:
             Expression: Sum of self and other (optimized).
         """
-        return _create_add(self, other)
+        return _create_sum(self, other)
 
     def __radd__(self, other):
         """Add a scalar and an expression (reverse operation).
@@ -269,7 +269,7 @@ class Expression(torch.nn.Module, ABC):
         Returns:
             Expression: Sum of other and self (optimized).
         """
-        return _create_add(other, self)
+        return _create_sum(other, self)
 
     def __sub__(self, other):
         """Subtract an expression or scalar from this expression.
@@ -280,7 +280,7 @@ class Expression(torch.nn.Module, ABC):
         Returns:
             Expression: Difference of self and other (optimized).
         """
-        return _create_add(self, -other)
+        return _create_sum(self, -other)
 
     def __rsub__(self, other):
         """Subtract this expression from a scalar (reverse operation).
@@ -291,7 +291,7 @@ class Expression(torch.nn.Module, ABC):
         Returns:
             Expression: Difference of other and self (optimized).
         """
-        return _create_add(other, -self)
+        return _create_sum(other, -self)
 
     def __neg__(self):
         """Negate this expression.
