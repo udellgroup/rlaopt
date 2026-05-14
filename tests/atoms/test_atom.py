@@ -133,7 +133,7 @@ class TestTree:
         expected = ExprTree(
             "MockAtom",
             ExprTree(
-                "AddExpression",
+                "SumExpression",
                 ExprTree("Variable(x)"),
                 ExprTree("Constant"),
                 is_commutative=True,

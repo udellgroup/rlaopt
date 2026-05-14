@@ -22,11 +22,11 @@ def unary_op_expr():
     return unary_expressions._Unary
 
 
-def add_expr():
-    """Return AddExpression class to avoid circular imports."""
+def sum_expr():
+    """Return SumExpression class to avoid circular imports."""
     from rlaopt.expression import op_expressions
 
-    return op_expressions.AddExpression
+    return op_expressions.SumExpression
 
 
 def prod_expr():

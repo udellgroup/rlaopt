@@ -273,7 +273,7 @@ class TestExpression:
         _assert_expression_equals(result, ExprTree("Constant"), torch.tensor(6.0))
 
     def test_addition_flattening(self):
-        """Test that (a + b) + c flattens to AddExpression(a, b, c)."""
+        """Test that (a + b) + c flattens to SumExpression(a, b, c)."""
         a = expr_types.constant()(1.0)
         b = expr_types.constant()(2.0)
         # Use variable to prevent constant folding
@@ -284,7 +284,7 @@ class TestExpression:
         _assert_expression_equals(
             result,
             ExprTree(
-                "AddExpression",
+                "SumExpression",
                 ExprTree("Constant"),
                 ExprTree("Variable(x)"),
                 is_commutative=True,
@@ -310,7 +310,7 @@ class TestExpression:
         _assert_expression_equals(
             result,
             ExprTree(
-                "AddExpression",
+                "SumExpression",
                 ExprTree("Constant"),
                 ExprTree("Variable(x)"),
                 is_commutative=True,
@@ -327,7 +327,7 @@ class TestExpression:
         _assert_expression_equals(
             result,
             ExprTree(
-                "AddExpression",
+                "SumExpression",
                 ExprTree("Constant"),
                 ExprTree(
                     "ProductExpression",
@@ -493,7 +493,7 @@ class TestExpression:
         _assert_expression_equals(
             result,
             ExprTree(
-                "AddExpression",
+                "SumExpression",
                 ExprTree(
                     "ProductExpression",
                     ExprTree("Constant"),
@@ -603,7 +603,7 @@ class TestExpression:
                 "ProductExpression",
                 ExprTree("Constant"),
                 ExprTree(
-                    "AddExpression",
+                    "SumExpression",
                     ExprTree("Variable(x)"),
                     ExprTree("Variable(y)"),
                     is_commutative=True,
@@ -699,7 +699,7 @@ class TestExpression:
         _assert_expression_equals(
             result,
             ExprTree(
-                "AddExpression",
+                "SumExpression",
                 ExprTree(
                     "ProductExpression",
                     ExprTree("Constant"),
@@ -733,7 +733,7 @@ class TestExpression:
         _assert_expression_equals(
             result,
             ExprTree(
-                "AddExpression",
+                "SumExpression",
                 ExprTree(
                     "ProductExpression",
                     ExprTree("Constant"),
@@ -763,7 +763,7 @@ class TestExpression:
         _assert_expression_equals(
             result,
             ExprTree(
-                "AddExpression",
+                "SumExpression",
                 ExprTree(
                     "ProductExpression",
                     ExprTree("Constant"),
@@ -800,7 +800,7 @@ class TestExpression:
         _assert_expression_equals(
             result,
             ExprTree(
-                "AddExpression",
+                "SumExpression",
                 ExprTree(
                     "ProductExpression",
                     ExprTree("Constant"),
@@ -834,7 +834,7 @@ class TestExpression:
         _assert_expression_equals(
             result,
             ExprTree(
-                "AddExpression",
+                "SumExpression",
                 ExprTree("L1Norm", ExprTree("Variable(x)")),
                 ExprTree(
                     "ProductExpression",
@@ -858,7 +858,7 @@ class TestExpression:
         _assert_expression_equals(
             result,
             ExprTree(
-                "AddExpression",
+                "SumExpression",
                 ExprTree(
                     "ProductExpression",
                     ExprTree("Constant"),
@@ -886,7 +886,7 @@ class TestExpression:
         _assert_expression_equals(
             result,
             ExprTree(
-                "AddExpression",
+                "SumExpression",
                 ExprTree(
                     "ProductExpression",
                     ExprTree("Constant"),

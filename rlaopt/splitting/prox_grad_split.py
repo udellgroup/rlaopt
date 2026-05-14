@@ -4,7 +4,7 @@ import torch
 from tensordict import merge_tensordicts
 
 from rlaopt.atoms import Atom
-from rlaopt.expression import AddExpression, Expression
+from rlaopt.expression import Expression, SumExpression
 from rlaopt.ext_tensordict import TensorDict
 from rlaopt.splitting.operator_split import _OperatorSplit
 
@@ -30,14 +30,14 @@ class ProxGradSplit(_OperatorSplit):
         Raises:
             ValueError: If expression cannot be split for proximal gradient
         """
-        # Cast to AddExpression for easier splitting
-        if not isinstance(expr, AddExpression):
-            expr = AddExpression(expr)
+        # Cast to SumExpression for easier splitting
+        if not isinstance(expr, SumExpression):
+            expr = SumExpression(expr)
 
         f, r = self._attempt_split(expr)
         super().__init__(f, r)
 
-    def _attempt_split(self, expr: AddExpression) -> tuple[Expression, list[Atom]]:
+    def _attempt_split(self, expr: SumExpression) -> tuple[Expression, list[Atom]]:
         """Validate and split expression for proximal gradient methods.
 
         Args:

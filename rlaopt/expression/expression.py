@@ -26,7 +26,7 @@ class Expression(torch.nn.Module, ABC):
 
     Expression extends torch.nn.Module to provide automatic parameter tracking,
     gradient computation, and device management. All concrete expression types
-    (Variable, AddExpression, etc.) inherit from this base class.
+    (Variable, SumExpression, etc.) inherit from this base class.
 
     Expressions support operator overloading for natural mathematical syntax:
         - Arithmetic: +, -, *, /, @, **

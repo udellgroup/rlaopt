@@ -5,7 +5,7 @@ from linops import LinearOperator, hstack, vstack
 from tensordict import merge_tensordicts
 
 from rlaopt.atoms import Atom, AtomDecomposition
-from rlaopt.expression import AddExpression, Expression
+from rlaopt.expression import Expression, SumExpression
 from rlaopt.ext_tensordict import TensorDict
 from rlaopt.splitting.linops import _AffineExprLinOp, _HVPLinOp
 from rlaopt.splitting.operator_split import _OperatorSplit
@@ -33,9 +33,9 @@ class ADMMSplit(_OperatorSplit):
         Raises:
             ValueError: If expression cannot be split for ADMM
         """
-        # Cast to AddExpression for easier splitting
-        if not isinstance(expr, AddExpression):
-            expr = AddExpression(expr)
+        # Cast to SumExpression for easier splitting
+        if not isinstance(expr, SumExpression):
+            expr = SumExpression(expr)
 
         f, decomposed_atoms = self._attempt_split(expr)
         r = [decomposition.atom for decomposition in decomposed_atoms]
@@ -55,7 +55,7 @@ class ADMMSplit(_OperatorSplit):
         )
 
     def _attempt_split(
-        self, expr: AddExpression
+        self, expr: SumExpression
     ) -> tuple[Expression, list[AtomDecomposition]]:
         """Validate and split expression for ADMM.
 

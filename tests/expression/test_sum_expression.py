@@ -1,10 +1,10 @@
-"""Tests for AddExpression class."""
+"""Tests for SumExpression class."""
 
 import pytest
 import torch
 
 from rlaopt.expression import Expression, Variable
-from rlaopt.expression.op_expressions import AddExpression
+from rlaopt.expression.op_expressions import SumExpression
 
 
 @pytest.fixture
@@ -59,8 +59,8 @@ def another_non_smooth_expr():
     return MockNonSmooth2()
 
 
-class TestAddExpression:
-    """Test AddExpression concrete implementation."""
+class TestSumExpression:
+    """Test SumExpression concrete implementation."""
 
     # ----------------------
     # Initialization and basic operations
@@ -68,27 +68,27 @@ class TestAddExpression:
 
     def test_init_and_basic_properties(self, smooth_expr, another_smooth_expr):
         """Test initialization and basic expression properties."""
-        add_expr = AddExpression(smooth_expr, another_smooth_expr)
+        add_expr = SumExpression(smooth_expr, another_smooth_expr)
         assert add_expr.n_exprs == 2
         assert len(list(add_expr.exprs)) == 2
 
     def test_op_method_with_various_inputs(self, smooth_expr):
         """Test op() method with single, two, and multiple expressions."""
         # Single expression
-        single_expr = AddExpression(smooth_expr)
+        single_expr = SumExpression(smooth_expr)
         assert torch.equal(single_expr.op([torch.ones(5) * 5]), torch.ones(5) * 5)
 
         # Two expressions
         x = Variable((5,), name="x")
         y = Variable((5,), name="y")
-        double_expr = AddExpression(x, y)
+        double_expr = SumExpression(x, y)
         assert torch.equal(
             double_expr.op([torch.ones(5), torch.ones(5) * 2]), torch.ones(5) * 3
         )
 
         # Multiple expressions (nested)
         z = Variable((3,), name="z")
-        multi_expr = AddExpression(AddExpression(x, y), z)
+        multi_expr = SumExpression(SumExpression(x, y), z)
         values = [
             torch.tensor([1.0, 2.0, 3.0]),
             torch.tensor([4.0, 5.0, 6.0]),
@@ -102,7 +102,7 @@ class TestAddExpression:
 
     def test_get_smooth_part_mixed_terms(self, smooth_expr, non_smooth_expr):
         """Test get_smooth_part returns only smooth terms."""
-        mixed = AddExpression(smooth_expr, non_smooth_expr)
+        mixed = SumExpression(smooth_expr, non_smooth_expr)
 
         smooth_part = mixed.get_smooth_part()
 
@@ -114,7 +114,7 @@ class TestAddExpression:
 
     def test_get_non_smooth_exprs_mixed_terms(self, smooth_expr, non_smooth_expr):
         """Test get_non_smooth_exprs returns only non-smooth terms as a list."""
-        mixed = AddExpression(smooth_expr, non_smooth_expr)
+        mixed = SumExpression(smooth_expr, non_smooth_expr)
 
         non_smooth_exprs = mixed.get_non_smooth_exprs()
 
@@ -126,7 +126,7 @@ class TestAddExpression:
 
     def test_get_smooth_part_all_smooth(self, smooth_expr, another_smooth_expr):
         """Test get_smooth_part with all smooth terms returns all terms."""
-        all_smooth = AddExpression(smooth_expr, another_smooth_expr)
+        all_smooth = SumExpression(smooth_expr, another_smooth_expr)
 
         smooth_part = all_smooth.get_smooth_part()
 
@@ -138,7 +138,7 @@ class TestAddExpression:
 
     def test_get_non_smooth_exprs_all_smooth(self, smooth_expr, another_smooth_expr):
         """Test get_non_smooth_exprs returns empty list when all terms are smooth."""
-        all_smooth = AddExpression(smooth_expr, another_smooth_expr)
+        all_smooth = SumExpression(smooth_expr, another_smooth_expr)
 
         non_smooth_exprs = all_smooth.get_non_smooth_exprs()
 
@@ -151,7 +151,7 @@ class TestAddExpression:
         """Test get_smooth_part returns Constant(0.0) when all terms are non-smooth."""
         from rlaopt.expression.constant import Constant
 
-        all_non_smooth = AddExpression(non_smooth_expr, another_non_smooth_expr)
+        all_non_smooth = SumExpression(non_smooth_expr, another_non_smooth_expr)
 
         smooth_part = all_non_smooth.get_smooth_part()
 
@@ -164,7 +164,7 @@ class TestAddExpression:
         self, non_smooth_expr, another_non_smooth_expr
     ):
         """Test get_non_smooth_exprs with all non-smooth returns all terms."""
-        all_non_smooth = AddExpression(non_smooth_expr, another_non_smooth_expr)
+        all_non_smooth = SumExpression(non_smooth_expr, another_non_smooth_expr)
 
         non_smooth_exprs = all_non_smooth.get_non_smooth_exprs()
 
@@ -175,7 +175,7 @@ class TestAddExpression:
 
     def test_partition_completeness(self, smooth_expr, non_smooth_expr):
         """Test that smooth + non-smooth parts equal the original sum."""
-        mixed = AddExpression(smooth_expr, non_smooth_expr)
+        mixed = SumExpression(smooth_expr, non_smooth_expr)
 
         smooth_part = mixed.get_smooth_part()
         non_smooth_exprs = mixed.get_non_smooth_exprs()
@@ -192,7 +192,7 @@ class TestAddExpression:
         self, smooth_expr, another_smooth_expr, non_smooth_expr, another_non_smooth_expr
     ):
         """Test partitioning with multiple terms of each type."""
-        mixed = AddExpression(
+        mixed = SumExpression(
             smooth_expr, non_smooth_expr, another_smooth_expr, another_non_smooth_expr
         )
 
@@ -222,10 +222,10 @@ class TestAddExpression:
         """Test tree() returns correct structure."""
         from rlaopt.expression import ExprTree
 
-        add_expr = AddExpression(smooth_expr, another_smooth_expr)
+        add_expr = SumExpression(smooth_expr, another_smooth_expr)
 
         expected = ExprTree(
-            "AddExpression",
+            "SumExpression",
             smooth_expr.tree(),
             another_smooth_expr.tree(),
             is_commutative=True,
@@ -237,7 +237,7 @@ class TestAddExpression:
     # ----------------------
 
     def test_is_affine_with_affine_operands(self):
-        """Test that AddExpression is affine when all operands are affine."""
+        """Test that SumExpression is affine when all operands are affine."""
         from rlaopt.expression import expr_types
 
         x = expr_types.variable()(torch.tensor([1.0, 2.0, 3.0]), name="x")
@@ -250,7 +250,7 @@ class TestAddExpression:
         assert result.is_affine() is True
 
     def test_is_affine_with_nonaffine_operand(self):
-        """Test that AddExpression is not affine when any operand is non-affine."""
+        """Test that SumExpression is not affine when any operand is non-affine."""
         from rlaopt.expression import expr_types
 
         x = expr_types.variable()(torch.tensor([1.0, 2.0, 3.0]), name="x")

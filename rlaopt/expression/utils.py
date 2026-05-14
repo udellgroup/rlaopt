@@ -11,7 +11,7 @@ def _create_add(left, right):
     """Create an addition expression with automatic optimizations.
 
     Optimizations:
-    - Flattens nested AddExpressions: (a + b) + c -> AddExpression(a, b, c)
+    - Flattens nested SumExpressions: (a + b) + c -> SumExpression(a, b, c)
     - Folds constants: const1 + const2 -> single const
     - Filters zeros: expr + 0 -> expr, 0 + expr -> expr
 
@@ -20,16 +20,16 @@ def _create_add(left, right):
         right: Right operand (Expression, float, int, or torch.Tensor).
 
     Returns:
-        Expression: Optimized sum (AddExpression, Constant, or single expr).
+        Expression: Optimized sum (SumExpression, Constant, or single expr).
     """
     # Convert inputs to expressions if needed
     left = _to_expr(left)
     right = _to_expr(right)
 
-    # Collect all terms by flattening nested AddExpressions
+    # Collect all terms by flattening nested SumExpressions
     terms = []
     for expr in [left, right]:
-        if isinstance(expr, expr_types.add_expr()):
+        if isinstance(expr, expr_types.sum_expr()):
             terms.extend(expr.exprs)
         else:
             terms.append(expr)
@@ -58,7 +58,7 @@ def _create_add(left, right):
     # when the constants are folded
     if len(non_constants) == 1:
         return non_constants[0]
-    return expr_types.add_expr()(*non_constants)
+    return expr_types.sum_expr()(*non_constants)
 
 
 def _create_product(left, right, matmul: bool):
@@ -79,7 +79,7 @@ def _create_product(left, right, matmul: bool):
         matmul: If True, use matrix multiplication (no optimizations).
 
     Returns:
-        ProductExpression, AddExpression (if distributed), Constant
+        ProductExpression, SumExpression (if distributed), Constant
         (if all constants fold), or Atom (if scaled atom).
     """
     # Convert inputs to expressions if needed
@@ -133,12 +133,12 @@ def _create_product(left, right, matmul: bool):
                         return scaled
 
                 # Distribute: const * (a + b) -> const*a + const*b
-                if isinstance(other, expr_types.add_expr()):
+                if isinstance(other, expr_types.sum_expr()):
                     distributed_terms = [
                         _create_product(folded_const, term, matmul=False)
                         for term in other.exprs
                     ]
-                    return expr_types.add_expr()(*distributed_terms)
+                    return expr_types.sum_expr()(*distributed_terms)
 
             # General case: rebuild product with folded constant and other factors
             all_factors = [folded_const] + other_factors
