@@ -68,9 +68,9 @@ class TestSumExpression:
 
     def test_init_and_basic_properties(self, smooth_expr, another_smooth_expr):
         """Test initialization and basic expression properties."""
-        add_expr = SumExpression(smooth_expr, another_smooth_expr)
-        assert add_expr.n_exprs == 2
-        assert len(list(add_expr.exprs)) == 2
+        sum_expr = SumExpression(smooth_expr, another_smooth_expr)
+        assert sum_expr.n_exprs == 2
+        assert len(list(sum_expr.exprs)) == 2
 
     def test_op_method_with_various_inputs(self, smooth_expr):
         """Test op() method with single, two, and multiple expressions."""
@@ -222,7 +222,7 @@ class TestSumExpression:
         """Test tree() returns correct structure."""
         from rlaopt.expression import ExprTree
 
-        add_expr = SumExpression(smooth_expr, another_smooth_expr)
+        sum_expr = SumExpression(smooth_expr, another_smooth_expr)
 
         expected = ExprTree(
             "SumExpression",
@@ -230,7 +230,7 @@ class TestSumExpression:
             another_smooth_expr.tree(),
             is_commutative=True,
         )
-        assert add_expr.tree() == expected
+        assert sum_expr.tree() == expected
 
     # ----------------------
     # Tests for is_affine
