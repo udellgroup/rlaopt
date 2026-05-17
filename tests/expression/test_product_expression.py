@@ -4,10 +4,10 @@ import pytest
 import torch
 
 from rlaopt.expression import (
-    AddExpression,
     Constant,
     Expression,
     ExprTree,
+    SumExpression,
     Variable,
 )
 from rlaopt.expression.op_expressions import ProductExpression
@@ -113,7 +113,7 @@ class TestProductExpression:
         self, vector_var, another_vector_var
     ):
         """Test multiplying expressions built from Variables and Constants is allowed."""  # noqa: E501
-        sum_expr = AddExpression(vector_var, another_vector_var)
+        sum_expr = SumExpression(vector_var, another_vector_var)
         const = Constant(2.0)
         prod = ProductExpression(sum_expr, const, matmul=False)
         assert prod.n_exprs == 2

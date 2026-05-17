@@ -4,7 +4,7 @@ import torch
 
 from rlaopt.atoms import Atom, LinearModel
 from rlaopt.data import DataLoader
-from rlaopt.expression import AddExpression, Expression
+from rlaopt.expression import Expression, SumExpression
 from rlaopt.ext_tensordict import TensorDict
 from rlaopt.splitting.linops import make_subsamp_hvp_linop
 
@@ -39,8 +39,8 @@ class SapphireSplit:
         Args:
             expr (Expression): An expression object representing the composite function.
         """
-        if not isinstance(expr, AddExpression):
-            expr = AddExpression(expr)
+        if not isinstance(expr, SumExpression):
+            expr = SumExpression(expr)
 
         model, f, r = self._attempt_split(expr)
 
@@ -49,17 +49,17 @@ class SapphireSplit:
         self._r = r
 
     def _attempt_split(
-        self, expr: AddExpression
-    ) -> tuple[LinearModel, AddExpression | None, Atom | None]:
+        self, expr: SumExpression
+    ) -> tuple[LinearModel, SumExpression | None, Atom | None]:
         """Attempts to split the objective as: Linear Model + Smooth + Non-smooth.
 
         Args:
-            expr (AddExpression): The expression to split.
+            expr (SumExpression): The expression to split.
 
         Returns:
-            tuple[LinearModel, AddExpression | None, Atom | None]: A tuple containing:
+            tuple[LinearModel, SumExpression | None, Atom | None]: A tuple containing:
                 - LinearModel: The linear model term
-                - AddExpression | None: The smooth regularizer term (if present)
+                - SumExpression | None: The smooth regularizer term (if present)
                 - Atom | None: The non-smooth regularizer term (if present)
 
         Raises:
@@ -130,7 +130,7 @@ class SapphireSplit:
                 )
 
         # Prepare return values
-        smooth_expr = AddExpression(*smooth_exprs) if smooth_exprs else None
+        smooth_expr = SumExpression(*smooth_exprs) if smooth_exprs else None
 
         return linear_model, smooth_expr, non_smooth_expr
 

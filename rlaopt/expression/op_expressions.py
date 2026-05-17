@@ -1,4 +1,4 @@
-"""Module for addition and product operations on expressions."""
+"""Module for sum and product operations on expressions."""
 
 from typing import Callable
 
@@ -10,7 +10,7 @@ from rlaopt.expression.constant import Constant
 from rlaopt.expression.expression import Expression
 
 
-class AddExpression(_NAryOpExpression):
+class SumExpression(_NAryOpExpression):
     """Sum of multiple expressions.
 
     Represents the sum of two or more expressions.
@@ -22,7 +22,7 @@ class AddExpression(_NAryOpExpression):
     def __init__(self, *exprs: Expression):
         """Initialize sum expression.
 
-        Note: Flattening and optimization are handled by _create_add in utils.py.
+        Note: Flattening and optimization are handled by _create_sum in utils.py.
         This constructor assumes it receives already-optimized expressions.
 
         Args:
@@ -30,11 +30,11 @@ class AddExpression(_NAryOpExpression):
         """
         super().__init__(*exprs)
 
-        # Build op method for adding expressions
+        # Build op method for summing expressions
         self._op = self._build_op()
 
     def op(self, values: list[torch.Tensor]) -> torch.Tensor:
-        """Apply the addition operator to evaluated expressions.
+        """Apply the sum operator to evaluated expressions.
 
         Args:
             values: List of evaluated tensor expressions.
@@ -87,23 +87,23 @@ class AddExpression(_NAryOpExpression):
         if return_mode == "list":
             return smooth_exprs
 
-        return AddExpression(*smooth_exprs)
+        return SumExpression(*smooth_exprs)
 
     def _build_op(self) -> Callable[[list[torch.Tensor]], torch.Tensor]:
-        """Build the addition op method for AddExpression."""
+        """Build the sum op method for SumExpression."""
         if self.n_exprs > 1:
 
-            def add_op(values: list[torch.Tensor]) -> torch.Tensor:
+            def sum_op(values: list[torch.Tensor]) -> torch.Tensor:
                 result = values[0]
                 for value in values[1:]:
                     result = result + value
                 return result
         else:
 
-            def add_op(values: list[torch.Tensor]) -> torch.Tensor:
+            def sum_op(values: list[torch.Tensor]) -> torch.Tensor:
                 return values[0]
 
-        return add_op
+        return sum_op
 
 
 class ProductExpression(_NAryOpExpression):
@@ -169,7 +169,7 @@ class ProductExpression(_NAryOpExpression):
         """
         if isinstance(expr, (expr_types.variable(), Constant)):
             return True
-        if isinstance(expr, (ProductExpression, AddExpression)):
+        if isinstance(expr, (ProductExpression, SumExpression)):
             return all(self._is_var_or_const_tree(child) for child in expr.exprs)
         if isinstance(expr, expr_types.unary_op_expr()):
             return self._is_var_or_const_tree(expr.operand)

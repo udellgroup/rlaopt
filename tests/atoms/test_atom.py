@@ -45,7 +45,7 @@ def simple_variable():
 
 
 @pytest.fixture
-def add_expression(simple_variable):
+def sum_expression(simple_variable):
     """Create an Expression for testing."""
     return simple_variable + 1.0
 
@@ -58,20 +58,20 @@ class TestRegisterInputAndGetInput:
         atom = MockAtom(simple_variable, variable_only=False)
         assert atom.get_input("x") is simple_variable
 
-    def test_register_input_with_expression_when_allowed(self, add_expression):
+    def test_register_input_with_expression_when_allowed(self, sum_expression):
         """Test register_input accepts Expression when variable_only=False."""
-        atom = MockAtom(add_expression, variable_only=False)
-        assert atom.get_input("x") is add_expression
+        atom = MockAtom(sum_expression, variable_only=False)
+        assert atom.get_input("x") is sum_expression
 
     def test_register_input_rejects_non_expression(self):
         """Test register_input rejects non-Expression inputs."""
         with pytest.raises(TypeError, match="Expected Expression, but got"):
             MockAtom(torch.tensor([1.0, 2.0, 3.0]), variable_only=False)
 
-    def test_register_input_rejects_expression_when_variable_only(self, add_expression):
+    def test_register_input_rejects_expression_when_variable_only(self, sum_expression):
         """Test register_input rejects non-Variable when variable_only=True."""
         with pytest.raises(TypeError, match="Expected Variable, but got"):
-            MockAtom(add_expression, variable_only=True)
+            MockAtom(sum_expression, variable_only=True)
 
     def test_register_input_accepts_variable_when_variable_only(self, simple_variable):
         """Test register_input accepts Variable when variable_only=True."""
@@ -127,13 +127,13 @@ class TestTree:
         expected = ExprTree("MockAtom", ExprTree("Variable(x)"))
         assert atom.tree() == expected
 
-    def test_tree_with_expression_input(self, add_expression):
+    def test_tree_with_expression_input(self, sum_expression):
         """Test tree() returns correct structure for atom with Expression input."""
-        atom = MockAtom(add_expression, variable_only=False)
+        atom = MockAtom(sum_expression, variable_only=False)
         expected = ExprTree(
             "MockAtom",
             ExprTree(
-                "AddExpression",
+                "SumExpression",
                 ExprTree("Variable(x)"),
                 ExprTree("Constant"),
                 is_commutative=True,

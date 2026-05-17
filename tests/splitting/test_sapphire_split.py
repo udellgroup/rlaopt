@@ -6,7 +6,7 @@ from tensordict import assert_allclose_td
 
 from rlaopt.atoms import Box, L1Norm, LinearRegression, LogisticRegression, SumSquares
 from rlaopt.data import DataLoader, Dataset
-from rlaopt.expression import AddExpression, Variable
+from rlaopt.expression import SumExpression, Variable
 from rlaopt.ext_tensordict import TensorDict
 from rlaopt.splitting.sapphire_split import SapphireSplit
 
@@ -86,7 +86,7 @@ class TestProperties:
         assert isinstance(split.model, LogisticRegression)
 
     def test_f(self, problem_data, log_reg_model):
-        """Test f property: None with no regularizer, AddExpression otherwise."""
+        """Test f property: None with no regularizer, SumExpression otherwise."""
         beta, _ = problem_data
         model, _ = log_reg_model
 
@@ -96,7 +96,7 @@ class TestProperties:
 
         split = SapphireSplit(model + SumSquares(beta))
         assert split.f is not None
-        assert isinstance(split.f, AddExpression)
+        assert isinstance(split.f, SumExpression)
 
     def test_r(self, problem_data, log_reg_model):
         """Test r property is None when no non-smooth term, L1Norm otherwise."""

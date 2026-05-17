@@ -182,7 +182,7 @@ class TestVariable:
 
         x = Variable((5,), name="x")
         y = Variable((5,), name="y")
-        expr = expr_types.add_expr()(x, y)
+        expr = expr_types.sum_expr()(x, y)
 
         state = expr.state_dict()
         assert any("x" in key for key in state.keys())
