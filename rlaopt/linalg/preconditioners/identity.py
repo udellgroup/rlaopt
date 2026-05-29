@@ -14,7 +14,7 @@ class IdentityConfig(PreconditionerConfig):
 
     @property
     def is_identity(self) -> bool:
-        """Identity preconditioner is the no-op preconditioner."""
+        """Identity preconditioner is indeed the identity."""
         return True
 
 
