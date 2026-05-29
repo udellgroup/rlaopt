@@ -13,11 +13,11 @@ from rlaopt.solvers.gradient_solvers.gradient_solver_configs import (
 from rlaopt.solvers.gradient_solvers.gradient_solver_configs import (
     SapphireConfig as SapphireConfig,
 )
-from rlaopt.solvers.gradient_solvers.gradient_solvers import (
+from rlaopt.solvers.gradient_solvers.solvers import (
     GradSolverStoppingCriteria as GradSolverStoppingCriteria,
 )
-from rlaopt.solvers.gradient_solvers.gradient_solvers import ProxGrad as ProxGrad
-from rlaopt.solvers.gradient_solvers.gradient_solvers import Sapphire as Sapphire
+from rlaopt.solvers.gradient_solvers.solvers import ProxGrad as ProxGrad
+from rlaopt.solvers.gradient_solvers.solvers import Sapphire as Sapphire
 from rlaopt.solvers.pcg import PCG as PCG
 from rlaopt.solvers.pcg import PCGConfig as PCGConfig
 from rlaopt.solvers.pcg import PCGResult as PCGResult

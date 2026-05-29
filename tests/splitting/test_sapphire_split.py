@@ -111,6 +111,14 @@ class TestProperties:
         assert split.r is not None
         assert isinstance(split.r, L1Norm)
 
+    def test_has_non_smooth_component(self, problem_data, log_reg_model):
+        """has_non_smooth_component tracks whether the non-smooth term is present."""
+        beta, _ = problem_data
+        model, _ = log_reg_model
+
+        assert SapphireSplit(model).has_non_smooth_component is False
+        assert SapphireSplit(model + L1Norm(beta)).has_non_smooth_component is True
+
     def test_other_properties(self, log_reg_model):
         """Test loader, num_samples, and variable_values properties."""
         model, _ = log_reg_model
