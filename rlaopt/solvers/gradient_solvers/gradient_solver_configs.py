@@ -62,20 +62,21 @@ class ProxGradConfig(GradSolverConfig):
 
     @model_validator(mode="after")
     def _check_combinations(self) -> Self:
-        non_identity_precond = not isinstance(self.precond_config, IdentityConfig)
+        non_identity_precond = not self.precond_config.is_identity
 
         if non_identity_precond and self.use_linesearch:
             raise ValueError(
                 "Line search is not supported with a non-identity preconditioner; "
-                "set use_linesearch=False or use IdentityConfig. Backtracking would "
-                "require re-solving the APG subproblem on every trial step."
+                f"set use_linesearch=False or use {IdentityConfig.__name__}. "
+                "Backtracking would require re-solving the APG subproblem on "
+                "every trial step."
             )
 
         if non_identity_precond and self.use_acceleration:
             raise ValueError(
                 "Nesterov acceleration is not supported with a non-identity "
                 "preconditioner. Set use_acceleration=False "
-                "or use IdentityConfig."
+                f"or use {IdentityConfig.__name__}."
             )
 
         if self.use_linesearch and self.auto_update_stepsize:

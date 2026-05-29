@@ -8,7 +8,7 @@ import torch
 
 from rlaopt.data import DataLoader
 from rlaopt.ext_tensordict import TensorDict
-from rlaopt.linalg import IdentityConfig, PreconditionerConfig
+from rlaopt.linalg import PreconditionerConfig
 from rlaopt.splitting import ProxGradSplit, SapphireSplit
 
 from . import gradient_solver_core as core
@@ -66,7 +66,7 @@ def _build_apply_updates_fn(
     by an unpreconditioned prox. With a non-identity preconditioner and a
     non-smooth term, the scaled prox subproblem is solved via APG.
     """
-    if isinstance(precond_config, IdentityConfig) or not has_non_smooth_component:
+    if precond_config.is_identity or not has_non_smooth_component:
 
         def apply_updates(updates: TensorDict, var_values: TensorDict, state):
             dir_ = core.precond_grad(updates, state)
@@ -94,14 +94,14 @@ def _prox_grad_step_builder(config: ProxGradConfig, op_split: ProxGradSplit):
     # Get functions used for building proximal gradient step
     f, grad_f, prox_fn = op_split.func_f, op_split.grad_f, op_split.prox
     has_non_smooth_component = op_split.has_non_smooth_component
-    identity_precond = isinstance(config.precond_config, IdentityConfig)
+    precond_is_identity = config.precond_config.is_identity
 
     err_fn = partial(core.grad_mapping_norm, full_gradient_fn=grad_f, prox_fn=prox_fn)
 
     # ProxGradConfig rejects use_linesearch=True with a non-identity precond,
-    # so the `identity_precond and use_linesearch` gate matches the validated
+    # so the `precond_is_identity and use_linesearch` gate matches the validated
     # combinations. _build_apply_updates_fn handles every other case.
-    if identity_precond and config.use_linesearch:
+    if precond_is_identity and config.use_linesearch:
         apply_updates = partial(core.linesearch, f=f, apply_updates=prox_fn)
     else:
         apply_updates = _build_apply_updates_fn(
@@ -112,9 +112,9 @@ def _prox_grad_step_builder(config: ProxGradConfig, op_split: ProxGradSplit):
         )
 
     # ProxGradConfig rejects use_acceleration=True with a
-    # non-identity precond, so the `identity_precond and use_acceleration`
+    # non-identity precond, so the `precond_is_identity and use_acceleration`
     # gate matches the validated combinations.
-    if identity_precond and config.use_acceleration:
+    if precond_is_identity and config.use_acceleration:
         var_values_transform = core.nest_accel_update
     else:
 

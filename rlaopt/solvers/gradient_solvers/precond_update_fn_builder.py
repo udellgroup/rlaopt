@@ -8,7 +8,6 @@ from linops import LinearOperator
 
 from rlaopt.ext_tensordict import TensorDict
 from rlaopt.linalg import (
-    IdentityConfig,
     PreconditionerConfig,
     get_preconditioner,
     randomized_powering,
@@ -53,7 +52,7 @@ def build_preconditioner_update(
             P = get_preconditioner(precond_config, Hop, dtype)
 
             if update_stepsize:
-                if isinstance(precond_config, IdentityConfig):
+                if precond_config.is_identity:
                     Aop = Hop
                 else:
                     Hop = hessian_linop_fn(beta_value)
@@ -79,12 +78,12 @@ def _update_stepsize(
 ) -> GradSolverState:
     L = randomized_powering(Aop, shape, device=device)
 
-    if isinstance(precond_config, IdentityConfig):
+    if precond_config.is_identity:
         # Clamp so step size (1/L) never exceeds 100;
         # minibatch estimates can be overconfident
         L = max(L, 1e-2)
     else:
-        L = 2 * L  # conservative safety factor for preconditioned operator
+        L *= 2  # conservative safety factor for preconditioned operator
 
     eta_new = 1 / L
 
