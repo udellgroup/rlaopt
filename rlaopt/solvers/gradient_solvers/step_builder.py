@@ -8,7 +8,7 @@ import torch
 
 from rlaopt.data import DataLoader
 from rlaopt.ext_tensordict import TensorDict
-from rlaopt.linalg import IdentityConfig
+from rlaopt.linalg import IdentityConfig, PreconditionerConfig
 from rlaopt.splitting import ProxGradSplit, SapphireSplit
 
 from . import gradient_solver_core as core
@@ -54,7 +54,7 @@ def _get_updates(
 
 
 def _build_apply_updates_fn(
-    precond_config,
+    precond_config: PreconditionerConfig,
     has_non_smooth_component: bool,
     subproblem_iters: int,
     prox_fn: Callable[[TensorDict, float], TensorDict],
@@ -93,19 +93,28 @@ def get_step_fn(config: GradSolverConfig, op_split: ProxGradSplit | SapphireSpli
 def _prox_grad_step_builder(config: ProxGradConfig, op_split: ProxGradSplit):
     # Get functions used for building proximal gradient step
     f, grad_f, prox_fn = op_split.func_f, op_split.grad_f, op_split.prox
+    has_non_smooth_component = op_split.has_non_smooth_component
+    identity_precond = isinstance(config.precond_config, IdentityConfig)
 
     err_fn = partial(core.grad_mapping_norm, full_gradient_fn=grad_f, prox_fn=prox_fn)
 
-    if config.use_linesearch:
-        # linesearch calls apply_updates(x, eta) -> TensorDict, so pass prox_fn directly
+    # ProxGradConfig rejects use_linesearch=True with a non-identity precond,
+    # so the `identity_precond and use_linesearch` gate matches the validated
+    # combinations. _build_apply_updates_fn handles every other case.
+    if identity_precond and config.use_linesearch:
         apply_updates = partial(core.linesearch, f=f, apply_updates=prox_fn)
     else:
-        # optimization_step calls apply_updates(updates, var_values, state); wrap to
-        # match prox_update(var_vals, updates, state, prox_fn) argument order.
-        def apply_updates(updates, var_vals, state):
-            return core.prox_update(var_vals, updates, state, prox_fn)
+        apply_updates = _build_apply_updates_fn(
+            config.precond_config,
+            has_non_smooth_component,
+            config.subproblem_iters,
+            prox_fn,
+        )
 
-    if config.use_acceleration:
+    # ProxGradConfig rejects use_acceleration=True with a
+    # non-identity precond, so the `identity_precond and use_acceleration`
+    # gate matches the validated combinations.
+    if identity_precond and config.use_acceleration:
         var_values_transform = core.nest_accel_update
     else:
 
@@ -116,15 +125,31 @@ def _prox_grad_step_builder(config: ProxGradConfig, op_split: ProxGradSplit):
     def gradient_fn(v, s):
         return grad_f(v), s
 
-    def no_op_precond(v, s):
-        return s
+    # Preconditioner update: always go through build_preconditioner_update,
+    # mirroring Sapphire. For an identity preconditioner this is essentially
+    # free. update_stepsize=True is only meaningful when auto_update_stepsize is on;
+    # the validator rules out the linesearch+auto combination.
+    device = op_split.variable_values.to_flat_tensor().device
+    dtype = op_split.variable_values.to_flat_tensor().dtype
+
+    def hessian_linop_fn(var_values: TensorDict):
+        return op_split.hessian_linop_f(var_values)
+
+    update_precond_fn = build_preconditioner_update(
+        config.precond_config,
+        hessian_linop_fn,
+        config.precond_update_freq,
+        device,
+        dtype,
+        config.auto_update_stepsize,
+    )
 
     _step = partial(
         optimization_step,
         var_values_transform=var_values_transform,
         gradient_fn=gradient_fn,
         apply_updates=apply_updates,
-        update_precond_fn=no_op_precond,
+        update_precond_fn=update_precond_fn,
     )
 
     def step(var_values, state):

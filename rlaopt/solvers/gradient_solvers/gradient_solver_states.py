@@ -29,16 +29,20 @@ class GradSolverState(SolverState):
 class ProxGradState(GradSolverState):
     """State class for proximal gradient methods.
 
-    Extends GradSolverState with storage for previous iterate values,
-    enabling momentum/acceleration schemes.
+    Extends GradSolverState with storage for previous iterate values
+    (enabling momentum/acceleration schemes) and an optional
+    preconditioner.
 
     Attributes:
         variable_values_prev: Previous iteration's variable values for momentum.
             None until first iteration completes.
+        P: Preconditioner. None until first update (only populated when the
+            config uses a non-identity preconditioner).
         err: Current error metric value. Defaults to infinity.
     """
 
     variable_values_prev: TensorDict | None = None
+    P: Preconditioner | None = None
     err: float = torch.inf
 
 
