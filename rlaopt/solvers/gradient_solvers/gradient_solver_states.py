@@ -51,12 +51,9 @@ class SGDState(GradSolverState):
 
     Attributes:
         P: Preconditioner. None until first update.
-        precond_update_freq: Frequency (in iterations) for updating the
-            preconditioner. Defaults to 1.
     """
 
     P: Preconditioner | None = None
-    precond_update_freq: int = 1
 
 
 @dataclass(frozen=True)
@@ -137,16 +134,15 @@ def _build_prox_grad_state(
 def _build_sapphire_state(
     op_split: SapphireSplit, variable_values: TensorDict, config: SapphireConfig
 ) -> SapphireState:
-    eta, precond_update_freq = config.eta, config.precond_update_freq
+    eta = config.eta
     n = op_split.num_samples
 
     if config.base_method == "sgd":
-        return SGDState(iter_=0, eta=eta, precond_update_freq=precond_update_freq)
+        return SGDState(iter_=0, eta=eta)
     elif config.base_method == "svrg":
         return SVRGState(
             iter_=0,
             eta=eta,
-            precond_update_freq=precond_update_freq,
             snapshot=None,
             snapshot_grad=None,
         )
@@ -162,7 +158,6 @@ def _build_sapphire_state(
         return SAGAState(
             iter_=0,
             eta=eta,
-            precond_update_freq=precond_update_freq,
             table=table,
             grad_avg=grad_avg,
         )

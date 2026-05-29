@@ -161,10 +161,13 @@ def _sapphire_step_builder(config: SapphireConfig, op_split: SapphireSplit):
     check_termination_freq = config.check_termination_freq * conv_factor
     precond_update_freq = config.precond_update_freq * conv_factor
 
+    def hessian_linop_fn(beta_value: TensorDict):
+        X_batch, y_batch, _ = precond_loader.get_batch()
+        return op_split.get_subsamp_hessian_linop(beta_value, X_batch, y_batch, device)
+
     update_precond_fn = build_preconditioner_update(
         config.precond_config,
-        op_split,
-        precond_loader,
+        hessian_linop_fn,
         precond_update_freq,
         device,
         dtype,

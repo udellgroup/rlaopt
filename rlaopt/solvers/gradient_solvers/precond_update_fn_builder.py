@@ -6,7 +6,6 @@ from typing import Callable
 import torch
 from linops import LinearOperator
 
-from rlaopt.data import DataLoader
 from rlaopt.ext_tensordict import TensorDict
 from rlaopt.linalg import (
     IdentityConfig,
@@ -14,34 +13,42 @@ from rlaopt.linalg import (
     get_preconditioner,
     randomized_powering,
 )
-from rlaopt.splitting.sapphire_split import SapphireSplit
 
-from .gradient_solver_states import SapphireState
+from .gradient_solver_states import GradSolverState
 
 DataBatch = tuple[torch.Tensor, torch.Tensor, torch.Tensor]
 
 
 def build_preconditioner_update(
     precond_config: PreconditionerConfig,
-    op_split: SapphireSplit,
-    precond_loader: DataLoader,
+    hessian_linop_fn: Callable[[TensorDict], LinearOperator],
     precond_update_freq: int,
     device: torch.device,
     dtype: torch.dtype,
     update_stepsize: bool = True,
-) -> Callable[[TensorDict, SapphireState], SapphireState]:
+) -> Callable[[TensorDict, GradSolverState], GradSolverState]:
     """Build preconditioner update function.
 
+    Args:
+        precond_config: Preconditioner configuration.
+        hessian_linop_fn: Callable producing a Hessian linear operator at
+            the current iterate. Caller decides how it is constructed (full,
+            subsampled, etc.). Called once to build the preconditioner and
+            again (when ``update_stepsize=True`` and ``precond_config`` is
+            non-identity) for an independent step-size estimate.
+        precond_update_freq: Iterations between preconditioner refreshes.
+        device: Device on which the operator lives.
+        dtype: Dtype used for preconditioner construction.
+        update_stepsize: Whether to recompute ``state.eta`` from the
+            preconditioned Hessian's spectral radius on each refresh.
+
     Returns:
-        Callable for updating the preconditioner
+        Callable for updating the preconditioner.
     """
 
-    def update_precond_fn(beta_value: TensorDict, state: SapphireState):
+    def update_precond_fn(beta_value: TensorDict, state: GradSolverState):
         if state.iter_ % precond_update_freq == 0:
-            X_batch, y_batch, _ = precond_loader.get_batch()
-            Hop = op_split.get_subsamp_hessian_linop(
-                beta_value, X_batch, y_batch, device
-            )
+            Hop = hessian_linop_fn(beta_value)
 
             P = get_preconditioner(precond_config, Hop, dtype)
 
@@ -49,10 +56,7 @@ def build_preconditioner_update(
                 if isinstance(precond_config, IdentityConfig):
                     Aop = Hop
                 else:
-                    X_batch, y_batch, _ = precond_loader.get_batch()
-                    Hop = op_split.get_subsamp_hessian_linop(
-                        beta_value, X_batch, y_batch, device
-                    )
+                    Hop = hessian_linop_fn(beta_value)
 
                     def Aop(v: torch.Tensor) -> torch.Tensor:
                         return P.inv @ (Hop @ v + P.current_damping * v)
@@ -67,12 +71,12 @@ def build_preconditioner_update(
 
 
 def _update_stepsize(
-    state: SapphireState,
+    state: GradSolverState,
     Aop: Callable[[torch.Tensor], torch.Tensor] | LinearOperator,
     shape: tuple[int, int],
     device: torch.device,
     precond_config: PreconditionerConfig,
-) -> SapphireState:
+) -> GradSolverState:
     L = randomized_powering(Aop, shape, device=device)
 
     if isinstance(precond_config, IdentityConfig):
