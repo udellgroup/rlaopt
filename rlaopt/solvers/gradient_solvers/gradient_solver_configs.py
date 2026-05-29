@@ -4,7 +4,7 @@ from typing import Literal
 
 from pydantic import Field
 
-from rlaopt.linalg import NystromConfig
+from rlaopt.linalg import IdentityConfig, NystromConfig
 from rlaopt.linalg.preconditioners.preconditioner import PreconditionerConfig
 from rlaopt.solvers.configs_base import SolverConfig
 
@@ -13,6 +13,27 @@ class GradSolverConfig(SolverConfig):
     """Base configuration for gradient solvers."""
 
     eta: float
+
+    precond_config: PreconditionerConfig = Field(
+        default=IdentityConfig(),
+        description="Preconditioner configuration. Defaults to identity"
+        " (i.e. no preconditioning).",
+    )
+
+    subproblem_iters: int = Field(
+        default=20,
+        gt=0,
+        description="Number of accelerated proximal gradient iterations "
+        "performed to evaluate the scaled proximal operator. "
+        "Not used if the problem is fully smooth or the preconditioner is identity.",
+    )
+
+    auto_update_stepsize: bool = Field(
+        default=False,
+        description="Boolean flag specifying whether to automatically "
+        "update the stepsize based on an estimate of the local "
+        "smoothness constant. Defaults to False.",
+    )
 
 
 class ProxGradConfig(GradSolverConfig):
@@ -72,14 +93,6 @@ class SapphireConfig(GradSolverConfig):
         description="How frequently in epochs the preconditioner and "
         "stepsize (if auto_update_stepize = True) are updated. "
         "Defaults to 2 epochs.",
-    )
-
-    subproblem_iters: int = Field(
-        default=20,
-        gt=0,
-        description="Number of accelerated proximal gradient iterations "
-        "performed to evaluate the scaled proximal operator. "
-        "Not used if the problem is fully smooth.",
     )
 
     snapshot_update_freq: int = Field(
