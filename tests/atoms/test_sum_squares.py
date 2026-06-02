@@ -4,7 +4,7 @@ import pytest
 import torch
 from tensordict import assert_allclose_td
 
-from rlaopt.atoms.sum_squares import SumSquares
+from rlaopt.atoms.quad_form import SumSquares
 from rlaopt.expression import Expression, Variable
 from rlaopt.ext_tensordict import TensorDict
 
