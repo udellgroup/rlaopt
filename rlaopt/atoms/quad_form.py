@@ -59,5 +59,38 @@ class SumSquares(_QuadForm):
     def _prox(
         self, relevant_variable_values: TensorDict, prox_scaling: float
     ) -> TensorDict:
-        """Proximal operator for sum of squares."""
         return relevant_variable_values.apply(lambda x: 1 / (1 + 2 * prox_scaling) * x)
+
+
+class QuadForm(_QuadForm):
+    """Quadratic form atom, ``f(x) = x^T Q x``."""
+
+    def __init__(self, x: Expression, Q: torch.Tensor):
+        """Initializes the quadratic form atom.
+
+        Args:
+            x: Expression to apply the quadratic form to.
+            Q: Matrix defining the quadratic form.
+        """
+        _validate_quad_form_matrix(Q)
+        super().__init__(x, Q=Q)
+
+    def is_proxable(self) -> bool:
+        """Quadratic form is not proxable."""
+        return False
+
+    def _prox(
+        self, relevant_variable_values: TensorDict, prox_scaling: float
+    ) -> TensorDict:
+        raise NotImplementedError(
+            f"Proximal operator not supported for {self.__class__.__name__}, since "
+            "it requires solving a linear system."
+        )
+
+
+def _validate_quad_form_matrix(Q: torch.Tensor) -> None:
+    """Validate that Q is a square matrix."""
+    if Q.dim() != 2:
+        raise ValueError("Q must be 2-dimensional")
+    if Q.shape[0] != Q.shape[1]:
+        raise ValueError("Q must be a square matrix")
