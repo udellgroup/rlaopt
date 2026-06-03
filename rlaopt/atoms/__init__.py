@@ -30,6 +30,7 @@ from rlaopt.atoms.lp_norm_balls import L2NormBall as L2NormBall
 from rlaopt.atoms.lp_norm_balls import LInfNormBall as LInfNormBall
 from rlaopt.atoms.lp_norms import L1Norm as L1Norm
 from rlaopt.atoms.lp_norms import L2Norm as L2Norm
+from rlaopt.atoms.lp_norms import LInfNorm as LInfNorm
 from rlaopt.atoms.non_negative import NonNegative as NonNegative
 from rlaopt.atoms.nuc_norm import NucNorm as NucNorm
 from rlaopt.atoms.polyhedron import Polyhedron as Polyhedron

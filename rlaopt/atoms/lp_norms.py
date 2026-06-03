@@ -5,6 +5,7 @@ from abc import ABC, abstractmethod
 import torch
 
 from rlaopt.atoms.lp_norm_helpers import (
+    project_onto_l1_ball,
     project_onto_l2_ball,
     project_onto_linf_ball,
 )
@@ -17,10 +18,7 @@ class _Norm(NonsmoothRegularizer, ABC):
     """Base class for scaled Lp-norm regularizers.
 
     Computes ``scaling * ||x||_p``. Subclasses bind the norm via ``_norm``
-    (used by ``forward``) and the projection onto the dual-norm ball via
-    ``_dual_projection`` (used by ``_prox`` through Moreau decomposition:
-    ``prox_{lam ||.||_p}(v) = v - proj_{dual ball}(v, lam)``, where
-    ``lam = scaling * prox_scaling``).
+    and the projection onto the dual-norm ball via ``_dual_projection``.
     """
 
     def __init__(self, x: Expression, scaling: float | torch.Tensor = 1.0):
@@ -28,7 +26,7 @@ class _Norm(NonsmoothRegularizer, ABC):
         super().__init__(x, scaling_params={"scaling": scaling})
 
     def forward(self) -> torch.Tensor:
-        """Evaluate the scaled norm."""
+        """Evaluate the scaled Lp-norm."""
         value = self.get_input("x").forward()
         return self.get_buffer("scaling") * self._norm(value)
 
@@ -92,3 +90,25 @@ class L2Norm(_Norm):
 
     def _dual_projection(self, x: torch.Tensor, radius: torch.Tensor) -> torch.Tensor:
         return project_onto_l2_ball(x, radius)
+
+
+class LInfNorm(_Norm):
+    """L-infinity-norm regularization atom.
+
+    Computes the scaled L-infinity norm: scaling * ||x||_∞ = scaling * maxᵢ |xᵢ|
+
+    Args:
+        x: Expression to apply the L-infinity norm to.
+        scaling: Scaling factor for the L-infinity norm (default: 1.0).
+
+    Examples:
+        >>> x = Variable((100,), name='weights')
+        >>> linf = LInfNorm(x, scaling=0.01)
+        >>> penalty = linf.forward()
+    """
+
+    def _norm(self, value: torch.Tensor) -> torch.Tensor:
+        return torch.max(torch.abs(value))
+
+    def _dual_projection(self, x: torch.Tensor, radius: torch.Tensor) -> torch.Tensor:
+        return project_onto_l1_ball(x, radius)
