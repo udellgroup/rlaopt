@@ -6,7 +6,7 @@ import pytest
 import torch
 from tensordict import assert_allclose_td
 
-from rlaopt.atoms import L1Norm, L2Norm, SumSquares
+from rlaopt.atoms import L1Norm, L2Norm, LInfNorm, SumSquares
 from rlaopt.expression import ExprTree, Variable
 from rlaopt.ext_tensordict import TensorDict
 
@@ -201,6 +201,41 @@ class TestL2Norm(BaseLpNormTest):
         atom = L2Norm(simple_variable, scaling=2.0)
         # v norm = sqrt(2) ~ 1.41, lam = 2 * 1 = 2.0 -> norm <= lam -> 0
         location = TensorDict({simple_variable.name: torch.tensor([1.0, 1.0, 0.0])})
+        result = atom.prox(location, prox_scaling=1.0)
+        expected = TensorDict({simple_variable.name: torch.zeros(3)})
+        assert_allclose_td(result, expected)
+
+
+class TestLInfNorm(BaseLpNormTest):
+    """Tests for the LInfNorm atom."""
+
+    atom_cls = LInfNorm
+    expected_norm_1d = 3.0  # max(|1|, |-2|, |3|)
+    expected_norm_2d = 4.0  # max(|1|, |-2|, |3|, |-4|)
+
+    def test_prox_basic(self, simple_variable):
+        """Prox is v minus the projection onto the L1 ball (dual of Linf)."""
+        atom = LInfNorm(simple_variable, scaling=1.0)
+        # lam = 1.0; proj_{||.||_1 <= 1}([3, -1, 0]) = [1, 0, 0]
+        location = TensorDict({simple_variable.name: torch.tensor([3.0, -1.0, 0.0])})
+        result = atom.prox(location, prox_scaling=1.0)
+        expected = TensorDict({simple_variable.name: torch.tensor([2.0, -1.0, 0.0])})
+        assert_allclose_td(result, expected)
+
+    def test_prox_with_scaling_factor(self, simple_variable):
+        """Prox uses lam = scaling * prox_scaling for the dual projection."""
+        atom = LInfNorm(simple_variable, scaling=2.0)
+        # lam = 2.0; proj_{||.||_1 <= 2}([3, -1, 0]) = [2, 0, 0]
+        location = TensorDict({simple_variable.name: torch.tensor([3.0, -1.0, 0.0])})
+        result = atom.prox(location, prox_scaling=1.0)
+        expected = TensorDict({simple_variable.name: torch.tensor([1.0, -1.0, 0.0])})
+        assert_allclose_td(result, expected)
+
+    def test_prox_zero_when_l1_below_lambda(self, simple_variable):
+        """Prox returns 0 when ||v||_1 <= lam (the L-infinity prox null region)."""
+        atom = LInfNorm(simple_variable, scaling=1.0)
+        # ||[0.3, -0.2, 0.1]||_1 = 0.6 <= lam = 1.0 -> prox = 0
+        location = TensorDict({simple_variable.name: torch.tensor([0.3, -0.2, 0.1])})
         result = atom.prox(location, prox_scaling=1.0)
         expected = TensorDict({simple_variable.name: torch.zeros(3)})
         assert_allclose_td(result, expected)
