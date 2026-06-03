@@ -25,6 +25,11 @@ Regularizers
    :undoc-members:
    :show-inheritance:
 
+.. autoclass:: rlaopt.atoms.LInfNorm
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 .. autoclass:: rlaopt.atoms.SumSquares
    :members:
    :undoc-members:
