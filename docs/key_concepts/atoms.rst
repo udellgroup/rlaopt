@@ -42,18 +42,23 @@ The :class:`~rlaopt.atoms.L2Norm` atom represents the L2 (Euclidean) norm: :math
    x = Variable((10,), name='x')
    l2 = L2Norm(x, scaling=0.1)  # 0.1 * ||x||_2
 
-Sum of Squares
+Quadratic Form
 ~~~~~~~~~~~~~~
 
-The :class:`~rlaopt.atoms.SumSquares` atom represents the squared L2 norm: :math:`\|x\|_2^2 = \sum_i x_i^2`.
+The :class:`~rlaopt.atoms.QuadForm` atom represents a quadratic form defined by a matrix :math:`Q`: :math:`x^\top Q x`.
 
 .. code-block:: python
 
-   from rlaopt.atoms import SumSquares
+   import torch
+
+   from rlaopt.atoms import QuadForm
    from rlaopt.expression import Variable
 
    x = Variable((10,), name='x')
-   sos = SumSquares(x)
+   Q = torch.randn(10, 10)
+   qf = QuadForm(x, Q)  # x^T Q x
+
+The quadratic form is smooth, but it is not proxable, since its proximal operator would require solving a linear system.
 
 Elastic Net
 ~~~~~~~~~~~
@@ -74,16 +79,17 @@ Other Atoms
 
 rlaopt provides many other atoms:
 
-* :class:`~rlaopt.atoms.L2Norm`: L2 (Euclidean) norm
+* :class:`~rlaopt.atoms.SumSquares`: Sum of squares (squared L2 norm)
 * :class:`~rlaopt.atoms.Box`: Box constraints
-* :class:`~rlaopt.atoms.NonNegative`: Non-negativity constraints
-* :class:`~rlaopt.atoms.LinearEquality`: Linear equality constraints
 * :class:`~rlaopt.atoms.Halfspace`: Halfspace constraints
 * :class:`~rlaopt.atoms.Polyhedron`: Polyhedral constraints
 * :class:`~rlaopt.atoms.L1NormBall`: L1-norm ball constraint
 * :class:`~rlaopt.atoms.L2NormBall`: L2-norm ball constraint
-* :class:`~rlaopt.atoms.LInfNormBall`: L-infinity norm ball constraint
-* :class:`~rlaopt.atoms.NucNorm`: Nuclear norm
+* :class:`~rlaopt.atoms.LinearRegression`: Linear (least-squares) regression loss
+* :class:`~rlaopt.atoms.LogisticRegression`: Logistic regression loss
+* :class:`~rlaopt.atoms.PoissonRegression`: Poisson regression loss
+* :class:`~rlaopt.atoms.HuberRegression`: Huber regression loss
+* :class:`~rlaopt.atoms.MultinomialRegression`: Multinomial regression loss
 
 See the :doc:`../api/atoms` section for a complete list.
 
