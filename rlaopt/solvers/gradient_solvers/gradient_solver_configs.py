@@ -2,9 +2,10 @@
 
 from typing import Literal
 
-from pydantic import Field
+from pydantic import Field, model_validator
+from typing_extensions import Self
 
-from rlaopt.linalg import NystromConfig
+from rlaopt.linalg import IdentityConfig, NystromConfig
 from rlaopt.linalg.preconditioners.preconditioner import PreconditionerConfig
 from rlaopt.solvers.configs_base import SolverConfig
 
@@ -13,6 +14,27 @@ class GradSolverConfig(SolverConfig):
     """Base configuration for gradient solvers."""
 
     eta: float
+
+    precond_config: PreconditionerConfig = Field(
+        default=IdentityConfig(),
+        description="Preconditioner configuration. Defaults to identity"
+        " (i.e. no preconditioning).",
+    )
+
+    subproblem_iters: int = Field(
+        default=20,
+        gt=0,
+        description="Number of accelerated proximal gradient iterations "
+        "performed to evaluate the scaled proximal operator. "
+        "Not used if the problem is fully smooth or the preconditioner is identity.",
+    )
+
+    auto_update_stepsize: bool = Field(
+        default=False,
+        description="Boolean flag specifying whether to automatically "
+        "update the stepsize based on an estimate of the local "
+        "smoothness constant. Defaults to False.",
+    )
 
 
 class ProxGradConfig(GradSolverConfig):
@@ -29,6 +51,41 @@ class ProxGradConfig(GradSolverConfig):
     use_linesearch: bool = Field(
         default=True, description="Whether to use line search for step size selection."
     )
+
+    precond_update_freq: int = Field(
+        default=10,
+        gt=0,
+        description="How frequently in iterations the preconditioner and "
+        "stepsize (if auto_update_stepsize = True) are updated. "
+        "Defaults to 10 iterations. Ignored when precond_config is identity.",
+    )
+
+    @model_validator(mode="after")
+    def _check_combinations(self) -> Self:
+        non_identity_precond = not self.precond_config.is_identity
+
+        if non_identity_precond and self.use_linesearch:
+            raise ValueError(
+                "Line search is not supported with a non-identity preconditioner; "
+                f"set use_linesearch=False or use {IdentityConfig.__name__}. "
+                "Backtracking would require re-solving the APG subproblem on "
+                "every trial step."
+            )
+
+        if non_identity_precond and self.use_acceleration:
+            raise ValueError(
+                "Nesterov acceleration is not supported with a non-identity "
+                "preconditioner. Set use_acceleration=False "
+                f"or use {IdentityConfig.__name__}."
+            )
+
+        if self.use_linesearch and self.auto_update_stepsize:
+            raise ValueError(
+                "use_linesearch and auto_update_stepsize both control eta; "
+                "enable at most one."
+            )
+
+        return self
 
 
 class SapphireConfig(GradSolverConfig):
@@ -72,14 +129,6 @@ class SapphireConfig(GradSolverConfig):
         description="How frequently in epochs the preconditioner and "
         "stepsize (if auto_update_stepize = True) are updated. "
         "Defaults to 2 epochs.",
-    )
-
-    subproblem_iters: int = Field(
-        default=20,
-        gt=0,
-        description="Number of accelerated proximal gradient iterations "
-        "performed to evaluate the scaled proximal operator. "
-        "Not used if the problem is fully smooth.",
     )
 
     snapshot_update_freq: int = Field(

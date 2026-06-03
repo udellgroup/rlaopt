@@ -74,6 +74,11 @@ class ProxGradSplit(_OperatorSplit):
         return smooth_part, non_smooth_exprs
 
     @property
+    def has_non_smooth_component(self) -> bool:
+        """Whether the objective has at least one non-smooth proxable term."""
+        return len(self._r) > 0
+
+    @property
     def variable_values(self) -> TensorDict:
         """Returns the variable values associated with the composite function."""
         td_f = self._f.variable_values

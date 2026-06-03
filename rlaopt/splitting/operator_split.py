@@ -77,6 +77,18 @@ class _OperatorSplit(ABC):
         """
         return torch.func.grad(self.func_f)(variable_values)
 
+    def hessian_linop_f(self, variable_values: TensorDict) -> _HVPLinOp:
+        """Hessian of the smooth part as a linear operator.
+
+        Args:
+            variable_values: A dictionary of variables at which to evaluate
+                the Hessian.
+
+        Returns:
+            A linear operator implementing Hessian-vector products.
+        """
+        return _HVPLinOp(self._f, variable_values)
+
     def hvp_f(self, variable_values: TensorDict, v: torch.Tensor) -> torch.Tensor:
         """Compute the Hessian-vector product of the smooth part of the objective.
 
@@ -88,8 +100,7 @@ class _OperatorSplit(ABC):
         Returns:
             The Hessian-vector product of the Hessian at variable_values and v.
         """
-        hvp_op = _HVPLinOp(self._f, variable_values)
-        return hvp_op @ v
+        return self.hessian_linop_f(variable_values) @ v
 
     def prox(self, variable_values: TensorDict, eta: float) -> TensorDict:
         """Apply the proximal operator of r with step size eta to the variables.

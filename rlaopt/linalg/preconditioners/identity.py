@@ -12,7 +12,10 @@ from rlaopt.linalg.preconditioners.preconditioner import (
 class IdentityConfig(PreconditionerConfig):
     """Configuration for the Identity preconditioner."""
 
-    pass
+    @property
+    def is_identity(self) -> bool:
+        """Identity preconditioner is indeed the identity."""
+        return True
 
 
 class Identity(Preconditioner):

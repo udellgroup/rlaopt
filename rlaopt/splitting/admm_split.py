@@ -7,7 +7,7 @@ from tensordict import merge_tensordicts
 from rlaopt.atoms import Atom, AtomDecomposition
 from rlaopt.expression import Expression, SumExpression
 from rlaopt.ext_tensordict import TensorDict
-from rlaopt.splitting.linops import _AffineExprLinOp, _HVPLinOp
+from rlaopt.splitting.linops import _AffineExprLinOp
 from rlaopt.splitting.operator_split import _OperatorSplit
 
 
@@ -168,7 +168,7 @@ class ADMMSplit(_OperatorSplit):
         Returns:
             LinearOperator: The combined linear operator.
         """
-        hvp_op = _HVPLinOp(self._f, variable_values)
+        hvp_op = self.hessian_linop_f(variable_values)
         AT_A = self._A_T @ self._A
         # HACK: add info that might not be preserved by vstack/hstack/summation
         AT_A.device = hvp_op.device
