@@ -56,6 +56,7 @@ The :class:`~rlaopt.atoms.QuadForm` atom represents a quadratic form defined by 
 
    x = Variable((10,), name='x')
    Q = torch.randn(10, 10)
+   Q = Q.T @ Q
    qf = QuadForm(x, Q)  # x^T Q x
 
 The quadratic form is smooth, but it is not proxable, since its proximal operator would require solving a linear system.
