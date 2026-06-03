@@ -8,12 +8,10 @@ import torch
 
 from rlaopt.data import DataLoader
 from rlaopt.ext_tensordict import TensorDict
-from rlaopt.linalg import IdentityConfig
-from rlaopt.solvers.gradient_solvers import gradient_solver_core as core
-from rlaopt.splitting.operator_split import _OperatorSplit
-from rlaopt.splitting.prox_grad_split import ProxGradSplit
-from rlaopt.splitting.sapphire_split import SapphireSplit
+from rlaopt.linalg import PreconditionerConfig
+from rlaopt.splitting import ProxGradSplit, SapphireSplit
 
+from . import gradient_solver_core as core
 from .gradient_solver_configs import GradSolverConfig, ProxGradConfig, SapphireConfig
 from .gradient_solver_states import GradSolverState, SapphireState
 from .precond_update_fn_builder import build_preconditioner_update
@@ -55,6 +53,34 @@ def _get_updates(
     return updates, state, var_values
 
 
+def _build_apply_updates_fn(
+    precond_config: PreconditionerConfig,
+    has_non_smooth_component: bool,
+    subproblem_iters: int,
+    prox_fn: Callable[[TensorDict, float], TensorDict],
+):
+    """Build the ``apply_updates`` closure used by gradient step builders.
+
+    With an identity preconditioner or no non-smooth term, the preconditioned
+    descent direction collapses to ``P^{-1} g`` (a no-op for identity) followed
+    by an unpreconditioned prox. With a non-identity preconditioner and a
+    non-smooth term, the scaled prox subproblem is solved via APG.
+    """
+    if precond_config.is_identity or not has_non_smooth_component:
+
+        def apply_updates(updates: TensorDict, var_values: TensorDict, state):
+            dir_ = core.precond_grad(updates, state)
+            return core.prox_update(var_values, dir_, state, prox_fn)
+    else:
+
+        def apply_updates(updates: TensorDict, var_values: TensorDict, state):
+            return core.prox_update_P(
+                var_values, updates, state, subproblem_iters, prox_fn
+            )
+
+    return apply_updates
+
+
 def get_step_fn(config: GradSolverConfig, op_split: ProxGradSplit | SapphireSplit):
     """Builds step function for gradient based solvers based on the config."""
     if isinstance(config, ProxGradConfig):
@@ -64,22 +90,31 @@ def get_step_fn(config: GradSolverConfig, op_split: ProxGradSplit | SapphireSpli
 
 
 ##### ProxGrad Builder #####
-def _prox_grad_step_builder(config: ProxGradConfig, op_split: _OperatorSplit):
+def _prox_grad_step_builder(config: ProxGradConfig, op_split: ProxGradSplit):
     # Get functions used for building proximal gradient step
     f, grad_f, prox_fn = op_split.func_f, op_split.grad_f, op_split.prox
+    has_non_smooth_component = op_split.has_non_smooth_component
+    precond_is_identity = config.precond_config.is_identity
 
     err_fn = partial(core.grad_mapping_norm, full_gradient_fn=grad_f, prox_fn=prox_fn)
 
-    if config.use_linesearch:
-        # linesearch calls apply_updates(x, eta) -> TensorDict, so pass prox_fn directly
+    # ProxGradConfig rejects use_linesearch=True with a non-identity precond,
+    # so the `precond_is_identity and use_linesearch` gate matches the validated
+    # combinations. _build_apply_updates_fn handles every other case.
+    if precond_is_identity and config.use_linesearch:
         apply_updates = partial(core.linesearch, f=f, apply_updates=prox_fn)
     else:
-        # optimization_step calls apply_updates(updates, var_values, state); wrap to
-        # match prox_update(var_vals, updates, state, prox_fn) argument order.
-        def apply_updates(updates, var_vals, state):
-            return core.prox_update(var_vals, updates, state, prox_fn)
+        apply_updates = _build_apply_updates_fn(
+            config.precond_config,
+            has_non_smooth_component,
+            config.subproblem_iters,
+            prox_fn,
+        )
 
-    if config.use_acceleration:
+    # ProxGradConfig rejects use_acceleration=True with a
+    # non-identity precond, so the `precond_is_identity and use_acceleration`
+    # gate matches the validated combinations.
+    if precond_is_identity and config.use_acceleration:
         var_values_transform = core.nest_accel_update
     else:
 
@@ -90,15 +125,31 @@ def _prox_grad_step_builder(config: ProxGradConfig, op_split: _OperatorSplit):
     def gradient_fn(v, s):
         return grad_f(v), s
 
-    def no_op_precond(v, s):
-        return s
+    # Preconditioner update: always go through build_preconditioner_update,
+    # mirroring Sapphire. For an identity preconditioner this is essentially
+    # free. update_stepsize=True is only meaningful when auto_update_stepsize is on;
+    # the validator rules out the linesearch+auto combination.
+    device = op_split.variable_values.to_flat_tensor().device
+    dtype = op_split.variable_values.to_flat_tensor().dtype
+
+    def hessian_linop_fn(var_values: TensorDict):
+        return op_split.hessian_linop_f(var_values)
+
+    update_precond_fn = build_preconditioner_update(
+        config.precond_config,
+        hessian_linop_fn,
+        config.precond_update_freq,
+        device,
+        dtype,
+        config.auto_update_stepsize,
+    )
 
     _step = partial(
         optimization_step,
         var_values_transform=var_values_transform,
         gradient_fn=gradient_fn,
         apply_updates=apply_updates,
-        update_precond_fn=no_op_precond,
+        update_precond_fn=update_precond_fn,
     )
 
     def step(var_values, state):
@@ -126,8 +177,10 @@ def _sapphire_step_builder(config: SapphireConfig, op_split: SapphireSplit):
     # Get batch and full gradient functions
     batch_grad_fn, full_gradient_fn = op_split.batch_grad_loss, op_split.grad_loss
 
-    # Get prox operator and data loader
-    prox_fn, loader = op_split.prox, op_split.loader
+    # Get prox operator, non-smooth component flag, and data loader
+    prox_fn = op_split.prox
+    has_non_smooth_component = op_split.has_non_smooth_component
+    loader = op_split.loader
 
     # Get gradient oracle for base method specified in the config file.
     if config.base_method == "sgd":
@@ -161,40 +214,25 @@ def _sapphire_step_builder(config: SapphireConfig, op_split: SapphireSplit):
     check_termination_freq = config.check_termination_freq * conv_factor
     precond_update_freq = config.precond_update_freq * conv_factor
 
+    def hessian_linop_fn(beta_value: TensorDict):
+        X_batch, y_batch, _ = precond_loader.get_batch()
+        return op_split.get_subsamp_hessian_linop(beta_value, X_batch, y_batch, device)
+
     update_precond_fn = build_preconditioner_update(
         config.precond_config,
-        op_split,
-        precond_loader,
+        hessian_linop_fn,
         precond_update_freq,
         device,
         dtype,
         config.auto_update_stepsize,
     )
 
-    # Branching condition
-    # config_cond is True when an identity preconditioner is used
-    # or the Nyström preconditioner is used and the objective is smooth.
-
-    config_cond = isinstance(config.precond_config, IdentityConfig) or (
-        not isinstance(config.precond_config, IdentityConfig) and op_split.r is None
+    apply_updates = _build_apply_updates_fn(
+        config.precond_config,
+        has_non_smooth_component,
+        config.subproblem_iters,
+        prox_fn,
     )
-
-    if config_cond:
-
-        def apply_updates(
-            updates: TensorDict, var_values: TensorDict, state: SapphireState
-        ):
-            dir_ = core.precond_grad(updates, state)
-            return core.prox_update(var_values, dir_, state, prox_fn)
-
-    else:
-
-        def apply_updates(
-            updates: TensorDict, var_values: TensorDict, state: SapphireState
-        ):
-            return core.prox_update_P(
-                var_values, updates, state, config.subproblem_iters, prox_fn
-            )
 
     _step = partial(
         optimization_step,

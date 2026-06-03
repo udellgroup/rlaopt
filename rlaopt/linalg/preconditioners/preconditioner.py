@@ -14,6 +14,14 @@ class PreconditionerConfig(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
+    @property
+    def is_identity(self) -> bool:
+        """Whether this config corresponds to the identity preconditioner.
+
+        Solvers branch on this property to skip preconditioning work.
+        """
+        return False
+
 
 class Preconditioner(ABC):
     """Abstract base class for preconditioners."""

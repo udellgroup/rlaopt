@@ -153,6 +153,11 @@ class SapphireSplit:
         return self._r
 
     @property
+    def has_non_smooth_component(self) -> bool:
+        """Whether the objective has a non-smooth proximal term."""
+        return self._r is not None
+
+    @property
     def model(self) -> LinearModel:
         """Returns linear model term.
 
