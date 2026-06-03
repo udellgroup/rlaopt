@@ -162,7 +162,14 @@ class ProxGrad(BaseGradientSolver):
     - Basic proximal gradient (fixed step size)
     - Accelerated proximal gradient (Nesterov momentum)
     - Backtracking line search for adaptive step sizes
+    - Preconditioned proximal gradient (e.g. Nyström) with optional
+      automatic stepsize
     - Combinations of acceleration and line search
+
+    Combination constraints (enforced by ``ProxGradConfig``):
+    - A non-identity preconditioner is incompatible with both line search
+      and Nesterov acceleration.
+    - Line search and automatic stepsize cannot both be enabled.
     """
 
     def __init__(self, obj: Expression, config: ProxGradConfig, detach=True):

@@ -5,6 +5,7 @@ import torch
 
 from rlaopt.atoms import Box, L1Norm, NonNegative, SumSquares
 from rlaopt.expression import Variable
+from rlaopt.linalg import IdentityConfig, NystromConfig
 from rlaopt.solvers import GradSolverStoppingCriteria, ProxGrad, ProxGradConfig
 
 TOLERANCES = {torch.float32: 1e-4, torch.float64: 1e-7}
@@ -21,6 +22,21 @@ def acceleration(request):
 def ls(request):
     """Whether to use line search."""
     return request.param
+
+
+@pytest.fixture(
+    params=["identity", "nystrom"], ids=["identity_precond", "nystrom_precond"]
+)
+def precond_cfg(request):
+    """Preconditioner configuration."""
+    if request.param == "identity":
+        return IdentityConfig()
+    return NystromConfig(
+        rank_init=8,
+        error_tolerance=1e-1,
+        base_damping=1e-3,
+        damping_mode="adaptive",
+    )
 
 
 @pytest.fixture(params=[torch.float32, torch.float64], ids=["float32", "float64"])
@@ -101,15 +117,17 @@ def compute_lipschitz_stepsize(A, scaling=0.5):
 class TestProxGrad:
     """Tests for the proximal gradient solver."""
 
-    def test_least_squares(self, reset_torch_state, precision, acceleration, ls):
+    def test_least_squares(
+        self, reset_torch_state, precision, acceleration, ls, precond_cfg
+    ):
         """Test proximal gradient on least squares problem."""
         torch.set_default_dtype(precision)
         A, b, x = generate_least_squares_data(n=1024, p=256, precision=precision)
         obj = SumSquares(A @ x - b)
         eta = compute_lipschitz_stepsize(A)
-        _solve_and_verify(obj, eta, acceleration, ls)
+        _solve_and_verify(obj, eta, acceleration, ls, precond_cfg)
 
-    def test_box(self, reset_torch_state, precision, acceleration, ls):
+    def test_box(self, reset_torch_state, precision, acceleration, ls, precond_cfg):
         """Test proximal gradient on box-constrained problem."""
         torch.set_default_dtype(precision)
         A, b, x = generate_least_squares_data(n=1024, p=256, precision=precision)
@@ -117,24 +135,26 @@ class TestProxGrad:
         upper = 1.0
         obj = SumSquares(A @ x - b) + Box(x, lower=lower, upper=upper)
         eta = compute_lipschitz_stepsize(A)
-        _solve_and_verify(obj, eta, acceleration, ls)
+        _solve_and_verify(obj, eta, acceleration, ls, precond_cfg)
 
-    def test_nonnegative(self, reset_torch_state, precision, acceleration, ls):
+    def test_nonnegative(
+        self, reset_torch_state, precision, acceleration, ls, precond_cfg
+    ):
         """Test proximal gradient on nonnegative-constrained problem."""
         torch.set_default_dtype(precision)
         A, b, x = generate_least_squares_data(n=1024, p=256, precision=precision)
         obj = SumSquares(A @ x - b) + NonNegative(x)
         eta = compute_lipschitz_stepsize(A)
-        _solve_and_verify(obj, eta, acceleration, ls)
+        _solve_and_verify(obj, eta, acceleration, ls, precond_cfg)
 
-    def test_lasso(self, reset_torch_state, precision, acceleration, ls):
+    def test_lasso(self, reset_torch_state, precision, acceleration, ls, precond_cfg):
         """Test proximal gradient on LASSO problem."""
         torch.set_default_dtype(precision)
         A, b, x, _ = generate_lasso_data(n=1024, p=128, s=32, precision=precision)
         mu = 0.1 * torch.linalg.norm(A.T @ b, ord=torch.inf)
         obj = SumSquares(A @ x - b) + L1Norm(x, scaling=mu)
         eta = compute_lipschitz_stepsize(A)
-        _solve_and_verify(obj, eta, acceleration, ls)
+        _solve_and_verify(obj, eta, acceleration, ls, precond_cfg)
 
     # def test_nucnorm(self, reset_torch_state, precision, tol, acceleration, ls):
     #     """Test proximal gradient on nuclear norm regularized problem."""
@@ -146,7 +166,7 @@ class TestProxGrad:
     #     _solve_and_verify(obj, eta, tol, acceleration, ls)
 
     def test_nonsmooth_subset_of_smooth(
-        self, reset_torch_state, precision, acceleration, ls
+        self, reset_torch_state, precision, acceleration, ls, precond_cfg
     ):
         """Test when non-smooth variables are subset of smooth variables."""
         torch.set_default_dtype(precision)
@@ -161,10 +181,10 @@ class TestProxGrad:
         # Hessian has A.T @ A for x block and 2*I for y block
         # Use more conservative stepsize accounting for both blocks
         eta = compute_lipschitz_stepsize(A, scaling=0.25)
-        _solve_and_verify(obj, eta, acceleration, ls)
+        _solve_and_verify(obj, eta, acceleration, ls, precond_cfg)
 
     def test_nonsmooth_disjoint_from_smooth(
-        self, reset_torch_state, precision, acceleration, ls
+        self, reset_torch_state, precision, acceleration, ls, precond_cfg
     ):
         """Test non-smooth variables disjoint from smooth variables."""
         torch.set_default_dtype(precision)
@@ -176,10 +196,10 @@ class TestProxGrad:
         z = Variable(torch.zeros(32, dtype=precision), name="z")
         obj = SumSquares(A @ x - b) + L1Norm(z, scaling=0.1)
         eta = compute_lipschitz_stepsize(A)
-        _solve_and_verify(obj, eta, acceleration, ls)
+        _solve_and_verify(obj, eta, acceleration, ls, precond_cfg)
 
     def test_complex_mixed_variables(
-        self, reset_torch_state, precision, acceleration, ls
+        self, reset_torch_state, precision, acceleration, ls, precond_cfg
     ):
         """Test complex case with multiple smooth and non-smooth terms."""
         torch.set_default_dtype(precision)
@@ -202,17 +222,22 @@ class TestProxGrad:
         # Hessian has A.T @ A blocks and I blocks from SumSquares(x+y)
         # Use more conservative stepsize
         eta = compute_lipschitz_stepsize(A, scaling=0.5)
-        _solve_and_verify(obj, eta, acceleration, ls)
+        _solve_and_verify(obj, eta, acceleration, ls, precond_cfg)
 
     def test_pure_nonsmooth(self, reset_torch_state, precision, acceleration, ls):
-        """Test pure non-smooth objective (no smooth part)."""
+        """Test pure non-smooth objective (no smooth part).
+
+        Intentionally not parameterized by precond_cfg: preconditioning a
+        pure non-smooth objective does not make sense, since the Hessian
+        of the smooth part is zero.
+        """
         torch.set_default_dtype(precision)
         torch.manual_seed(0)
         p = 64
         x = Variable(torch.randn(p, dtype=precision), name="x")
         obj = L1Norm(x)
         eta = 1.0  # Stepsize doesn't affect pure prox
-        _solve_and_verify(obj, eta, acceleration, ls)
+        _solve_and_verify(obj, eta, acceleration, ls, IdentityConfig())
 
 
 class TestProxGradDifferentiability:
@@ -270,20 +295,43 @@ class TestProxGradErrors:
         with pytest.raises(ValueError, match="ProxGradConfig configuration"):
             ProxGrad(obj, "not a config")
 
+    def test_linesearch_with_auto_update_rejected(self):
+        """use_linesearch=True + auto_update_stepsize=True is rejected.
+
+        Both control eta, so enabling them together is ambiguous. The
+        precond × linesearch and precond × acceleration combinations are
+        covered in TestProxGrad.
+        """
+        with pytest.raises(ValueError, match="both control eta"):
+            ProxGradConfig(use_linesearch=True, auto_update_stepsize=True)
+
 
 # ============================================================================
 # Helper Functions
 # ============================================================================
 
 
-def _solve_and_verify(obj, eta, use_acceleration, use_linesearch):
-    """Test that optimization problem is solved correctly."""
-    opt = _build_opt(obj, eta, use_acceleration, use_linesearch)
-    stopping_criteria = GradSolverStoppingCriteria(max_iters=MAX_ITERS)
+def _solve_and_verify(obj, eta, use_acceleration, use_linesearch, precond_cfg):
+    """Verify the problem solves under valid configs and rejects under invalid ones.
 
-    # Test using solve method
-    results = opt.solve(stopping_criteria=stopping_criteria)
-    assert results.convergence_status.value == "converged"
+    The ProxGradConfig validator forbids combining a non-identity preconditioner
+    with linesearch or acceleration. For those cells, assert the rejection
+    raises with the right message; for every other cell, run the solver and
+    assert convergence.
+    """
+    non_identity = not isinstance(precond_cfg, IdentityConfig)
+
+    if non_identity and use_linesearch:
+        with pytest.raises(ValueError, match="Line search is not supported"):
+            _build_opt(obj, eta, use_acceleration, use_linesearch, precond_cfg)
+    elif non_identity and use_acceleration:
+        with pytest.raises(ValueError, match="Nesterov acceleration is not supported"):
+            _build_opt(obj, eta, use_acceleration, use_linesearch, precond_cfg)
+    else:
+        opt = _build_opt(obj, eta, use_acceleration, use_linesearch, precond_cfg)
+        stopping_criteria = GradSolverStoppingCriteria(max_iters=MAX_ITERS)
+        results = opt.solve(stopping_criteria=stopping_criteria)
+        assert results.convergence_status.value == "converged"
 
 
 def _init_opt(obj, opt):
@@ -292,11 +340,16 @@ def _init_opt(obj, opt):
     return params, opt.init_state(params)
 
 
-def _build_opt(obj, eta, use_acceleration, use_linesearch):
+def _build_opt(obj, eta, use_acceleration, use_linesearch, precond_cfg):
     """Build proximal gradient optimizer with specified configuration."""
+    # Non-identity precond pairs with auto_update_stepsize (user-supplied eta
+    # is ignored; the spectral estimate replaces it on the first refresh).
+    auto_update = not isinstance(precond_cfg, IdentityConfig)
     config = ProxGradConfig(
         eta=eta,
         use_acceleration=use_acceleration,
         use_linesearch=use_linesearch,
+        precond_config=precond_cfg,
+        auto_update_stepsize=auto_update,
     )
     return ProxGrad(obj, config)

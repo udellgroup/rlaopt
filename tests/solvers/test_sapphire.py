@@ -478,7 +478,7 @@ class TestProxUpdateP:
         # Random current iterate and gradient direction
         var_vals = TensorDict({"beta": torch.randn(p, dtype=precision)})
         grads = TensorDict({"beta": torch.randn(p, dtype=precision)})
-        state = SGDState(iter_=0, eta=0.1, P=P, precond_update_freq=1)
+        state = SGDState(iter_=0, eta=0.1, P=P)
 
         return var_vals, grads, state, p, precision
 

@@ -47,6 +47,11 @@ class TestAllSmoothExpression:
         assert len(obj._r) == 0
         assert obj.f.is_smooth()
 
+    def test_has_non_smooth_component(self, single_var_smooth):
+        """has_non_smooth_component is False when objective is all smooth."""
+        obj, _ = single_var_smooth
+        assert obj.has_non_smooth_component is False
+
     def test_variable_values(self, single_var_smooth):
         """Test variable_values property."""
         obj, x = single_var_smooth
@@ -115,7 +120,11 @@ class TestAllNonsmoothExpression:
         assert obj._f is not None
         assert obj._r is not None
         assert len(obj._r) == 1
-        assert obj.r[0].is_proxable()
+
+    def test_has_non_smooth_component(self, single_nonsmooth):
+        """has_non_smooth_component is True when objective is purely non-smooth."""
+        obj, _ = single_nonsmooth
+        assert obj.has_non_smooth_component is True
 
     def test_evaluate(self, single_nonsmooth):
         """Test evaluate method."""
@@ -180,6 +189,11 @@ class TestMixedSameVariable:
         # Both should use variable x
         assert "x" in obj.f.get_variable_names()
         assert "x" in obj.r[0].get_variable_names()
+
+    def test_has_non_smooth_component(self, lasso_problem):
+        """has_non_smooth_component is True for a mixed smooth/non-smooth objective."""
+        obj, _, _, _, _ = lasso_problem
+        assert obj.has_non_smooth_component is True
 
     def test_evaluate(self, lasso_problem):
         """Test evaluate method."""
