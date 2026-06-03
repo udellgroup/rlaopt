@@ -137,6 +137,23 @@ class BaseLpNormTest(ABC):
         atom = self.atom_cls(SumSquares(x), scaling=1.0)
         assert atom.decompose() is None
 
+    def test_prox_differentiable_wrt_scaling(self, simple_variable):
+        """Test prox correctly differentiates w.r.t. the scaling."""
+        v = torch.tensor([3.0, -2.0, 0.5])
+
+        def loss(scaling):
+            atom = self.atom_cls(simple_variable, scaling=scaling)
+            location = TensorDict({simple_variable.name: v})
+            result = atom.prox(location, prox_scaling=1.0)
+            return (result[simple_variable.name] ** 2).sum()
+
+        scaling = torch.tensor(0.3)
+        grad = torch.func.grad(loss)(scaling)
+        numerical = (loss(scaling + 1e-3) - loss(scaling - 1e-3)) / 2e-3
+        assert torch.isfinite(grad)
+        assert grad != 0.0
+        assert torch.allclose(grad, numerical, rtol=0.05)
+
 
 class TestL1Norm(BaseLpNormTest):
     """Tests for the L1Norm atom."""
