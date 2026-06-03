@@ -27,10 +27,10 @@ from rlaopt.atoms.linear_model.linear_model import (
 from rlaopt.atoms.linear_model.linear_model import (
     PoissonRegression as PoissonRegression,
 )
+from rlaopt.atoms.lp_norm_balls import L1NormBall as L1NormBall
+from rlaopt.atoms.lp_norm_balls import L2NormBall as L2NormBall
+from rlaopt.atoms.lp_norm_balls import LInfNormBall as LInfNormBall
 from rlaopt.atoms.non_negative import NonNegative as NonNegative
-from rlaopt.atoms.norm_balls import L1NormBall as L1NormBall
-from rlaopt.atoms.norm_balls import L2NormBall as L2NormBall
-from rlaopt.atoms.norm_balls import LInfNormBall as LInfNormBall
 from rlaopt.atoms.nuc_norm import NucNorm as NucNorm
 from rlaopt.atoms.polyhedron import Polyhedron as Polyhedron
 from rlaopt.atoms.sum_squares import SumSquares as SumSquares

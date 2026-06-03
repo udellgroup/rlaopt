@@ -6,7 +6,11 @@ from numbers import Real
 import torch
 
 from rlaopt.atoms.atom import Atom, AtomDecomposition
-from rlaopt.atoms.box import Box
+from rlaopt.atoms.lp_norm_helpers import (
+    project_onto_l1_ball,
+    project_onto_l2_ball,
+    project_onto_linf_ball,
+)
 from rlaopt.expression import Expression, Variable
 from rlaopt.ext_tensordict import TensorDict
 
@@ -16,7 +20,7 @@ class _NormBall(Atom, ABC):
 
     Provides shared logic for atoms that represent the indicator function of
     a norm ball ``{x : ||x|| <= radius}``. Subclasses define the specific norm
-    via ``_norm`` and the projection in ``_prox``.
+    via ``_norm`` and the projection onto the ball via ``_projection``.
     """
 
     def __init__(self, x: Expression, radius: float | int | torch.Tensor = 1.0):
@@ -51,9 +55,20 @@ class _NormBall(Atom, ABC):
         new_atom = type(self)(new_var, radius=radius)
         return [AtomDecomposition(atom=new_atom, affine_expr=input_expr)]
 
+    def _prox(
+        self, relevant_variable_values: TensorDict, prox_scaling: float
+    ) -> TensorDict:
+        """Project onto the norm ball (prox of the indicator function)."""
+        radius = self.get_buffer("radius")
+        return relevant_variable_values.apply(lambda x: self._projection(x, radius))
+
     @abstractmethod
     def _norm(self, value: torch.Tensor) -> torch.Tensor:
         """Compute the norm used by this norm ball."""
+
+    @abstractmethod
+    def _projection(self, x: torch.Tensor, radius: torch.Tensor) -> torch.Tensor:
+        """Project ``x`` onto this norm ball of the given radius."""
 
 
 class L1NormBall(_NormBall):
@@ -70,34 +85,8 @@ class L1NormBall(_NormBall):
     def _norm(self, value: torch.Tensor) -> torch.Tensor:
         return torch.sum(torch.abs(value))
 
-    def _prox(
-        self, relevant_variable_values: TensorDict, prox_scaling: float
-    ) -> TensorDict:
-        """Project onto the L1-norm ball (prox of indicator)."""
-        radius = self.get_buffer("radius")
-
-        def project_onto_l1_ball(x: torch.Tensor) -> torch.Tensor:
-            radius_t = radius.to(device=x.device, dtype=x.dtype)
-            if radius_t.item() <= 0:
-                return torch.zeros_like(x)
-
-            flat = x.reshape(-1)
-            abs_flat = torch.abs(flat)
-            if (torch.sum(abs_flat) <= radius_t).item():
-                return x
-
-            sorted_abs, _ = torch.sort(abs_flat, descending=True)
-            cumsum = torch.cumsum(sorted_abs, dim=0)
-            idx = torch.arange(
-                1, sorted_abs.numel() + 1, device=flat.device, dtype=flat.dtype
-            )
-            cond = sorted_abs * idx > (cumsum - radius_t)
-            rho = torch.nonzero(cond, as_tuple=False)[-1].item()
-            theta = (cumsum[rho] - radius_t) / (rho + 1)
-            projected = torch.sign(flat) * torch.nn.functional.relu(abs_flat - theta)
-            return projected.reshape(x.shape)
-
-        return relevant_variable_values.apply(project_onto_l1_ball)
+    def _projection(self, x: torch.Tensor, radius: torch.Tensor) -> torch.Tensor:
+        return project_onto_l1_ball(x, radius)
 
 
 class L2NormBall(_NormBall):
@@ -114,45 +103,26 @@ class L2NormBall(_NormBall):
     def _norm(self, value: torch.Tensor) -> torch.Tensor:
         return torch.linalg.norm(value)
 
-    def _prox(
-        self, relevant_variable_values: TensorDict, prox_scaling: float
-    ) -> TensorDict:
-        """Project onto the L2-norm ball (prox of indicator)."""
-        radius = self.get_buffer("radius")
-
-        def project_onto_l2_ball(x: torch.Tensor) -> torch.Tensor:
-            radius_t = radius.to(device=x.device, dtype=x.dtype)
-            if radius_t.item() <= 0:
-                return torch.zeros_like(x)
-
-            norm = torch.linalg.norm(x)
-            if (norm <= radius_t).item():
-                return x
-            return (radius_t / norm) * x
-
-        return relevant_variable_values.apply(project_onto_l2_ball)
+    def _projection(self, x: torch.Tensor, radius: torch.Tensor) -> torch.Tensor:
+        return project_onto_l2_ball(x, radius)
 
 
-class LInfNormBall(Box):
+class LInfNormBall(_NormBall):
     """L-infinity norm ball constraint enforcing ||x||_inf <= radius.
 
     This atom represents the indicator function of the L-infinity norm ball:
         0 if ||x||_inf <= radius, +inf otherwise.
 
     Args:
-        x: Variable to constrain.
+        x: Expression to constrain.
         radius: Non-negative radius of the L-infinity norm ball (default: 1.0).
     """
 
-    def __init__(self, x: Variable, radius: float | int | torch.Tensor = 1.0):
-        """Initialize the L-infinity norm ball constraint atom."""
-        radius = _validate_radius(radius)
-        if torch.is_tensor(radius):
-            upper = radius
-        else:
-            upper = float(radius)
-        lower = -upper
-        super().__init__(x, lower=lower, upper=upper)
+    def _norm(self, value: torch.Tensor) -> torch.Tensor:
+        return torch.max(torch.abs(value))
+
+    def _projection(self, x: torch.Tensor, radius: torch.Tensor) -> torch.Tensor:
+        return project_onto_linf_ball(x, radius)
 
 
 def _validate_radius(radius: float | int | torch.Tensor) -> float | torch.Tensor:
