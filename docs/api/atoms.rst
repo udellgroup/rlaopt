@@ -25,11 +25,6 @@ Regularizers
    :undoc-members:
    :show-inheritance:
 
-.. autoclass:: rlaopt.atoms.SumSquares
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
 .. autoclass:: rlaopt.atoms.ElasticNet
    :members:
    :undoc-members:
@@ -39,6 +34,17 @@ Regularizers
    :members:
    :undoc-members:
    :show-inheritance:
+
+Smooth Functions
+----------------
+
+.. autoclass:: rlaopt.atoms.SumSquares
+   :members:
+   :undoc-members:
+
+.. autoclass:: rlaopt.atoms.QuadForm
+   :members:
+   :undoc-members:
 
 Constraints
 -----------
