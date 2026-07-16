@@ -34,4 +34,5 @@ from rlaopt.atoms.lp_norms import LInfNorm as LInfNorm
 from rlaopt.atoms.non_negative import NonNegative as NonNegative
 from rlaopt.atoms.nuc_norm import NucNorm as NucNorm
 from rlaopt.atoms.polyhedron import Polyhedron as Polyhedron
-from rlaopt.atoms.sum_squares import SumSquares as SumSquares
+from rlaopt.atoms.quad_form import QuadForm as QuadForm
+from rlaopt.atoms.quad_form import SumSquares as SumSquares
