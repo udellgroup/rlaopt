@@ -21,13 +21,20 @@ jobs:
         with:
           python-version: ${{ inputs.python-version }}
 
-      - name: Install pre-commit
-        run: pip install pre-commit
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v9
+        with:
+          version: "0.12.5"
+          enable-cache: true
+          cache-dependency-glob: "uv.lock"
+
+      - name: Sync development environment
+        run: uv sync --locked --no-default-groups --group dev --python "${{ inputs.python-version }}"
 
       - name: Run pre-commit on changed files
         run: |
           if [ "${{ github.event_name }}" == "pull_request" ]; then
-            pre-commit run --from-ref origin/${{ github.base_ref }} --to-ref HEAD
+            uv run --locked --no-sync pre-commit run --from-ref origin/${{ github.base_ref }} --to-ref HEAD
           else
-            pre-commit run --from-ref ${{ github.event.before }} --to-ref ${{ github.sha }}
+            uv run --locked --no-sync pre-commit run --from-ref ${{ github.event.before }} --to-ref ${{ github.sha }}
           fi
