@@ -35,3 +35,28 @@ jobs:
 
       - name: Run CPU-only tests
         run: uv run --locked --no-sync pytest -x
+
+  minimum-dependency-tests:
+    name: Minimum Dependency Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Set up Python 3.10
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.10"
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+        with:
+          enable-cache: true
+          cache-dependency-glob: "uv.lock"
+
+      - name: Sync minimum direct dependencies
+        run: >-
+          uv sync --upgrade --resolution lowest-direct
+          --no-default-groups --group test --python 3.10
+
+      - name: Run tests with minimum direct dependencies
+        run: uv run --no-sync pytest -x
