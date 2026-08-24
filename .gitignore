@@ -1,3 +1,6 @@
 __pycache__/
 rlaopt.egg-info/
 .vscode/
+.venv/
+build/
+dist/
