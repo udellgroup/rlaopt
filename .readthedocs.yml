@@ -18,12 +18,9 @@ build:
   os: ubuntu-24.04
   tools:
     python: "3.11"
-  jobs:
-    post_install:
-      # Install the package itself so autodoc can import it
-      - pip install -e .
-
-# Explicitly set the version of Python and its requirements
 python:
   install:
-    - requirements: docs/requirements.txt
+    - method: uv
+      command: sync
+      groups:
+        - docs

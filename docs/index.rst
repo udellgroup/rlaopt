@@ -16,7 +16,7 @@ Installation
 
 .. code-block:: bash
 
-   pip install -e .
+   uv sync
 
 Basic Usage
 ~~~~~~~~~~~

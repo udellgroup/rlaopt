@@ -10,10 +10,16 @@ A package containing implementations of randomized linear algebra-based optimiza
 
 ## Installation
 
-Please clone this repo. The package can be installed in a python environment in editable mode using the following command:
+Install [uv](https://docs.astral.sh/uv/getting-started/installation/), clone this repository, and create the development environment with:
 
 ```bash
-pip install -e .
+uv sync
+```
+
+Run commands inside the locked environment with `uv run`, for example:
+
+```bash
+uv run pytest
 ```
 
 ## Citation
