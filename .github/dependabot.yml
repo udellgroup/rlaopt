@@ -1,0 +1,53 @@
+version: 2
+
+updates:
+  - package-ecosystem: uv
+    directory: /
+    schedule:
+      interval: monthly
+      time: "09:00"
+      timezone: America/Los_Angeles
+    versioning-strategy: lockfile-only
+    groups:
+      uv-dependencies:
+        applies-to: version-updates
+        patterns:
+          - "*"
+        update-types:
+          - minor
+          - patch
+      security-fixes:
+        applies-to: security-updates
+        patterns:
+          - "*"
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+      time: "09:00"
+      timezone: America/Los_Angeles
+    groups:
+      actions:
+        applies-to: version-updates
+        patterns:
+          - "*"
+        update-types:
+          - minor
+          - patch
+      security-fixes:
+        applies-to: security-updates
+        patterns:
+          - "*"
+
+  - package-ecosystem: pre-commit
+    directory: /
+    schedule:
+      interval: monthly
+      time: "09:00"
+      timezone: America/Los_Angeles
+    groups:
+      pre-commit-hooks:
+        applies-to: version-updates
+        patterns:
+          - "*"
