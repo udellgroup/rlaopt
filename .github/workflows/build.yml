@@ -20,6 +20,13 @@ jobs:
     with:
       python-versions: '["3.10", "3.11", "3.12"]'
 
+  # Stage 2: Minimum supported dependencies
+  minimum-dependency-tests:
+    needs: pre-commit
+    uses: ./.github/workflows/minimum-dependency-tests.yml
+    with:
+      python-version: '3.10'
+
   # Stage 3: CUDA-enabled tests
   cuda-tests:
     needs: cpu-tests
@@ -34,7 +41,7 @@ jobs:
   final-check:
     name: Build
     runs-on: ubuntu-latest
-    needs: [cuda-tests]
+    needs: [cuda-tests, minimum-dependency-tests]
     steps:
       - name: Success
         run: echo "All tests passed!"

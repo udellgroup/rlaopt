@@ -22,11 +22,6 @@ jobs:
     strategy:
       matrix:
         python-version: ${{ fromJSON(inputs.python-versions) }}
-        dependency-resolution:
-          - locked
-        include:
-          - python-version: "3.10"
-            dependency-resolution: lowest-direct
     steps:
       - uses: actions/checkout@v5
         with:
@@ -55,33 +50,21 @@ jobs:
         run: nvcc --version
 
       # Coverage Python version with coverage for SonarQube
-      - name: Sync locked test environment
-        if: matrix.dependency-resolution == 'locked'
+      - name: Sync test environment
         run: uv sync --locked --no-default-groups --group test --python "${{ matrix.python-version }}"
 
-      - name: Sync minimum direct dependencies
-        if: matrix.dependency-resolution == 'lowest-direct'
-        run: >-
-          uv sync --upgrade --resolution lowest-direct
-          --no-default-groups --group test --python "${{ matrix.python-version }}"
-
       - name: Run CUDA tests with coverage
-        if: >-
-          matrix.python-version == inputs.coverage-python-version &&
-          matrix.dependency-resolution == 'locked'
+        if: matrix.python-version == inputs.coverage-python-version
         run: uv run --locked --no-sync pytest -x --cov=rlaopt --cov-report=xml
 
       # Other Python versions without coverage
       - name: Run CUDA tests
-        if: >-
-          matrix.python-version != inputs.coverage-python-version ||
-          matrix.dependency-resolution == 'lowest-direct'
-        run: uv run --no-sync pytest -x
+        if: matrix.python-version != inputs.coverage-python-version
+        run: uv run --locked --no-sync pytest -x
 
       - name: Validate SonarQube token
         if: >-
           matrix.python-version == inputs.coverage-python-version &&
-          matrix.dependency-resolution == 'locked' &&
           github.actor != 'dependabot[bot]' &&
           env.SONAR_TOKEN == ''
         run: |
@@ -91,7 +74,6 @@ jobs:
       - name: Note skipped SonarQube scan
         if: >-
           matrix.python-version == inputs.coverage-python-version &&
-          matrix.dependency-resolution == 'locked' &&
           github.actor == 'dependabot[bot]'
         run: echo "::notice::Skipping SonarQube scan for Dependabot"
 
@@ -99,6 +81,5 @@ jobs:
       - name: SonarQube Scan
         if: >-
           matrix.python-version == inputs.coverage-python-version &&
-          matrix.dependency-resolution == 'locked' &&
           github.actor != 'dependabot[bot]'
         uses: SonarSource/sonarqube-scan-action@v6
