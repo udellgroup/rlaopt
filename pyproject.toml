@@ -34,16 +34,25 @@ dependencies = [
 Homepage = "https://github.com/udellgroup/rlaopt"
 Issues = "https://github.com/udellgroup/rlaopt/issues"
 
-[project.optional-dependencies]
+[dependency-groups]
 test = [
     "pytest>=8.0.0",
     "pytest-cov>=6.0.0",
 ]
 dev = [
-    "pytest>=8.0.0",
-    "pytest-cov>=6.0.0",
+    {include-group = "test"},
     "pre-commit>=4.0.0",
 ]
+docs = [
+    "sphinx>=7.0.0",
+    "sphinx-book-theme>=1.0.0",
+    "sphinxcontrib-bibtex>=2.6.0",
+    "myst-parser>=2.0.0",
+    "autodoc-pydantic>=2.0.0",
+]
+
+[tool.uv]
+required-version = "==0.12.5"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

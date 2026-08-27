@@ -4,11 +4,11 @@ Installation
 Installation
 ------------
 
-Please clone this repository. The package can be installed in a Python environment in editable mode using the following command:
+Install ``uv``, clone this repository, and create the development environment using the committed lockfile:
 
 .. code-block:: bash
 
-   pip install -e .
+   uv sync
 
 Requirements
 ------------
@@ -21,20 +21,20 @@ rlaopt requires:
 * tensordict >= 0.10.0
 * typing_extensions >= 4.15.0
 
-Optional Dependencies
----------------------
+Development Dependencies
+------------------------
 
-For development, additional dependencies are available:
-
-.. code-block:: bash
-
-   pip install -e ".[dev]"
-
-For testing:
+The default development environment includes the test and pre-commit dependency groups:
 
 .. code-block:: bash
 
-   pip install -e ".[test]"
+   uv sync
+
+Run the test suite with:
+
+.. code-block:: bash
+
+   uv run pytest
 
 Building Documentation
 -----------------------
@@ -43,7 +43,7 @@ To build the documentation locally:
 
 .. code-block:: bash
 
-   cd docs
-   make html
+   uv sync --group docs
+   uv run make -C docs html
 
 The documentation will be generated in ``docs/_build/html/``.
