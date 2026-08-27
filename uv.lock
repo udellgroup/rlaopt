@@ -1941,7 +1941,7 @@ test = [
 [package.metadata]
 requires-dist = [
     { name = "numpy", specifier = ">=2.2.6" },
-    { name = "pandas", specifier = ">=2.0.0" },
+    { name = "pandas", specifier = ">=2.2.2" },
     { name = "pydantic", specifier = ">=2.12.0" },
     { name = "tensordict", specifier = ">=0.10.0" },
     { name = "torch", specifier = ">=2.6.0" },

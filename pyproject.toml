@@ -24,7 +24,7 @@ dependencies = [
     "numpy>=2.2.6",
     "torch>=2.6.0",
     "torch_linops >= 0.2.0",
-    "pandas>=2.0.0",
+    "pandas>=2.2.2",
     "pydantic>=2.12.0",
     "tensordict>=0.10.0",
     "typing_extensions>=4.15.0",
@@ -52,7 +52,7 @@ docs = [
 ]
 
 [tool.uv]
-required-version = "==0.12.5"
+required-version = ">=0.12.5"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

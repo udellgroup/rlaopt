@@ -1,0 +1,51 @@
+name: Minimum Dependency Tests
+
+on:
+  workflow_call:
+    inputs:
+      python-version:
+        required: true
+        type: string
+
+jobs:
+  minimum-dependency-tests:
+    name: Minimum Dependencies (${{ matrix.environment }})
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        environment: [cpu, cuda]
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Set up Python ${{ inputs.python-version }}
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ inputs.python-version }}
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+        with:
+          enable-cache: true
+          cache-dependency-glob: "uv.lock"
+
+      - name: Set up CUDA
+        if: matrix.environment == 'cuda'
+        uses: Jimver/cuda-toolkit@v0.2.22
+        with:
+          cuda: '12.5.0'
+          method: 'network'
+          sub-packages: '["nvcc", "cudart"]'
+          use-github-cache: 'true'
+
+      - name: Verify CUDA
+        if: matrix.environment == 'cuda'
+        run: nvcc --version
+
+      - name: Sync minimum direct dependencies
+        run: >-
+          uv sync --upgrade --resolution lowest-direct
+          --no-default-groups --group test
+          --python "${{ inputs.python-version }}"
+
+      - name: Run tests
+        run: uv run --no-sync pytest -x

@@ -11,12 +11,14 @@ on:
         type: string
     secrets:
       sonar-token:
-        required: true
+        required: false
 
 jobs:
   cuda-tests:
     name: CUDA-enabled Tests
     runs-on: ubuntu-latest
+    env:
+      SONAR_TOKEN: ${{ secrets.sonar-token }}
     strategy:
       matrix:
         python-version: ${{ fromJSON(inputs.python-versions) }}
@@ -60,9 +62,24 @@ jobs:
         if: matrix.python-version != inputs.coverage-python-version
         run: uv run --locked --no-sync pytest -x
 
+      - name: Validate SonarQube token
+        if: >-
+          matrix.python-version == inputs.coverage-python-version &&
+          github.actor != 'dependabot[bot]' &&
+          env.SONAR_TOKEN == ''
+        run: |
+          echo "::error::SONAR_TOKEN is required for non-Dependabot builds"
+          exit 1
+
+      - name: Note skipped SonarQube scan
+        if: >-
+          matrix.python-version == inputs.coverage-python-version &&
+          github.actor == 'dependabot[bot]'
+        run: echo "::notice::Skipping SonarQube scan for Dependabot"
+
       # SonarQube Scan (only for coverage Python version)
       - name: SonarQube Scan
-        if: matrix.python-version == inputs.coverage-python-version
+        if: >-
+          matrix.python-version == inputs.coverage-python-version &&
+          github.actor != 'dependabot[bot]'
         uses: SonarSource/sonarqube-scan-action@v6
-        env:
-          SONAR_TOKEN: ${{ secrets.sonar-token }}
