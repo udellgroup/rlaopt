@@ -1,4 +1,4 @@
-"""rlaopt: randomized linear algebra tools for large-scale optimization."""
+"""rlaopt: Randomized linear algebra-based methods for optimization and scientific computing."""
 
 from importlib.metadata import PackageNotFoundError, version
 

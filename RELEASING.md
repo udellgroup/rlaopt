@@ -1,30 +1,10 @@
 # Releasing rlaopt
 
-This document is the authoritative release checklist for maintainers. rlaopt uses a static version in `pyproject.toml`, uv for building and validation, GitHub Releases for release notes, and PyPI Trusted Publishing for deployment. Do not publish from a maintainer workstation.
-
-## One-time repository setup
-
-Complete these steps before the first release:
-
-1. In the GitHub repository, create an environment named `pypi` under **Settings → Environments**.
-   - Add at least one required reviewer so publishing requires explicit approval.
-   - Restrict deployments to protected tags matching `v*`.
-   - Do not add a PyPI token or other publishing secret.
-2. Add a GitHub tag ruleset for `v*` that prevents unauthorized tag creation, updates, and deletion. Allow only the maintainers who release the package to bypass it.
-3. In the PyPI account that will own the project, open **Publishing** and add a pending GitHub Trusted Publisher with these exact values:
-   - PyPI project name: `rlaopt`
-   - GitHub owner: `udellgroup`
-   - GitHub repository: `rlaopt`
-   - Workflow name: `publish-release.yml`
-   - Environment name: `pypi`
-
-A pending publisher creates the PyPI project on its first successful use; it does not reserve the name beforehand. After the first release, add at least one other maintainer as a PyPI owner.
-
-For Read the Docs, activate the first released tag after it appears and set the stable release as the default version. Keep `latest` available for documentation built from `main`.
+This document is the release checklist for maintainers. rlaopt uses a static version in `pyproject.toml`, uv for building and validation, GitHub Releases for release notes, and PyPI Trusted Publishing for deployment.
 
 ## Versioning
 
-Use [PEP 440](https://peps.python.org/pep-0440/) versions and choose increments according to [Semantic Versioning](https://semver.org/). While rlaopt is in the `0.x` series, a minor release may contain breaking API changes, but those changes must be called out prominently in the release notes.
+Use [PEP 440](https://peps.python.org/pep-0440/) versions and choose increments according to [Semantic Versioning](https://semver.org/). 
 
 `[project].version` in `pyproject.toml` is the only version maintainers edit. The installed `rlaopt.__version__` and the Sphinx documentation version are derived from package metadata.
 
@@ -34,7 +14,7 @@ Use uv to update the version and lockfile together:
 uv version X.Y.Z --no-sync
 ```
 
-Examples of valid release versions and tags include `0.2.0` / `v0.2.0` and `0.2.0rc1` / `v0.2.0rc1`. Never reuse a version or move a published release tag.
+An examples of a valid release version and tag would be `0.2.0` / `v0.2.0`.
 
 ## Prepare a release
 
@@ -54,6 +34,7 @@ Examples of valid release versions and tags include `0.2.0` / `v0.2.0` and `0.2.
    ```
 
 3. Update user-facing documentation for any changed installation, compatibility, or migration instructions.
+
 4. Run the local packaging checks:
 
    ```bash
@@ -85,7 +66,7 @@ GitHub Release notes are the canonical changelog. On the new release form, choos
 - Supported Python changes, dependency constraints, and installation notes.
 ```
 
-Retain GitHub's generated pull-request list, contributor list, and full comparison link below those sections. For the first release, write a concise manual overview because there is no previous release from which GitHub can generate a comparison.
+Retain GitHub's generated pull-request list, contributor list, and full comparison link below those sections.
 
 ## Publish a release
 
@@ -93,17 +74,16 @@ Retain GitHub's generated pull-request list, contributor list, and full comparis
 2. In GitHub, draft a new release targeting that exact commit on `main`.
 3. Create the tag `vX.Y.Z` and use the same value as the release title.
 4. Generate and edit the release notes as described above.
-5. Mark the GitHub release as a prerelease if and only if the version is a PEP 440 prerelease such as `0.2.0rc1`.
-6. Publish the GitHub Release. This is the irreversible deployment trigger.
-7. Approve the `pypi` environment deployment after checking the tag, commit, and version shown in the workflow run.
+5. Publish the GitHub Release. This is the irreversible deployment trigger.
+6. Approve the `pypi` environment deployment after checking the tag, commit, and version shown in the workflow run.
 
-The release workflow verifies that the tag matches `pyproject.toml`, the prerelease flag matches the version, and the tagged commit belongs to `main`. It then builds and smoke-tests the distributions in an unprivileged job. A separate job obtains a short-lived OIDC credential, generates PEP 740 attestations, and publishes the exact artifacts to PyPI. After publication, the wheel and source distribution are attached to the GitHub Release.
+The release workflow verifies that the tag matches `pyproject.toml` and the tagged commit belongs to `main`. It then builds and smoke-tests the distributions in an unprivileged job. A separate job obtains a short-lived OIDC credential, generates PEP 740 attestations, and publishes the exact artifacts to PyPI. After publication, the wheel and source distribution are attached to the GitHub Release.
 
 ## Verify the release
 
 After the workflow completes:
 
-1. Check the project page and provenance on `https://pypi.org/project/rlaopt/`.
+1. Check the project page on `https://pypi.org/project/rlaopt/`.
 2. Test a clean install from PyPI:
 
    ```bash
