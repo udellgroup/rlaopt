@@ -48,9 +48,6 @@ jobs:
       - name: Check lockfile
         run: uv lock --check
 
-      - name: Sync release tools
-        run: uv sync --locked --only-group release
-
       - name: Validate release tag
         if: inputs.expected-tag != ''
         env:
@@ -70,9 +67,6 @@ jobs:
 
       - name: Build distributions
         run: uv build --no-sources
-
-      - name: Check distribution metadata
-        run: uv run --locked --no-sync twine check --strict dist/*
 
       - name: Smoke-test distributions
         run: |

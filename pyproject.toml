@@ -45,7 +45,6 @@ dependencies = [
 Homepage = "https://github.com/udellgroup/rlaopt"
 Documentation = "https://rlaopt.readthedocs.io"
 Issues = "https://github.com/udellgroup/rlaopt/issues"
-Repository = "https://github.com/udellgroup/rlaopt"
 
 [dependency-groups]
 test = [
@@ -62,9 +61,6 @@ docs = [
     "sphinxcontrib-bibtex>=2.6.0",
     "myst-parser>=2.0.0",
     "autodoc-pydantic>=2.0.0",
-]
-release = [
-    "twine>=7.0.0",
 ]
 
 [tool.uv]
