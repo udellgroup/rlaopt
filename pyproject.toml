@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools", "wheel"]
+requires = ["setuptools>=77.0.3", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
@@ -20,6 +20,16 @@ authors = [
     {name = "Parth Nobel", email = "ptnobel@stanford.edu"},
     {name = "Alexa Hu", email = "xuningh@stanford.edu"},
 ]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering",
+]
 dependencies = [
     "numpy>=2.2.6",
     "torch>=2.6.0",
@@ -32,7 +42,9 @@ dependencies = [
 
 [project.urls]
 Homepage = "https://github.com/udellgroup/rlaopt"
+Documentation = "https://rlaopt.readthedocs.io"
 Issues = "https://github.com/udellgroup/rlaopt/issues"
+Repository = "https://github.com/udellgroup/rlaopt"
 
 [dependency-groups]
 test = [
@@ -49,6 +61,9 @@ docs = [
     "sphinxcontrib-bibtex>=2.6.0",
     "myst-parser>=2.0.0",
     "autodoc-pydantic>=2.0.0",
+]
+release = [
+    "twine>=7.0.0",
 ]
 
 [tool.uv]

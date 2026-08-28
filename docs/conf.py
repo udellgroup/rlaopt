@@ -7,6 +7,8 @@ import sys
 
 sys.path.insert(0, os.path.abspath(".."))
 
+from rlaopt import __version__  # noqa: E402
+
 # -- Project information -----------------------------------------------------
 
 project = "rlaopt"
@@ -14,8 +16,8 @@ copyright = "2025"
 author = "Pratik Rathore, Zachary Frangella, Parth Nobel, Alexa Hu"
 
 
-release = "0.1.0"
-version = "0.1.0"
+release = __version__
+version = __version__
 
 # -- General configuration ---------------------------------------------------
 
@@ -65,9 +67,6 @@ html_theme_options = {
 html_title = "rlaopt Documentation"
 html_logo = ""  # Add path if available
 html_favicon = ""
-
-# Add any paths that contain custom static files
-html_static_path = ["_static"]
 
 # -- Extension configuration -------------------------------------------------
 
