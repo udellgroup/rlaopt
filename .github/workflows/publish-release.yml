@@ -16,7 +16,6 @@ jobs:
       contents: read
     with:
       expected-tag: ${{ github.event.release.tag_name }}
-      release-prerelease: ${{ github.event.release.prerelease }}
       upload-artifact: true
 
   publish:

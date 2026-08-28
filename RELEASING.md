@@ -74,11 +74,10 @@ Retain GitHub's generated pull-request list, contributor list, and full comparis
 2. In GitHub, draft a new release targeting that exact commit on `main`.
 3. Create the tag `vX.Y.Z` and use the same value as the release title.
 4. Generate and edit the release notes as described above.
-5. Mark the GitHub release as a prerelease if and only if the version is a PEP 440 prerelease such as `0.2.0rc1`.
-6. Publish the GitHub Release. This is the irreversible deployment trigger.
-7. Approve the `pypi` environment deployment after checking the tag, commit, and version shown in the workflow run.
+5. Publish the GitHub Release. This is the irreversible deployment trigger.
+6. Approve the `pypi` environment deployment after checking the tag, commit, and version shown in the workflow run.
 
-The release workflow verifies that the tag matches `pyproject.toml`, the prerelease flag matches the version, and the tagged commit belongs to `main`. It then builds and smoke-tests the distributions in an unprivileged job. A separate job obtains a short-lived OIDC credential, generates PEP 740 attestations, and publishes the exact artifacts to PyPI. After publication, the wheel and source distribution are attached to the GitHub Release.
+The release workflow verifies that the tag matches `pyproject.toml` and the tagged commit belongs to `main`. It then builds and smoke-tests the distributions in an unprivileged job. A separate job obtains a short-lived OIDC credential, generates PEP 740 attestations, and publishes the exact artifacts to PyPI. After publication, the wheel and source distribution are attached to the GitHub Release.
 
 ## Verify the release
 
