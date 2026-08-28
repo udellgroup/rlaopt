@@ -38,9 +38,9 @@ uv run pytest
 
 ## Releasing
 
-The version in `pyproject.toml` is the single source of truth. Maintainers prepare a short-lived release branch with `uv version X.Y.Z --no-sync`, merge it into `main`, and publish a GitHub Release tagged `vX.Y.Z`. Publishing the GitHub Release validates, attests, and uploads the package to PyPI through Trusted Publishing.
+The version number in `pyproject.toml` is the single source of truth. Maintainers prepare a release branch using `uv version X.Y.Z --no-sync`, merge it into `main`, and publish a GitHub Release tagged `vX.Y.Z`. Publishing the GitHub Release validates, attests, and uploads the package to PyPI through Trusted Publishing.
 
-See [RELEASING.md](https://github.com/udellgroup/rlaopt/blob/main/RELEASING.md) for the complete setup, packaging, versioning, release-note, and recovery procedures.
+See [RELEASING.md](https://github.com/udellgroup/rlaopt/blob/main/RELEASING.md) for the complete process.
 
 ## Citation
 
