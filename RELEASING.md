@@ -4,7 +4,7 @@ This document is the release checklist for maintainers. rlaopt uses a static ver
 
 ## Versioning
 
-Use [PEP 440](https://peps.python.org/pep-0440/) versions and choose increments according to [Semantic Versioning](https://semver.org/). 
+Use [PEP 440](https://peps.python.org/pep-0440/) versions and choose increments according to [Semantic Versioning](https://semver.org/).
 
 `[project].version` in `pyproject.toml` is the only version maintainers edit. The installed `rlaopt.__version__` and the Sphinx documentation version are derived from package metadata.
 
@@ -14,7 +14,7 @@ Use uv to update the version and lockfile together:
 uv version X.Y.Z --no-sync
 ```
 
-An examples of a valid release version and tag would be `0.2.0` / `v0.2.0`.
+An example of a valid release version and tag is `0.2.0` / `v0.2.0`.
 
 ## Prepare a release
 
@@ -74,10 +74,11 @@ Retain GitHub's generated pull-request list, contributor list, and full comparis
 2. In GitHub, draft a new release targeting that exact commit on `main`.
 3. Create the tag `vX.Y.Z` and use the same value as the release title.
 4. Generate and edit the release notes as described above.
-5. Publish the GitHub Release. This is the irreversible deployment trigger.
-6. Approve the `pypi` environment deployment after checking the tag, commit, and version shown in the workflow run.
+5. Mark the GitHub release as a prerelease if and only if the version is a PEP 440 prerelease such as `0.2.0rc1`.
+6. Publish the GitHub Release. This is the irreversible deployment trigger.
+7. Approve the `pypi` environment deployment after checking the tag, commit, and version shown in the workflow run.
 
-The release workflow verifies that the tag matches `pyproject.toml` and the tagged commit belongs to `main`. It then builds and smoke-tests the distributions in an unprivileged job. A separate job obtains a short-lived OIDC credential, generates PEP 740 attestations, and publishes the exact artifacts to PyPI. After publication, the wheel and source distribution are attached to the GitHub Release.
+The release workflow verifies that the tag matches `pyproject.toml`, the prerelease flag matches the version, and the tagged commit belongs to `main`. It then builds and smoke-tests the distributions in an unprivileged job. A separate job obtains a short-lived OIDC credential, generates PEP 740 attestations, and publishes the exact artifacts to PyPI. After publication, the wheel and source distribution are attached to the GitHub Release.
 
 ## Verify the release
 
