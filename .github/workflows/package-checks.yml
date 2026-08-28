@@ -1,0 +1,138 @@
+name: Package checks
+
+on:
+  workflow_call:
+    inputs:
+      expected-tag:
+        description: Release tag that must match the project version
+        required: false
+        type: string
+        default: ''
+      release-prerelease:
+        description: Whether the GitHub release is marked as a prerelease
+        required: false
+        type: boolean
+        default: false
+      upload-artifact:
+        description: Whether to upload the built distributions
+        required: false
+        type: boolean
+        default: false
+      python-version:
+        description: Python version used for package and documentation checks
+        required: false
+        type: string
+        default: '3.12'
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    name: Build and validate package
+    runs-on: ubuntu-latest
+    env:
+      UV_PYTHON: ${{ inputs.python-version }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+          ref: ${{ inputs.expected-tag || github.sha }}
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+        with:
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+
+      - name: Set up Python
+        run: uv python install "$UV_PYTHON"
+
+      - name: Check lockfile
+        run: uv lock --check
+
+      - name: Sync release tools
+        run: uv sync --locked --only-group release
+
+      - name: Validate release tag
+        if: inputs.expected-tag != ''
+        env:
+          EXPECTED_TAG: ${{ inputs.expected-tag }}
+          RELEASE_PRERELEASE: ${{ inputs.release-prerelease }}
+        run: |
+          project_version="$(uv version --short)"
+          if [ "$EXPECTED_TAG" != "v${project_version}" ]; then
+            echo "::error::Release tag $EXPECTED_TAG does not match project version v${project_version}"
+            exit 1
+          fi
+
+          uv run --locked --no-sync python - \
+            "$project_version" "$RELEASE_PRERELEASE" <<'PY'
+          import sys
+          from packaging.version import Version
+
+          version = Version(sys.argv[1])
+          release_is_prerelease = sys.argv[2] == "true"
+          if version.is_prerelease != release_is_prerelease:
+              raise SystemExit(
+                  "GitHub's prerelease setting does not match "
+                  f"the project version ({version})"
+              )
+          PY
+
+          git fetch --no-tags origin main:refs/remotes/origin/main
+          if ! git merge-base --is-ancestor HEAD origin/main; then
+            echo "::error::Release tag $EXPECTED_TAG is not on the main branch"
+            exit 1
+          fi
+
+      - name: Build distributions
+        run: uv build --no-sources
+
+      - name: Check distribution metadata
+        run: uv run --locked --no-sync twine check --strict dist/*
+
+      - name: Smoke-test distributions
+        run: |
+          project_version="$(uv version --short)"
+          for artifact in dist/*.whl dist/*.tar.gz; do
+            uv run --isolated --no-project --with "$artifact" python -c \
+              'import importlib.metadata as m; import sys; import rlaopt; assert m.version("rlaopt") == rlaopt.__version__ == sys.argv[1]' \
+              "$project_version"
+          done
+
+      - name: Upload distributions
+        if: inputs.upload-artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: python-distributions
+          path: dist/
+          if-no-files-found: error
+
+  docs:
+    name: Build documentation
+    runs-on: ubuntu-latest
+    env:
+      UV_PYTHON: ${{ inputs.python-version }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ inputs.expected-tag || github.sha }}
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+        with:
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+
+      - name: Sync documentation environment
+        run: uv sync --locked --no-default-groups --group docs
+
+      - name: Build documentation
+        run: >-
+          uv run --locked --no-sync sphinx-build
+          -b html docs docs/_build/html

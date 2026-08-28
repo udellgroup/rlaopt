@@ -27,6 +27,11 @@ jobs:
     with:
       python-version: '3.10'
 
+  # Stage 2: Package and documentation checks
+  package-checks:
+    needs: pre-commit
+    uses: ./.github/workflows/package-checks.yml
+
   # Stage 3: CUDA-enabled tests
   cuda-tests:
     needs: cpu-tests
@@ -41,7 +46,7 @@ jobs:
   final-check:
     name: Build
     runs-on: ubuntu-latest
-    needs: [cuda-tests, minimum-dependency-tests]
+    needs: [cuda-tests, minimum-dependency-tests, package-checks]
     steps:
       - name: Success
         run: echo "All tests passed!"
