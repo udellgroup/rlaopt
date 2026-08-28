@@ -2,6 +2,7 @@
 
 import os
 import sys
+from datetime import date
 
 # -- Path setup --------------------------------------------------------------
 
@@ -12,7 +13,7 @@ from rlaopt import __version__  # noqa: E402
 # -- Project information -----------------------------------------------------
 
 project = "rlaopt"
-copyright = "2025"
+copyright = str(date.today().year)
 author = "Pratik Rathore, Zachary Frangella, Parth Nobel, Alexa Hu"
 
 
