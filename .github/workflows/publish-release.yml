@@ -10,13 +10,66 @@ concurrency:
 
 jobs:
   checks:
-    name: Validate release
-    uses: ./.github/workflows/package-checks.yml
+    name: Build and validate package
+    runs-on: ubuntu-latest
     permissions:
       contents: read
-    with:
-      expected-tag: ${{ github.event.release.tag_name }}
-      upload-artifact: true
+    env:
+      UV_PYTHON: "3.11"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+          ref: ${{ github.event.release.tag_name }}
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+        with:
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+
+      - name: Set up Python
+        run: uv python install "$UV_PYTHON"
+
+      - name: Check lockfile
+        run: uv lock --check
+
+      - name: Validate release tag
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: |
+          project_version="$(uv version --short)"
+          if [ "$RELEASE_TAG" != "v${project_version}" ]; then
+            echo "::error::Release tag $RELEASE_TAG does not match project version v${project_version}"
+            exit 1
+          fi
+
+          git fetch --no-tags origin main:refs/remotes/origin/main
+          if ! git merge-base --is-ancestor HEAD origin/main; then
+            echo "::error::Release tag $RELEASE_TAG is not on the main branch"
+            exit 1
+          fi
+
+      - name: Build distributions
+        run: uv build --no-sources
+
+      - name: Smoke-test distributions
+        run: |
+          project_version="$(uv version --short)"
+          for artifact in dist/*.whl dist/*.tar.gz; do
+            uv run --isolated --no-project --with "$artifact" python -c \
+              "import importlib.metadata as m; import sys; import rlaopt; assert m.version(\"rlaopt\") == rlaopt.__version__ == sys.argv[1]" \
+              "$project_version"
+          done
+
+      - name: Upload distributions
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: python-distributions
+          path: dist/
+          if-no-files-found: error
 
   publish:
     name: Publish to PyPI

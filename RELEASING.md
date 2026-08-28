@@ -42,7 +42,7 @@ An example of a valid release version and tag is `0.2.0` / `v0.2.0`.
    uv build --no-sources
    ```
 
-5. Commit the release preparation, open a pull request, and merge it after CI passes. The package checks in CI rebuild the project, smoke-test independent installs from both the wheel and source distribution, and build the documentation.
+5. Commit the release preparation, open a pull request, and merge it after the regular test and Read the Docs checks pass.
 
 The release branch prepares the version; it never triggers a deployment.
 
