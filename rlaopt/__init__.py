@@ -1,4 +1,4 @@
-"""rlaopt: Randomized linear algebra-based methods for optimization and scientific computing."""
+"""rlaopt: Randomized linear algebra-based methods for optimization and scientific computing."""  # noqa: E501
 
 from importlib.metadata import PackageNotFoundError, version
 
