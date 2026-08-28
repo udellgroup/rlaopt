@@ -59,7 +59,9 @@ jobs:
         run: |
           project_version="$(uv version --short)"
           for artifact in dist/*.whl dist/*.tar.gz; do
-            uv run --isolated --no-project --with "$artifact" python -c \
+            # -P keeps the repository checkout off Python's import path, ensuring
+            # rlaopt is imported from the installed distribution being tested.
+            uv run --isolated --no-project --with "$artifact" python -P -c \
               "import importlib.metadata as m; import sys; import rlaopt; assert m.version(\"rlaopt\") == rlaopt.__version__ == sys.argv[1]" \
               "$project_version"
           done
