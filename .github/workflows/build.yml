@@ -11,21 +11,21 @@ jobs:
   pre-commit:
     uses: ./.github/workflows/pre-commit.yml
     with:
-      python-version: '3.10'
+      python-version: '3.11'
 
   # Stage 2: CPU-only tests
   cpu-tests:
     needs: pre-commit
     uses: ./.github/workflows/cpu-tests.yml
     with:
-      python-versions: '["3.10", "3.11", "3.12"]'
+      python-versions: '["3.11", "3.12", "3.13", "3.14"]'
 
   # Stage 2: Minimum supported dependencies
   minimum-dependency-tests:
     needs: pre-commit
     uses: ./.github/workflows/minimum-dependency-tests.yml
     with:
-      python-version: '3.10'
+      python-version: '3.11'
 
   # Stage 2: Package and documentation checks
   package-checks:
@@ -37,8 +37,8 @@ jobs:
     needs: cpu-tests
     uses: ./.github/workflows/cuda-tests.yml
     with:
-      python-versions: '["3.10", "3.11", "3.12"]'
-      coverage-python-version: '3.10'
+      python-versions: '["3.11", "3.12", "3.13", "3.14"]'
+      coverage-python-version: '3.11'
     secrets:
       sonar-token: ${{ secrets.SONAR_TOKEN }}
 

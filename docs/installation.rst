@@ -19,7 +19,7 @@ Or add rlaopt to a uv-managed project:
 Requirements
 ------------
 
-rlaopt requires Python 3.10 or newer. Package installers resolve the remaining
+rlaopt requires Python 3.11 or newer. Package installers resolve the remaining
 runtime dependencies declared in ``pyproject.toml``.
 
 Development Installation
