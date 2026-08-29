@@ -30,7 +30,7 @@ jobs:
 
       - name: Set up CUDA
         if: matrix.environment == 'cuda'
-        uses: Jimver/cuda-toolkit@v0.2.22
+        uses: Jimver/cuda-toolkit@v0.2.36
         with:
           cuda: '12.5.0'
           method: 'network'
