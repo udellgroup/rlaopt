@@ -82,4 +82,4 @@ jobs:
         if: >-
           matrix.python-version == inputs.coverage-python-version &&
           github.actor != 'dependabot[bot]'
-        uses: SonarSource/sonarqube-scan-action@v6
+        uses: SonarSource/sonarqube-scan-action@v8
