@@ -1,30 +1,33 @@
 Installation
 =============
 
-Installation
-------------
+From PyPI
+---------
 
-Install ``uv``, clone this repository, and create the development environment using the committed lockfile:
+Install the latest release with pip:
 
 .. code-block:: bash
 
-   uv sync
+   pip install rlaopt
+
+Or add rlaopt to a uv-managed project:
+
+.. code-block:: bash
+
+   uv add rlaopt
 
 Requirements
 ------------
 
-rlaopt requires:
+rlaopt requires Python 3.11 or newer. Package installers resolve the remaining
+runtime dependencies declared in ``pyproject.toml``.
 
-* Python >= 3.10
-* PyTorch >= 2.6.0
-* pydantic >= 2.12.0
-* tensordict >= 0.10.0
-* typing_extensions >= 4.15.0
-
-Development Dependencies
+Development Installation
 ------------------------
 
-The default development environment includes the test and pre-commit dependency groups:
+Install `uv <https://docs.astral.sh/uv/getting-started/installation/>`_, clone
+the repository, and create the development environment from the committed
+lockfile:
 
 .. code-block:: bash
 

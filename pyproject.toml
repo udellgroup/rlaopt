@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools", "wheel"]
+requires = ["setuptools>=77.0.3", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
@@ -11,14 +11,21 @@ version = "0.1.0"
 description = "Randomized linear algebra-based methods for optimization and scientific computing in PyTorch."
 keywords = ["optimization", "scientific computing", "linear algebra", "randomized algorithms", "PyTorch"]
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 license = "Apache-2.0"
 license-files = ["LICENSE"]
 authors = [
-    {name = "Pratik Rathore", email = "pratikr@stanford.edu"},
-    {name = "Zachary Frangella", email = "zfran@stanford.edu"},
+    {name = "Pratik Rathore", email = "pratikr@alumni.stanford.edu"},
+    {name = "Zachary Frangella", email = "zfrangella@alumni.stanford.edu"},
     {name = "Parth Nobel", email = "ptnobel@stanford.edu"},
     {name = "Alexa Hu", email = "xuningh@stanford.edu"},
+]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
 ]
 dependencies = [
     "numpy>=2.2.6",
@@ -32,6 +39,7 @@ dependencies = [
 
 [project.urls]
 Homepage = "https://github.com/udellgroup/rlaopt"
+Documentation = "https://rlaopt.readthedocs.io"
 Issues = "https://github.com/udellgroup/rlaopt/issues"
 
 [dependency-groups]
@@ -60,7 +68,7 @@ python_files = "test_*.py"
 
 [tool.ruff]
 line-length = 88
-target-version = "py310"
+target-version = "py311"
 
 [tool.ruff.lint]
 select = [
